@@ -93,12 +93,12 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   }
 
   return (
-    <div className="relative inline-block w-full h-full overflow-hidden">
+    <div className={`relative overflow-hidden shrink-0 ${className}`}>
       <img
         src={src}
         alt={alt}
         onError={() => setHasError(true)}
-        className={`${className} object-cover`}
+        className="w-full h-full object-cover"
         referrerPolicy="no-referrer"
       />
       {showBadge && isGoogleDrive && (

@@ -310,7 +310,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
             src={item.imageUrl}
             alt={item.name}
             itemType={item.type}
-            className="w-full sm:w-36 h-36 rounded-xl shadow-xs shrink-0"
+            className="w-36 h-36 rounded-xl shadow-xs shrink-0 bg-white"
           />
           <div className="min-w-0 flex-1 space-y-2 text-center sm:text-left">
             <h3 className="font-extrabold text-base text-slate-900">{item.name}</h3>
