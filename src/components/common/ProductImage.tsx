@@ -93,7 +93,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   }
 
   return (
-    <div className="relative inline-block w-full h-full overflow-hidden">
+    <div className="relative inline-block h-full overflow-hidden">
       <img
         src={src}
         alt={alt}
