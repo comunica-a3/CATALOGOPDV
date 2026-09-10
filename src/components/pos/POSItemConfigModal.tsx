@@ -23,6 +23,7 @@ import {
 } from '../../types';
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
+import { getItemTypeLabel } from '../../utils/commissions';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
@@ -164,7 +165,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
       });
     }
 
-    if (item.type === 'PRODUTO_FISICO') {
+    if (item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO') {
       if (selectedVariant) {
         uPrice = selectedVariant.salePrice;
         uCost = selectedVariant.costPrice;
@@ -338,7 +339,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={item.name}
-      subtitle={`SKU: ${item.sku} • ${item.type === 'PRODUTO_GRAFICO' ? 'Gráfica' : item.type === 'PRODUTO_FISICO' ? 'Físico' : 'Serviço'}`}
+      subtitle={`SKU: ${item.sku} • ${getItemTypeLabel(item.type)}`}
       maxWidth="2xl"
     >
       <div className="space-y-5">
@@ -367,7 +368,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
                   Prazo: {item.leadTime}
                 </span>
               )}
-              {item.type === 'PRODUTO_FISICO' && (
+              {item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO' && item.stock !== undefined && (
                 <Badge
                   variant={(item.stock || 0) <= (item.minStock || 5) ? 'danger' : 'success'}
                   size="sm"
@@ -379,8 +380,8 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
           </div>
         </div>
 
-        {/* 1. PHYSICAL CONFIG: VARIANTS */}
-        {item.type === 'PRODUTO_FISICO' && item.variants && item.variants.length > 0 && (
+        {/* 1. PHYSICAL / CUSTOM CONFIG: VARIANTS */}
+        {item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO' && item.variants && item.variants.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">
               Selecione a Variante / Cor / Tamanho *

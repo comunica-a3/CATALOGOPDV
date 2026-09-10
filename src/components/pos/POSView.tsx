@@ -34,7 +34,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import {
@@ -47,6 +47,7 @@ import {
   Item,
   OnlineService,
   ProductionOrder,
+  ProductSeparation,
   Sale,
 } from '../../types';
 import {
@@ -66,6 +67,7 @@ import { POSCheckoutModal } from './POSCheckoutModal';
 import { POSCustomerModal } from './POSCustomerModal';
 import { POSItemConfigModal } from './POSItemConfigModal';
 import { POSReceiptModal } from './POSReceiptModal';
+import { getSeparationIcon } from '../items/ProductSeparationManagerModal';
 
 interface POSViewProps {
   categories: Category[];
@@ -84,8 +86,26 @@ export const POSView: React.FC<POSViewProps> = ({
 }) => {
   const { currentUser } = useAuth();
 
-  // View Modes in Catalog column: 'PRODUCTS' | 'GRAPHICS' | 'SERVICES' | 'DOCS'
-  const [posMode, setPosMode] = useState<'PRODUCTS' | 'GRAPHICS' | 'SERVICES' | 'DOCS'>('PRODUCTS');
+  // View Modes in Catalog column: category separation id, 'PRODUCTS', 'GRAPHICS', 'SERVICES', 'DOCS'
+  const [posMode, setPosMode] = useState<string>('PRODUTO_FISICO');
+  const [productSeparations, setProductSeparations] = useState<ProductSeparation[]>(() =>
+    StorageService.getProductSeparations()
+  );
+
+  useEffect(() => {
+    const handleSeps = () => {
+      setProductSeparations(StorageService.getProductSeparations());
+    };
+    window.addEventListener('product-separations-updated', handleSeps);
+    return () => window.removeEventListener('product-separations-updated', handleSeps);
+  }, []);
+
+  const resolveTargetType = (mode: string): string => {
+    if (mode === 'PRODUCTS') return 'PRODUTO_FISICO';
+    if (mode === 'GRAPHICS') return 'PRODUTO_GRAFICO';
+    if (mode === 'SERVICES') return 'SERVICO';
+    return mode;
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('TODOS');
@@ -169,37 +189,31 @@ export const POSView: React.FC<POSViewProps> = ({
   }, [onlineServices]);
 
   const relevantCategories = useMemo(() => {
-    if (posMode === 'PRODUCTS') {
-      const activeTypeCatIds = new Set(
-        activeItems.filter((i) => i.type === 'PRODUTO_FISICO').map((i) => i.categoryId)
-      );
-      return categories.filter((c) => activeTypeCatIds.has(c.id));
-    }
-    if (posMode === 'GRAPHICS') {
-      const activeTypeCatIds = new Set(
-        activeItems.filter((i) => i.type === 'PRODUTO_GRAFICO').map((i) => i.categoryId)
-      );
-      return categories.filter((c) => activeTypeCatIds.has(c.id));
-    }
-    if (posMode === 'SERVICES') {
+    if (posMode === 'DOCS') return [];
+    const targetType = resolveTargetType(posMode);
+
+    if (targetType === 'SERVICO') {
       const activeTypeCatIds = new Set(
         allServiceItems.map((i) => i.categoryId)
       );
       return categories.filter((c) => activeTypeCatIds.has(c.id));
     }
-    return categories;
+
+    const activeTypeCatIds = new Set(
+      activeItems.filter((i) => i.type === targetType).map((i) => i.categoryId)
+    );
+    return categories.filter((c) => activeTypeCatIds.has(c.id));
   }, [categories, activeItems, allServiceItems, posMode]);
 
   const filteredItems = useMemo(() => {
     const term = (searchTerm || '').toLowerCase();
+    const targetType = resolveTargetType(posMode);
 
     let baseList = activeItems;
-    if (posMode === 'PRODUCTS') {
-      baseList = activeItems.filter((item) => item.type === 'PRODUTO_FISICO');
-    } else if (posMode === 'GRAPHICS') {
-      baseList = activeItems.filter((item) => item.type === 'PRODUTO_GRAFICO');
-    } else if (posMode === 'SERVICES') {
+    if (targetType === 'SERVICO') {
       baseList = allServiceItems;
+    } else {
+      baseList = activeItems.filter((item) => item.type === targetType);
     }
 
     return baseList.filter((item) => {
@@ -592,59 +606,44 @@ export const POSView: React.FC<POSViewProps> = ({
         {/* LEFT COLUMN: ITEM SEARCH & GRID (7 cols on LG, 8 on XL) */}
         <div className="lg:col-span-7 xl:col-span-8 space-y-4">
           {/* Module Mode Selector Tabs: Produtos | Gráfica | Serviços Online | Geração de Documentos */}
-          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-xs grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPosMode('PRODUCTS');
-                setSelectedCategoryTab('TODOS');
-              }}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                posMode === 'PRODUCTS'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>Produtos</span>
-            </button>
+          {/* Catalog Separation Selector */}
+          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-xs flex items-center gap-1.5 overflow-x-auto">
+            {productSeparations.map((sep) => {
+              const IconComp = getSeparationIcon(sep.icon);
+              const targetType = resolveTargetType(posMode);
+              const isSelected = targetType === sep.id;
+
+              return (
+                <button
+                  key={sep.id}
+                  type="button"
+                  onClick={() => {
+                    setPosMode(sep.id);
+                    setSelectedCategoryTab('TODOS');
+                  }}
+                  className={`flex items-center justify-center gap-2 py-2 px-3.5 text-xs font-bold rounded-lg transition-all cursor-pointer shrink-0 ${
+                    isSelected
+                      ? sep.id === 'PRODUTO_GRAFICO'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : sep.id === 'SERVICO'
+                        ? 'bg-cyan-600 text-white shadow-xs'
+                        : 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <IconComp className="w-4 h-4" />
+                  <span>{sep.name}</span>
+                </button>
+              );
+            })}
 
             <button
               type="button"
               onClick={() => {
-                setPosMode('GRAPHICS');
+                setPosMode('DOCS');
                 setSelectedCategoryTab('TODOS');
               }}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                posMode === 'GRAPHICS'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Gráfica</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPosMode('SERVICES');
-                setSelectedCategoryTab('TODOS');
-              }}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                posMode === 'SERVICES'
-                  ? 'bg-cyan-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Globe className="w-4 h-4" />
-              <span>Serviços</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPosMode('DOCS')}
-              className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-2 py-2 px-3.5 text-xs font-bold rounded-lg transition-all cursor-pointer shrink-0 ${
                 posMode === 'DOCS'
                   ? 'bg-violet-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
@@ -667,13 +666,13 @@ export const POSView: React.FC<POSViewProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={
-                    posMode === 'PRODUCTS'
-                      ? 'Buscar produtos, suprimentos, canecas, papéis, insumos...'
-                      : posMode === 'GRAPHICS'
-                      ? 'Buscar produtos gráficos, banners, adesivos, cartões, panfletos...'
-                      : posMode === 'SERVICES'
+                    posMode === 'DOCS'
+                      ? 'Buscar modelo de documento (currículo, contrato, declaração)...'
+                      : resolveTargetType(posMode) === 'SERVICO'
                       ? 'Buscar serviços, consultas, DETRAN, CPF, MEI, antecedentes...'
-                      : 'Buscar modelo de documento (currículo, contrato, declaração)...'
+                      : resolveTargetType(posMode) === 'PRODUTO_GRAFICO'
+                      ? 'Buscar produtos gráficos, banners, adesivos, cartões, panfletos...'
+                      : 'Buscar itens, produtos, suprimentos, materiais...'
                   }
                   className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-hidden transition-all font-medium"
                 />
@@ -692,17 +691,12 @@ export const POSView: React.FC<POSViewProps> = ({
             </div>
 
             {/* Category Filter Pills (PRODUCTS, GRAPHICS, or SERVICES mode) */}
-            {(posMode === 'PRODUCTS' || posMode === 'GRAPHICS' || posMode === 'SERVICES') && (
+            {posMode !== 'DOCS' && (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
                 {[
                   {
                     id: 'TODOS',
-                    label:
-                      posMode === 'PRODUCTS'
-                        ? 'Todos os Produtos'
-                        : posMode === 'GRAPHICS'
-                        ? 'Todos os Gráficos'
-                        : 'Todos os Serviços',
+                    label: 'Todos',
                   },
                   ...relevantCategories.map((c) => ({ id: c.id, label: c.name })),
                 ].map((tab) => (
@@ -712,11 +706,7 @@ export const POSView: React.FC<POSViewProps> = ({
                     onClick={() => setSelectedCategoryTab(tab.id)}
                     className={`px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                       selectedCategoryTab === tab.id
-                        ? posMode === 'PRODUCTS'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : posMode === 'GRAPHICS'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-cyan-600 text-white shadow-xs'
+                        ? 'bg-blue-600 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-transparent'
                     }`}
                   >
@@ -727,13 +717,13 @@ export const POSView: React.FC<POSViewProps> = ({
             )}
           </div>
 
-          {/* ================= MODE 1 & 2: STANDARD PRODUCTS & GRAPHICS ================= */}
-          {(posMode === 'PRODUCTS' || posMode === 'GRAPHICS') && (
+          {/* ================= MODE 1 & 2: STANDARD PRODUCTS & GRAPHICS & CUSTOM ================= */}
+          {posMode !== 'DOCS' && resolveTargetType(posMode) !== 'SERVICO' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
               {filteredItems.length > 0 ? (
                 filteredItems.map((item) => {
                   const isLowStock =
-                    item.type === 'PRODUTO_FISICO' &&
+                    (item.type === 'PRODUTO_FISICO' || item.stock !== undefined) &&
                     (item.stock || 0) <= (item.minStock || 5);
 
                   return (
@@ -756,13 +746,23 @@ export const POSView: React.FC<POSViewProps> = ({
                               <span className="font-mono text-[10px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
                                 {item.sku}
                               </span>
-                              {item.type === 'PRODUTO_GRAFICO' ? (
-                                <Badge variant="primary" size="sm">Gráfico</Badge>
-                              ) : item.type === 'PRODUTO_FISICO' ? (
-                                <Badge variant="purple" size="sm">Físico</Badge>
-                              ) : (
-                                <Badge variant="success" size="sm">Serviço</Badge>
-                              )}
+                              <Badge
+                                variant={
+                                  item.type === 'PRODUTO_GRAFICO'
+                                    ? 'primary'
+                                    : item.type === 'PRODUTO_FISICO'
+                                    ? 'purple'
+                                    : 'info'
+                                }
+                                size="sm"
+                              >
+                                {productSeparations.find((s) => s.id === item.type)?.name ||
+                                  (item.type === 'PRODUTO_GRAFICO'
+                                    ? 'Gráfico'
+                                    : item.type === 'PRODUTO_FISICO'
+                                    ? 'Físico'
+                                    : 'Serviço')}
+                              </Badge>
                             </div>
                             <h3 className="font-bold text-xs text-slate-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
                               {item.name}
@@ -834,7 +834,7 @@ export const POSView: React.FC<POSViewProps> = ({
                 <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200 shadow-xs">
                   <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="font-bold text-slate-700">
-                    Nenhum {posMode === 'PRODUCTS' ? 'produto' : 'item gráfico'} encontrado nesta busca
+                    Nenhum item comercial encontrado nesta busca
                   </p>
                   <p className="text-xs text-slate-400">Verifique os termos ou altere a categoria.</p>
                 </div>
@@ -843,7 +843,7 @@ export const POSView: React.FC<POSViewProps> = ({
           )}
 
           {/* ================= MODE 2: SERVICES ================= */}
-          {posMode === 'SERVICES' && (
+          {posMode !== 'DOCS' && resolveTargetType(posMode) === 'SERVICO' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
               {filteredItems.length > 0 ? (
                 filteredItems.map((item) => {
@@ -922,7 +922,7 @@ export const POSView: React.FC<POSViewProps> = ({
                           title="Adicionar serviço ao pedido"
                         >
                           <Plus className="w-3 h-3" />
-                          <span>+ Pedido</span>
+                          <span>Pedido</span>
                         </button>
                       </div>
                     </div>

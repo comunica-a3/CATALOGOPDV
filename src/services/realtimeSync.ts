@@ -77,6 +77,7 @@ class RealtimeSyncManager {
         'items-updated',
         'catalog-niches-updated',
         'categories-updated',
+        'product-separations-updated',
         'settings-updated',
         'production-updated',
       ];

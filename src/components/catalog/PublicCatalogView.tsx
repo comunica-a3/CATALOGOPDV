@@ -31,6 +31,7 @@ import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Category, CompanySettings, Item, ProductNicheCard, VitrineCartItem } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getItemTypeLabel } from '../../utils/commissions';
 import { Badge } from '../common/Badge';
 import { ProductImage } from '../common/ProductImage';
 import { CatalogCartModal } from './CatalogCartModal';
@@ -378,6 +379,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       // 4. Filtro secundário de Tipo
       const matchType =
         selectedType === 'TODOS' ||
+        selectedType === item.type ||
         (selectedType === 'PRODUTO_GRAFICO' && item.type === 'PRODUTO_GRAFICO') ||
         (selectedType === 'PRODUTO_FISICO' && item.type === 'PRODUTO_FISICO') ||
         (selectedType === 'SERVICO' && item.type === 'SERVICO');
@@ -1165,13 +1167,18 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-2 left-2">
-                        {item.type === 'PRODUTO_GRAFICO' ? (
-                          <Badge variant="primary" size="sm">Gráfico</Badge>
-                        ) : item.type === 'PRODUTO_FISICO' ? (
-                          <Badge variant="purple" size="sm">Físico</Badge>
-                        ) : (
-                          <Badge variant="success" size="sm">Serviço</Badge>
-                        )}
+                        <Badge
+                          variant={
+                            item.type === 'PRODUTO_GRAFICO'
+                              ? 'primary'
+                              : item.type === 'PRODUTO_FISICO'
+                              ? 'purple'
+                              : 'success'
+                          }
+                          size="sm"
+                        >
+                          {getItemTypeLabel(item.type)}
+                        </Badge>
                       </div>
                     </div>
 

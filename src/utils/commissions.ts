@@ -14,7 +14,21 @@ export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
 
 export function getItemTypeLabel(type?: ItemType | string): string {
   if (!type) return 'Produto Gráfico';
-  return ITEM_TYPE_LABELS[type as ItemType] || type;
+  if (ITEM_TYPE_LABELS[type as ItemType]) return ITEM_TYPE_LABELS[type as ItemType];
+  
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('pdv_product_separations');
+      if (raw) {
+        const seps = JSON.parse(raw);
+        if (Array.isArray(seps)) {
+          const found = seps.find((s: any) => s.id === type || s.name === type);
+          if (found && found.name) return found.name;
+        }
+      }
+    } catch {}
+  }
+  return type;
 }
 
 /**

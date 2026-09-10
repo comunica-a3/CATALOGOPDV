@@ -7,6 +7,7 @@ import {
   Item,
   ItemTypeCommissionRates,
   ProductionOrder,
+  ProductSeparation,
   Receivable,
   ReceivingAccount,
   Sale,
@@ -94,6 +95,33 @@ export const INITIAL_COMPANY_SETTINGS: CompanySettings = {
   promoterCommissionPercent: 20,
   catalogSubtitle: 'Sua rotina, mais simples.',
 };
+
+export const INITIAL_PRODUCT_SEPARATIONS: ProductSeparation[] = [
+  {
+    id: 'PRODUTO_GRAFICO',
+    name: 'Gráficos',
+    description: 'Materiais gráficos e impressos',
+    icon: 'Layers',
+    isSystem: true,
+    sortOrder: 1,
+  },
+  {
+    id: 'PRODUTO_FISICO',
+    name: 'Físicos',
+    description: 'Produtos físicos e itens de estoque',
+    icon: 'Package',
+    isSystem: true,
+    sortOrder: 2,
+  },
+  {
+    id: 'SERVICO',
+    name: 'Serviços',
+    description: 'Serviços digitais e atendimento',
+    icon: 'Globe',
+    isSystem: true,
+    sortOrder: 3,
+  },
+];
 
 export const INITIAL_CATEGORIES: Category[] = OFFICIAL_CATEGORIES;
 

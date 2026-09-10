@@ -3,6 +3,8 @@
  * Connects frontend views and StorageService directly to the Express backend and SQLite database.
  */
 
+import { ProductSeparation } from '../types';
+
 const API_BASE = '/api';
 
 function getAuthToken(): string | null {
@@ -216,6 +218,25 @@ export const api = {
 
   async deleteCategory(id: string) {
     return request<{ success: boolean }>(`/categories/${id}`, { method: 'DELETE' });
+  },
+
+  // Product Separations (Categorias Principais / Separações de Produtos)
+  async getProductSeparations() {
+    return request<ProductSeparation[]>('/product-separations');
+  },
+
+  async saveProductSeparation(separation: Partial<ProductSeparation>) {
+    return request<ProductSeparation>('/product-separations', {
+      method: 'POST',
+      body: JSON.stringify(separation),
+    });
+  },
+
+  async deleteProductSeparation(id: string, transferToId?: string) {
+    return request<{ success: boolean; transferredCount?: number }>(`/product-separations/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ transferToId }),
+    });
   },
 
   // Sales

@@ -18,16 +18,17 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
-import { Category, Item, ItemType } from '../../types';
+import { Category, Item, ItemType, ProductSeparation } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ProductImage } from '../common/ProductImage';
 import { ItemFormModal } from './ItemFormModal';
 import { ProductImportModal } from './ProductImportModal';
+import { ProductSeparationManagerModal } from './ProductSeparationManagerModal';
 
 interface ItemListProps {
   categories: Category[];
@@ -48,9 +49,23 @@ export const ItemList: React.FC<ItemListProps> = ({
   // Modal State
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSeparationsModalOpen, setIsSeparationsModalOpen] = useState(false);
+  const [productSeparations, setProductSeparations] = useState<ProductSeparation[]>(() =>
+    StorageService.getProductSeparations()
+  );
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [isDuplicationMode, setIsDuplicationMode] = useState(false);
   const [toastMessage, setToastMessage] = useState<string>('');
+
+  useEffect(() => {
+    const handleSepsUpdated = () => {
+      setProductSeparations(StorageService.getProductSeparations());
+    };
+    window.addEventListener('product-separations-updated', handleSepsUpdated);
+    return () => {
+      window.removeEventListener('product-separations-updated', handleSepsUpdated);
+    };
+  }, []);
 
   // Delete Confirm State
   const [itemToDelete, setItemToDelete] = useState<Item | null>(null);
@@ -148,6 +163,10 @@ export const ItemList: React.FC<ItemListProps> = ({
         return <Badge variant="purple" size="sm">Físico</Badge>;
       case 'SERVICO':
         return <Badge variant="success" size="sm">Serviço</Badge>;
+      default: {
+        const sep = productSeparations.find((s) => s.id === type || s.name === type);
+        return <Badge variant="indigo" size="sm">{sep?.name || type}</Badge>;
+      }
     }
   };
 
@@ -246,9 +265,10 @@ export const ItemList: React.FC<ItemListProps> = ({
           <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
             {[
               { id: 'TODOS', label: 'Todos' },
-              { id: 'PRODUTO_GRAFICO', label: 'Gráficos' },
-              { id: 'PRODUTO_FISICO', label: 'Físicos' },
-              { id: 'SERVICO', label: 'Serviços' },
+              ...productSeparations.map((s) => ({
+                id: s.id,
+                label: s.name,
+              })),
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -263,6 +283,19 @@ export const ItemList: React.FC<ItemListProps> = ({
                 {tab.label}
               </button>
             ))}
+
+            {canManageProducts && (
+              <button
+                type="button"
+                id="btn-manage-separations-filter"
+                onClick={() => setIsSeparationsModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer flex items-center gap-1"
+                title="Criar ou gerenciar separações/categorias de produtos"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nova Separação</span>
+              </button>
+            )}
           </div>
 
           {/* Catalog Filter */}
@@ -571,6 +604,12 @@ export const ItemList: React.FC<ItemListProps> = ({
         message={`Tem certeza que deseja excluir o item "${itemToDelete?.name}" (${itemToDelete?.sku})? Esta ação não pode ser desfeita.`}
         confirmLabel="Sim, Excluir"
         variant="danger"
+      />
+
+      {/* Product Separations Manager Modal */}
+      <ProductSeparationManagerModal
+        isOpen={isSeparationsModalOpen}
+        onClose={() => setIsSeparationsModalOpen(false)}
       />
     </div>
   );

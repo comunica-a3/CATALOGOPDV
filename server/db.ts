@@ -5,6 +5,7 @@ import {
   INITIAL_CATEGORIES,
   INITIAL_COMPANY_SETTINGS,
   INITIAL_ITEMS,
+  INITIAL_PRODUCT_SEPARATIONS,
   INITIAL_RECEIVING_ACCOUNTS,
 } from '../src/data/initialData';
 import {
@@ -827,6 +828,37 @@ export async function runMigrations(): Promise<void> {
     );
   }
 
+  // Migration 009: Product Separations (Dynamic Categories / Separações de Produtos)
+  if (!appliedVersions.has('009_product_separations_table')) {
+    console.log('Applying migration 009_product_separations_table...');
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS product_separations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        is_system INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    // Ensure the 3 standard system separations exist
+    for (const s of INITIAL_PRODUCT_SEPARATIONS) {
+      await db.run(
+        `INSERT OR IGNORE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+        [s.id, s.name, s.description || '', s.icon || null, s.sortOrder || 0, new Date().toISOString(), new Date().toISOString()]
+      );
+    }
+
+    await db.run(
+      'INSERT INTO schema_migrations VALUES (?, ?, ?)',
+      ['009_product_separations_table', 'Add product_separations table for dynamic product categories', new Date().toISOString()]
+    );
+  }
+
   // Always run unconditional column check to heal any existing database schema drift
   await ensureAllTableColumns();
 }
@@ -1099,6 +1131,34 @@ export async function seedDefaultDataIfEmpty(): Promise<void> {
         [cat.id, cat.name, (cat as any).slug || '', (cat as any).description || '', (cat as any).itemType || null, (cat as any).icon || null, 1, new Date().toISOString(), new Date().toISOString()]
       );
     }
+  }
+
+  // 2b. Product Separations
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS product_separations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        is_system INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const sepCount = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM product_separations');
+    if (!sepCount || sepCount.count === 0) {
+      for (const s of INITIAL_PRODUCT_SEPARATIONS) {
+        await db.run(
+          `INSERT OR IGNORE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+          [s.id, s.name, s.description || '', s.icon || null, s.sortOrder || 0, new Date().toISOString(), new Date().toISOString()]
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('Notice seeding product_separations:', err);
   }
 
   // 3. Official Catalog Items - seeded once on fresh installation
@@ -1389,6 +1449,7 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
     'audit_logs',
     'items',
     'categories',
+    'product_separations',
     'company_settings',
     'receiving_accounts',
     'online_services',
@@ -1435,6 +1496,14 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
     await db.run(
       'INSERT OR REPLACE INTO categories (id, name, slug, description, item_type, icon, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [cat.id, cat.name, (cat as any).slug || '', (cat as any).description || '', (cat as any).itemType || null, (cat as any).icon || null, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z']
+    );
+  }
+
+  // Product Separations
+  for (const s of INITIAL_PRODUCT_SEPARATIONS) {
+    await db.run(
+      'INSERT OR REPLACE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)',
+      [s.id, s.name, s.description || '', s.icon || null, s.sortOrder || 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z']
     );
   }
 

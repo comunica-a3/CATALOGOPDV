@@ -41,8 +41,10 @@ import {
   ItemType,
   ItemVariant,
   ProductionType,
+  ProductSeparation,
   ServiceField,
 } from '../../types';
+import { ProductSeparationManagerModal, getSeparationIcon } from './ProductSeparationManagerModal';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
 
@@ -166,6 +168,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   categories,
   isDuplication = false,
 }) => {
+  const [productSeparations, setProductSeparations] = useState<ProductSeparation[]>(() =>
+    StorageService.getProductSeparations()
+  );
+  const [isSeparationsModalOpen, setIsSeparationsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleSeps = () => {
+      setProductSeparations(StorageService.getProductSeparations());
+    };
+    window.addEventListener('product-separations-updated', handleSeps);
+    return () => window.removeEventListener('product-separations-updated', handleSeps);
+  }, []);
+
   const [activeTab, setActiveTab] = useState<'geral' | 'especifico' | 'catalogo'>('geral');
   const [errorMsg, setErrorMsg] = useState<string>('');
 
@@ -574,8 +589,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     const now = new Date().toISOString();
     const itemId = itemToEdit?.id || `item-${Date.now()}`;
 
+    const isPhysicalOrCustom = type !== 'PRODUTO_GRAFICO' && type !== 'SERVICO';
+
     const computedStock =
-      type === 'PRODUTO_FISICO'
+      isPhysicalOrCustom
         ? variants.length > 0
           ? variants.reduce((acc, v) => acc + (v.stock || 0), 0)
           : stock
@@ -609,12 +626,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       createdAt: itemToEdit?.createdAt || now,
       updatedAt: now,
 
-      // Physical
-      brand: type === 'PRODUTO_FISICO' ? brand : undefined,
-      supplier: type === 'PRODUTO_FISICO' ? supplier : undefined,
+      // Physical / Custom
+      brand: isPhysicalOrCustom ? brand : undefined,
+      supplier: isPhysicalOrCustom ? supplier : undefined,
       stock: computedStock,
-      minStock: type === 'PRODUTO_FISICO' ? minStock : undefined,
-      variants: type === 'PRODUTO_FISICO' ? variants : undefined,
+      minStock: isPhysicalOrCustom ? minStock : undefined,
+      variants: isPhysicalOrCustom ? variants : undefined,
 
       // Graphic
       pricingModel: type === 'PRODUTO_GRAFICO' ? pricingModel : undefined,
@@ -699,7 +716,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            2. Configurações de {type === 'PRODUTO_GRAFICO' ? 'Gráfica' : type === 'PRODUTO_FISICO' ? 'Estoque / Físico' : 'Serviço'}
+            2. Configurações de {type === 'PRODUTO_GRAFICO' ? 'Gráfica' : type === 'SERVICO' ? 'Serviço' : (productSeparations.find(s => s.id === type)?.name || 'Estoque / Físico')}
           </button>
           <button
             type="button"
@@ -717,62 +734,56 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* TAB 1: DADOS GERAIS */}
         {activeTab === 'geral' && (
           <div className="space-y-4">
-            {/* Item Type Selector */}
+            {/* Item Type / Separation Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Tipo do Item *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Tipo / Separação do Item *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsSeparationsModalOpen(true)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nova Separação</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div
-                  onClick={() => handleTypeChange('PRODUTO_GRAFICO')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    type === 'PRODUTO_GRAFICO'
-                      ? 'border-blue-600 bg-blue-50/70 shadow-xs'
-                      : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-xs text-blue-900">Produto Gráfico</span>
-                    <Layers className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Banners, cartões, panfletos. Gera ordem de produção.
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => handleTypeChange('PRODUTO_FISICO')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    type === 'PRODUTO_FISICO'
-                      ? 'border-indigo-600 bg-indigo-50/70 shadow-xs'
-                      : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-xs text-indigo-900">Produto Físico</span>
-                    <Package className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Fones, cabos, tintas. Controla saldo de estoque.
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => handleTypeChange('SERVICO')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    type === 'SERVICO'
-                      ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
-                      : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-xs text-emerald-900">Serviço Digital</span>
-                    <FileCode className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    2ª via de contas, digitação, contratos, cópias.
-                  </p>
-                </div>
+                {productSeparations.map((sep) => {
+                  const IconComp = getSeparationIcon(sep.icon);
+                  const isSelected = type === sep.id;
+                  return (
+                    <div
+                      key={sep.id}
+                      onClick={() => handleTypeChange(sep.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50/70 shadow-xs ring-1 ring-blue-500'
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-bold text-xs ${isSelected ? 'text-blue-900' : 'text-slate-800'}`}>
+                          {sep.name}
+                        </span>
+                        <IconComp className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`} />
+                      </div>
+                      <p className="text-[11px] text-slate-500 line-clamp-2">
+                        {sep.description || (
+                          sep.id === 'PRODUTO_GRAFICO'
+                            ? 'Banners, cartões, panfletos. Gera ordem de produção.'
+                            : sep.id === 'PRODUTO_FISICO'
+                            ? 'Fones, cabos, tintas. Controla saldo de estoque.'
+                            : sep.id === 'SERVICO'
+                            ? '2ª via de contas, digitação, contratos, cópias.'
+                            : 'Produtos desta categoria com controle comercial completo.'
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1777,8 +1788,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               </div>
             )}
 
-            {/* IF PRODUTO_FISICO */}
-            {type === 'PRODUTO_FISICO' && (
+            {/* IF PRODUTO_FISICO OR CUSTOM SEPARATION */}
+            {type !== 'PRODUTO_GRAFICO' && type !== 'SERVICO' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -2230,6 +2241,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         isOpen={isDrivePickerOpen}
         onClose={() => setIsDrivePickerOpen(false)}
         onSelectFile={handleSelectDriveFile}
+      />
+
+      {/* Product Separations Manager Modal */}
+      <ProductSeparationManagerModal
+        isOpen={isSeparationsModalOpen}
+        onClose={() => setIsSeparationsModalOpen(false)}
+        onSeparationCreatedOrUpdated={(newSep) => {
+          handleTypeChange(newSep.id);
+        }}
       />
     </Modal>
   );

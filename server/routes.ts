@@ -1612,6 +1612,198 @@ router.delete('/categories/:id', async (req: AuthRequest, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// PRODUCT SEPARATIONS CRUD (Categorias Principais / Separações de Produtos)
+// -----------------------------------------------------------------------------
+
+router.get('/product-separations', async (req, res) => {
+  try {
+    // Ensure table exists
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS product_separations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        is_system INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    const rows = await db.all<any>(
+      'SELECT * FROM product_separations ORDER BY sort_order ASC, name ASC'
+    );
+
+    // If table is empty, auto-seed defaults
+    if (!rows || rows.length === 0) {
+      const defaultSeps = [
+        { id: 'PRODUTO_GRAFICO', name: 'Gráficos', description: 'Materiais gráficos e impressos', icon: 'Layers', sort_order: 1 },
+        { id: 'PRODUTO_FISICO', name: 'Físicos', description: 'Produtos físicos e itens de estoque', icon: 'Package', sort_order: 2 },
+        { id: 'SERVICO', name: 'Serviços', description: 'Serviços digitais e atendimento', icon: 'Globe', sort_order: 3 },
+      ];
+      const now = new Date().toISOString();
+      for (const s of defaultSeps) {
+        await db.run(
+          `INSERT OR IGNORE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+          [s.id, s.name, s.description, s.icon, s.sort_order, now, now]
+        );
+      }
+      const seeded = await db.all<any>(
+        'SELECT * FROM product_separations ORDER BY sort_order ASC, name ASC'
+      );
+      return res.json(
+        seeded.map((r) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || undefined,
+          icon: r.icon || undefined,
+          isSystem: Number(r.is_system) === 1,
+          sortOrder: Number(r.sort_order) || 0,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }))
+      );
+    }
+
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description || undefined,
+        icon: r.icon || undefined,
+        isSystem: Number(r.is_system) === 1,
+        sortOrder: Number(r.sort_order) || 0,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      }))
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao buscar separações de produtos.' });
+  }
+});
+
+router.post('/product-separations', async (req: AuthRequest, res) => {
+  try {
+    const s = req.body;
+    if (!s.name || !s.name.trim()) {
+      res.status(400).json({ error: 'O nome da separação/categoria é obrigatório.' });
+      return;
+    }
+
+    const isSystemId = s.id === 'PRODUTO_GRAFICO' || s.id === 'PRODUTO_FISICO' || s.id === 'SERVICO';
+    const cleanName = s.name.trim();
+    const slug = cleanName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+    const id = s.id || `sep_${slug}_${Date.now()}`;
+    const now = new Date().toISOString();
+
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS product_separations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        is_system INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    // Check if updating existing
+    const existing = await db.get<any>('SELECT * FROM product_separations WHERE id = ?', [id]);
+    const isSystem = isSystemId || (existing && Number(existing.is_system) === 1) ? 1 : 0;
+    const sortOrder = s.sortOrder !== undefined ? Number(s.sortOrder) : (existing ? Number(existing.sort_order) : 10);
+
+    await db.run(
+      `INSERT OR REPLACE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        cleanName,
+        s.description?.trim() || '',
+        s.icon || 'Package',
+        isSystem,
+        sortOrder,
+        existing?.created_at || s.createdAt || now,
+        now,
+      ]
+    );
+
+    persistDatabase();
+
+    broadcastSync('product-separations-updated', { id, name: cleanName });
+    broadcastSync('catalog-updated', { type: 'product-separation', id });
+
+    res.json({
+      id,
+      name: cleanName,
+      description: s.description?.trim() || undefined,
+      icon: s.icon || 'Package',
+      isSystem: isSystem === 1,
+      sortOrder,
+      createdAt: existing?.created_at || s.createdAt || now,
+      updatedAt: now,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar separação de produtos.' });
+  }
+});
+
+router.delete('/product-separations/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { transferToId } = req.body || {};
+
+    if (id === 'PRODUTO_GRAFICO' || id === 'PRODUTO_FISICO' || id === 'SERVICO') {
+      res.status(400).json({
+        error: 'As separações padrão do sistema (Gráficos, Físicos e Serviços) são fundamentais e não podem ser excluídas.',
+      });
+      return;
+    }
+
+    // Check how many items currently use this separation
+    const itemCountRow = await db.get<{ count: number }>(
+      'SELECT COUNT(*) as count FROM items WHERE type = ?',
+      [id]
+    );
+    const count = Number(itemCountRow?.count || 0);
+
+    let transferredCount = 0;
+    if (count > 0) {
+      if (!transferToId) {
+        res.status(400).json({
+          error: `Existem ${count} produto(s) vinculados a esta separação. Selecione uma categoria destino para transferi-los antes de excluir.`,
+          count,
+          requiresTransfer: true,
+        });
+        return;
+      }
+
+      // Transfer items to target separation
+      const now = new Date().toISOString();
+      await db.run(
+        'UPDATE items SET type = ?, updated_at = ? WHERE type = ?',
+        [transferToId, now, id]
+      );
+      transferredCount = count;
+      broadcastSync('items-updated', { count: transferredCount });
+    }
+
+    await db.run('DELETE FROM product_separations WHERE id = ?', [id]);
+    persistDatabase();
+
+    broadcastSync('product-separations-updated', { id, deleted: true, transferToId });
+    broadcastSync('catalog-updated', { type: 'separation-deleted', id });
+
+    res.json({ success: true, transferredCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir separação de produtos.' });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // SALES CRUD & PAYMENTS
 // -----------------------------------------------------------------------------
 

@@ -1,4 +1,15 @@
-export type ItemType = 'PRODUTO_GRAFICO' | 'PRODUTO_FISICO' | 'SERVICO';
+export type ItemType = 'PRODUTO_GRAFICO' | 'PRODUTO_FISICO' | 'SERVICO' | string;
+
+export interface ProductSeparation {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  isSystem?: boolean;
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export type GraphicPricingModel = 'POR_UNIDADE' | 'POR_PACOTE' | 'POR_M2';
 

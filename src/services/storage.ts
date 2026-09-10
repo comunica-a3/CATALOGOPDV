@@ -5,6 +5,7 @@ import {
   INITIAL_INVENTORY_MOVEMENTS,
   INITIAL_ITEMS,
   INITIAL_PRODUCTION_ORDERS,
+  INITIAL_PRODUCT_SEPARATIONS,
   INITIAL_RECEIVABLES,
   INITIAL_RECEIVING_ACCOUNTS,
   INITIAL_SALES,
@@ -61,6 +62,7 @@ import {
   ProductionOrderFile,
   ProductionStatus,
   ProductNicheCard,
+  ProductSeparation,
   PublicSegmentPage,
   Receivable,
   ReceivableStatus,
@@ -90,6 +92,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'pdv_company_settings',
   USERS: 'pdv_users',
   CATEGORIES: 'pdv_categories',
+  PRODUCT_SEPARATIONS: 'pdv_product_separations',
   CUSTOMERS: 'pdv_customers',
   ITEMS: 'pdv_items',
   SALES: 'pdv_sales',
@@ -142,6 +145,11 @@ function checkAndRunInitialImport(): void {
       const existingCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       if (!existingCategories) {
         localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+      }
+
+      const existingSeparations = localStorage.getItem(STORAGE_KEYS.PRODUCT_SEPARATIONS);
+      if (!existingSeparations) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCT_SEPARATIONS, JSON.stringify(INITIAL_PRODUCT_SEPARATIONS));
       }
 
       if (!localStorage.getItem(STORAGE_KEYS.SALES)) localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify([]));
@@ -359,6 +367,7 @@ export class StorageService {
         saleAnnotationsRes,
         nichesRes,
         productionRes,
+        separationsRes,
       ] = await Promise.allSettled([
         api.getSettings(),
         api.getUsers(),
@@ -377,6 +386,7 @@ export class StorageService {
         api.getAllSaleAnnotations(),
         api.getCatalogNiches(),
         api.getProductionOrders(),
+        api.getProductSeparations(),
       ]);
 
       if (settingsRes.status === 'fulfilled' && settingsRes.value) {
@@ -493,6 +503,18 @@ export class StorageService {
           const localCategories = this.getCategories();
           if (localCategories.length > 0) {
             api.saveCategoriesBatch(localCategories).catch(() => {});
+          }
+        }
+      }
+
+      // Robust Product Separations Sync (Server Authority)
+      if (separationsRes.status === 'fulfilled' && Array.isArray(separationsRes.value)) {
+        const remoteSeps = separationsRes.value;
+        if (remoteSeps.length > 0) {
+          setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, remoteSeps);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('product-separations-updated'));
+            window.dispatchEvent(new CustomEvent('catalog-updated'));
           }
         }
       }
@@ -1572,11 +1594,125 @@ export class StorageService {
     return this.getItems().find((i) => i.id === id);
   }
 
+  static getProductSeparations(): ProductSeparation[] {
+    const seps = getItemFromStorage<ProductSeparation[]>(
+      STORAGE_KEYS.PRODUCT_SEPARATIONS,
+      INITIAL_PRODUCT_SEPARATIONS
+    );
+    // Guarantee the 3 standard system separations are always present
+    const idMap = new Map<string, ProductSeparation>();
+    for (const s of seps) {
+      idMap.set(s.id, s);
+    }
+    for (const initSep of INITIAL_PRODUCT_SEPARATIONS) {
+      if (!idMap.has(initSep.id)) {
+        idMap.set(initSep.id, initSep);
+      } else {
+        const existing = idMap.get(initSep.id)!;
+        idMap.set(initSep.id, {
+          ...existing,
+          isSystem: true,
+          sortOrder: existing.sortOrder !== undefined ? existing.sortOrder : initSep.sortOrder,
+        });
+      }
+    }
+    return Array.from(idMap.values()).sort((a, b) => (a.sortOrder ?? 10) - (b.sortOrder ?? 10));
+  }
+
+  static async saveProductSeparation(separation: Partial<ProductSeparation>): Promise<ProductSeparation> {
+    if (!separation.name || !separation.name.trim()) {
+      throw new Error('O nome da separação é obrigatório.');
+    }
+    // 1. Send to server database (authoritative source)
+    let serverSep: ProductSeparation;
+    try {
+      serverSep = await api.saveProductSeparation(separation);
+    } catch (err: any) {
+      console.warn('Falha ao salvar separação no servidor:', err);
+      // Fallback local update
+      const cleanName = separation.name.trim();
+      const slug = cleanName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+      serverSep = {
+        id: separation.id || `sep_${slug}_${Date.now()}`,
+        name: cleanName,
+        description: separation.description,
+        icon: separation.icon || 'Package',
+        isSystem: separation.id === 'PRODUTO_GRAFICO' || separation.id === 'PRODUTO_FISICO' || separation.id === 'SERVICO',
+        sortOrder: separation.sortOrder ?? 10,
+        createdAt: separation.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    // 2. Update local storage cache
+    const current = this.getProductSeparations();
+    const idx = current.findIndex((s) => s.id === serverSep.id);
+    if (idx >= 0) {
+      current[idx] = serverSep;
+    } else {
+      current.push(serverSep);
+    }
+    setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, current);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('product-separations-updated', { detail: serverSep }));
+      window.dispatchEvent(new CustomEvent('catalog-updated'));
+    }
+
+    return serverSep;
+  }
+
+  static async deleteProductSeparation(id: string, transferToId?: string): Promise<void> {
+    if (id === 'PRODUTO_GRAFICO' || id === 'PRODUTO_FISICO' || id === 'SERVICO') {
+      throw new Error('As categorias padrão do sistema não podem ser excluídas.');
+    }
+
+    // 1. Send to server database
+    try {
+      await api.deleteProductSeparation(id, transferToId);
+    } catch (err: any) {
+      console.error('Falha ao excluir separação no servidor:', err);
+      throw new Error(err.message || 'Falha ao excluir separação no servidor.');
+    }
+
+    // 2. Update local state
+    const current = this.getProductSeparations().filter((s) => s.id !== id);
+    setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, current);
+
+    // If transferToId provided, transfer any local items as well
+    if (transferToId) {
+      const items = this.getItems();
+      let itemsModified = false;
+      const updatedItems = items.map((item) => {
+        if (item.type === id) {
+          itemsModified = true;
+          return { ...item, type: transferToId };
+        }
+        return item;
+      });
+      if (itemsModified) {
+        setItemToStorage(STORAGE_KEYS.ITEMS, updatedItems);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('items-updated'));
+        }
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('product-separations-updated', { detail: { id, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('catalog-updated'));
+    }
+  }
+
   static generateNextSku(type: ItemType): string {
     const items = this.getItems();
     let prefix = 'GRF-';
     if (type === 'PRODUTO_FISICO') prefix = 'FIS-';
-    if (type === 'SERVICO') prefix = 'SRV-';
+    else if (type === 'SERVICO') prefix = 'SRV-';
+    else {
+      const clean = (type || 'PRD').replace(/^sep[_-]/, '').substring(0, 3).toUpperCase();
+      prefix = (clean || 'PRD') + '-';
+    }
 
     const matchingSkus = items
       .map((i) => i.sku)
