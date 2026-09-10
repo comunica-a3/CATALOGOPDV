@@ -1,0 +1,8 @@
+{
+  "name": "Remix Sistema PDV e Catálogo ",
+  "description": "Sistema comercial integrado de PDV, catálogo público, cadastro unificado de itens (gráficos, físicos e serviços), estoque, produção gráfica, faturamento e contas a receber.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

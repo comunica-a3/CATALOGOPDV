@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F8FAFC;
+    color: #0F172A;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Custom clean minimal scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F1F5F9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
+}
+
+/* ========================================================================= */
+/* REGRAS AVANÇADAS DE IMPRESSÃO (A4, 80MM E 58MM)                          */
+/* ========================================================================= */
+@media print {
+  @page {
+    margin: 5mm;
+  }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+    font-family: inherit;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ocultar navegação, cabeçalhos do app, botões e elementos no-print */
+  #main-app-header,
+  #main-app-sidebar,
+  #mobile-navigation-bar,
+  #app-toast-container,
+  button,
+  .no-print,
+  .modal-close-btn,
+  nav,
+  aside,
+  header {
+    display: none !important;
+  }
+
+  /* Neutralizar overlays e janelas modais para impressão limpa */
+  #modal-overlay,
+  [id^="modal-overlay"] {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  #modal-container,
+  [id^="modal-container"] {
+    position: static !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Recibo Térmico 80mm */
+  #printable-sale-receipt,
+  #printable-thermal-receipt-80mm,
+  .print-80mm {
+    display: block !important;
+    width: 76mm !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    color: #000 !important;
+  }
+
+  /* Recibo Térmico 58mm */
+  #printable-sale-receipt-58mm,
+  #printable-thermal-receipt-58mm,
+  .print-58mm {
+    display: block !important;
+    width: 52mm !important;
+    max-width: 58mm !important;
+    margin: 0 auto !important;
+    padding: 1.5mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 9.5px !important;
+    line-height: 1.15 !important;
+    color: #000 !important;
+    word-break: break-word !important;
+  }
+
+  /* Proposta Comercial / Orçamento A4 */
+  #printable-budget,
+  #printable-commercial-receipt,
+  .print-a4 {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+}
