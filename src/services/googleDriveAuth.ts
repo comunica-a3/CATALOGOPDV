@@ -51,7 +51,7 @@ export async function signInWithGoogleDrive(): Promise<{ user: User; accessToken
       accessToken: token,
     };
   } catch (error: any) {
-    console.error('Erro de autenticação com Google Drive:', error);
+    console.warn('Tentativa de autenticação Google Drive encerrada ou restrita:', error?.code || error?.message);
     throw error;
   }
 }

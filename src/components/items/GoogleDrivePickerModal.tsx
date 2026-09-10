@@ -89,13 +89,27 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
       setCurrentUser(user);
       loadDriveFiles(true);
     } catch (err: any) {
-      console.error('Falha na autenticação Google:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
+      const code = err?.code || '';
+      console.warn('Falha na autenticação Google:', code || err);
+      if (code === 'auth/popup-closed-by-user') {
         setAuthError('A janela de login do Google foi fechada antes da conclusão.');
-      } else if (err.code === 'auth/popup-blocked') {
-        setAuthError('O navegador bloqueou o popup de login. Permita popups para este site.');
+      } else if (code === 'auth/popup-blocked') {
+        setAuthError(
+          'O navegador ou iframe bloqueou o popup de login do Google. Para autenticar com sua conta, abra o sistema em uma nova aba ou use o link direto da imagem abaixo.'
+        );
+      } else if (code === 'auth/internal-error' || code === 'auth/network-request-failed') {
+        setAuthError(
+          'A autenticação popup do Google foi bloqueada pelas restrições do ambiente embutido (iframe). Abra o sistema em uma nova aba para conectar sua conta ou cole o link direto da imagem abaixo.'
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          'Domínio não autorizado no Firebase Authentication. Cole o link direto de compartilhamento da imagem abaixo para vincular sem restrições.'
+        );
       } else {
-        setAuthError(err.message || 'Erro ao conectar conta Google.');
+        setAuthError(
+          err.message ||
+            'Erro ao conectar conta Google. Abra o sistema em uma nova aba ou cole o link direto do arquivo abaixo.'
+        );
       }
     } finally {
       setIsAuthenticating(false);
@@ -149,8 +163,8 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
     }
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearchSubmit = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     loadDriveFiles(true);
   };
 
@@ -172,8 +186,8 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
     onClose();
   };
 
-  const handleResolveManualInput = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleResolveManualInput = async (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     if (!manualInput.trim()) return;
 
     setManualError('');
@@ -258,9 +272,19 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
               </p>
 
               {authError && (
-                <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-left max-w-md">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-rose-800">{authError}</p>
+                <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col gap-2.5 text-left max-w-md">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-rose-800 leading-relaxed">{authError}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => window.open(window.location.href, '_blank')}
+                    className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-100/80 hover:bg-rose-200/80 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Abrir Sistema em Nova Aba</span>
+                  </button>
                 </div>
               )}
 
@@ -302,22 +326,29 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
                 <p className="text-xs font-bold text-slate-700 mb-2">
                   Ou use um link direto do Google Drive:
                 </p>
-                <form onSubmit={handleResolveManualInput} className="flex gap-2">
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleResolveManualInput();
+                      }
+                    }}
                     placeholder="Cole o link de compartilhamento do Drive..."
                     className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none"
                   />
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => handleResolveManualInput()}
                     disabled={isResolvingManual || !manualInput.trim()}
                     className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                   >
                     {isResolvingManual ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Usar Link'}
                   </button>
-                </form>
+                </div>
                 {manualError && (
                   <p className="text-[11px] text-rose-600 mt-1.5">{manualError}</p>
                 )}
@@ -361,16 +392,22 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
 
                 {/* Search Bar & Refresh */}
                 <div className="flex items-center gap-2 flex-1 max-w-md">
-                  <form onSubmit={handleSearchSubmit} className="relative flex-1">
+                  <div className="relative flex-1">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSearchSubmit();
+                        }
+                      }}
                       placeholder="Pesquisar fotos por nome..."
                       className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 focus:outline-none"
                     />
-                  </form>
+                  </div>
                   <button
                     type="button"
                     onClick={() => loadDriveFiles(true)}
@@ -385,7 +422,7 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
 
               {/* Paste direct link collapsible bar */}
               <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
-                <form onSubmit={handleResolveManualInput} className="flex items-center gap-2 w-full">
+                <div className="flex items-center gap-2 w-full">
                   <span className="text-[11px] font-semibold text-slate-500 shrink-0">
                     Ou cole o link do Drive:
                   </span>
@@ -393,17 +430,24 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
                     type="text"
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleResolveManualInput();
+                      }
+                    }}
                     placeholder="https://drive.google.com/file/d/..."
                     className="flex-1 px-2.5 py-1 text-xs bg-white border border-slate-300 rounded-md focus:border-blue-500 focus:outline-none"
                   />
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => handleResolveManualInput()}
                     disabled={isResolvingManual || !manualInput.trim()}
                     className="px-3 py-1 bg-slate-800 text-white rounded-md text-xs font-semibold hover:bg-slate-900 transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
                   >
                     {isResolvingManual ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Usar'}
                   </button>
-                </form>
+                </div>
               </div>
 
               {manualError && (

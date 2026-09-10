@@ -2223,14 +2223,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Google Drive Picker Modal */}
-        <GoogleDrivePickerModal
-          isOpen={isDrivePickerOpen}
-          onClose={() => setIsDrivePickerOpen(false)}
-          onSelectFile={handleSelectDriveFile}
-        />
       </form>
+
+      {/* Google Drive Picker Modal */}
+      <GoogleDrivePickerModal
+        isOpen={isDrivePickerOpen}
+        onClose={() => setIsDrivePickerOpen(false)}
+        onSelectFile={handleSelectDriveFile}
+      />
     </Modal>
   );
 };
