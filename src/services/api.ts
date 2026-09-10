@@ -450,8 +450,34 @@ export const api = {
     return request<any[]>('/document-templates');
   },
 
+  async saveDocumentTemplate(template: any) {
+    return request<any>('/document-templates', {
+      method: 'POST',
+      body: JSON.stringify(template),
+    });
+  },
+
+  async deleteDocumentTemplate(id: string) {
+    return request<any>(`/document-templates/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getGeneratedDocuments() {
     return request<any[]>('/generated-documents');
+  },
+
+  async saveGeneratedDocument(doc: any) {
+    return request<any>('/generated-documents', {
+      method: 'POST',
+      body: JSON.stringify(doc),
+    });
+  },
+
+  async deleteGeneratedDocument(id: string) {
+    return request<any>(`/generated-documents/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   // Settings

@@ -8,7 +8,6 @@ import {
   INITIAL_RECEIVING_ACCOUNTS,
 } from '../src/data/initialData';
 import {
-  INITIAL_DOCUMENT_TEMPLATES,
   INITIAL_ONLINE_SERVICES,
 } from '../src/data/initialServicesAndDocuments';
 import {
@@ -1216,27 +1215,18 @@ export async function seedDefaultDataIfEmpty(): Promise<void> {
     }
   }
 
-  const tmplCount = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM document_templates');
-  if (!tmplCount || tmplCount.count === 0) {
-    for (const tmpl of INITIAL_DOCUMENT_TEMPLATES as any[]) {
-      await db.run(
-        `INSERT OR REPLACE INTO document_templates (
-          id, name, description, category, content, variables_json, active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          tmpl.id,
-          tmpl.title || tmpl.name,
-          tmpl.description || '',
-          tmpl.category,
-          tmpl.templateBody || tmpl.content || '',
-          tmpl.fields ? JSON.stringify(tmpl.fields) : tmpl.variables ? JSON.stringify(tmpl.variables) : null,
-          tmpl.active ? 1 : 0,
-          tmpl.createdAt || new Date().toISOString(),
-          tmpl.updatedAt || new Date().toISOString(),
-        ]
-      );
-    }
-  }
+  // Ensure all legacy fictitious/example document templates are permanently purged
+  try {
+    await db.run(`DELETE FROM document_templates WHERE id IN (
+      'tmpl-curriculo-profissional',
+      'tmpl-contrato-prestacao-servicos',
+      'tmpl-declaracao-residencia',
+      'tmpl-procuracao-simples',
+      'tmpl-recibo-simples',
+      'tmpl-requerimento-administrativo',
+      'tmpl-carta-demissao'
+    )`);
+  } catch {}
 
   // 6. Commercial Packages & Approach Templates
   const pkgCount = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM packages');
@@ -1542,25 +1532,8 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
     );
   }
 
-  // Document Templates
-  for (const tmpl of INITIAL_DOCUMENT_TEMPLATES as any[]) {
-    await db.run(
-      `INSERT OR REPLACE INTO document_templates (
-        id, name, description, category, content, variables_json, active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        tmpl.id,
-        tmpl.title || tmpl.name,
-        tmpl.description || '',
-        tmpl.category,
-        tmpl.templateBody || tmpl.content || '',
-        tmpl.fields ? JSON.stringify(tmpl.fields) : tmpl.variables ? JSON.stringify(tmpl.variables) : null,
-        tmpl.active ? 1 : 0,
-        '2026-01-01T00:00:00.000Z',
-        '2026-01-01T00:00:00.000Z',
-      ]
-    );
-  }
+  // Document Templates: cleared for production use (zero pre-loaded templates)
+  await db.run('DELETE FROM document_templates');
 
   // Packages
   for (const pkg of INITIAL_PACKAGES as any[]) {

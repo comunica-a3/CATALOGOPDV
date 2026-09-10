@@ -3405,10 +3405,13 @@ router.get('/document-templates', async (req, res) => {
     const rows = await db.all<any>('SELECT * FROM document_templates ORDER BY name ASC');
     res.json(rows.map((r) => ({
       id: r.id,
+      title: r.name,
       name: r.name,
       description: r.description || undefined,
       category: r.category,
+      templateBody: r.content,
       content: r.content,
+      fields: r.variables_json ? JSON.parse(r.variables_json) : [],
       variables: r.variables_json ? JSON.parse(r.variables_json) : [],
       active: Number(r.active) === 1,
       createdAt: r.created_at,
@@ -3416,6 +3419,79 @@ router.get('/document-templates', async (req, res) => {
     })));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao buscar templates.' });
+  }
+});
+
+router.post('/document-templates', async (req, res) => {
+  try {
+    const tmpl = req.body;
+    if (!tmpl || !tmpl.id || (!tmpl.title && !tmpl.name)) {
+      return res.status(400).json({ error: 'Dados de modelo inválidos.' });
+    }
+    const name = tmpl.title || tmpl.name;
+    const content = tmpl.templateBody || tmpl.content || '';
+    const fields = tmpl.fields || tmpl.variables || [];
+    const now = new Date().toISOString();
+
+    await db.run(
+      `INSERT OR REPLACE INTO document_templates (
+        id, name, description, category, content, variables_json, active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tmpl.id,
+        name,
+        tmpl.description || '',
+        tmpl.category || 'Outros',
+        content,
+        JSON.stringify(fields),
+        tmpl.active !== false ? 1 : 0,
+        tmpl.createdAt || now,
+        tmpl.updatedAt || now,
+      ]
+    );
+    res.json({ success: true, id: tmpl.id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar modelo.' });
+  }
+});
+
+router.put('/document-templates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tmpl = req.body;
+    const name = tmpl.title || tmpl.name;
+    const content = tmpl.templateBody || tmpl.content || '';
+    const fields = tmpl.fields || tmpl.variables || [];
+    const now = new Date().toISOString();
+
+    await db.run(
+      `UPDATE document_templates SET
+        name = ?, description = ?, category = ?, content = ?, variables_json = ?, active = ?, updated_at = ?
+      WHERE id = ?`,
+      [
+        name,
+        tmpl.description || '',
+        tmpl.category || 'Outros',
+        content,
+        JSON.stringify(fields),
+        tmpl.active !== false ? 1 : 0,
+        now,
+        id,
+      ]
+    );
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao atualizar modelo.' });
+  }
+});
+
+router.delete('/document-templates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM document_templates WHERE id = ?', [id]);
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir modelo.' });
   }
 });
 
@@ -3437,6 +3513,47 @@ router.get('/generated-documents', async (req, res) => {
     })));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao buscar documentos gerados.' });
+  }
+});
+
+router.post('/generated-documents', async (req, res) => {
+  try {
+    const doc = req.body;
+    if (!doc || !doc.id) {
+      return res.status(400).json({ error: 'Documento gerado inválido.' });
+    }
+    await db.run(
+      `INSERT OR REPLACE INTO generated_documents (
+        id, template_id, template_name, title, customer_id, customer_name, customer_cpf_cnpj,
+        rendered_content, created_by_user_id, created_by_user_name, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        doc.id,
+        doc.templateId || null,
+        doc.templateName || '',
+        doc.title || '',
+        doc.customerId || null,
+        doc.customerName || null,
+        doc.customerCpfCnpj || null,
+        doc.renderedContent || '',
+        doc.createdByUserId || null,
+        doc.createdByUserName || null,
+        doc.createdAt || new Date().toISOString(),
+      ]
+    );
+    res.json({ success: true, id: doc.id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar documento gerado.' });
+  }
+});
+
+router.delete('/generated-documents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM generated_documents WHERE id = ?', [id]);
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir documento gerado.' });
   }
 });
 

@@ -425,34 +425,57 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   </div>
 
                   <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                    {templates
-                      .filter((t) => t.active)
-                      .map((tmpl) => (
-                        <div
-                          key={tmpl.id}
-                          onClick={() => handleSelectTemplate(tmpl)}
-                          className={`p-3 rounded-lg border transition-all cursor-pointer ${
-                            selectedTemplate?.id === tmpl.id
-                              ? 'bg-violet-50 border-violet-500 shadow-xs'
-                              : 'bg-white hover:bg-slate-50 border-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                              {tmpl.category}
-                            </span>
-                            <span className="text-xs font-bold text-emerald-700">
-                              R$ {tmpl.defaultPrice.toFixed(2).replace('.', ',')}
-                            </span>
+                    {templates.filter((t) => t.active).length === 0 ? (
+                      <div className="p-6 text-center bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2">
+                        <LayoutTemplate className="w-8 h-8 text-slate-300 mx-auto" />
+                        <p className="text-xs font-bold text-slate-700">Nenhum modelo cadastrado</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Crie seus próprios modelos de documento para começar a gerar e preencher.
+                        </p>
+                        {canManageTemplates && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingTemplate(null);
+                              setIsTemplateModalOpen(true);
+                            }}
+                            className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors cursor-pointer shadow-2xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Criar Novo Modelo</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      templates
+                        .filter((t) => t.active)
+                        .map((tmpl) => (
+                          <div
+                            key={tmpl.id}
+                            onClick={() => handleSelectTemplate(tmpl)}
+                            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                              selectedTemplate?.id === tmpl.id
+                                ? 'bg-violet-50 border-violet-500 shadow-xs'
+                                : 'bg-white hover:bg-slate-50 border-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                                {tmpl.category}
+                              </span>
+                              <span className="text-xs font-bold text-emerald-700">
+                                R$ {tmpl.defaultPrice.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-xs text-slate-900 mt-1.5">
+                              {tmpl.title}
+                            </h4>
+                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
+                              {tmpl.description}
+                            </p>
                           </div>
-                          <h4 className="font-bold text-xs text-slate-900 mt-1.5">
-                            {tmpl.title}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
-                            {tmpl.description}
-                          </p>
-                        </div>
-                      ))}
+                        ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -585,7 +608,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       Selecione um Modelo de Documento
                     </h3>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                      Escolha um modelo ao lado (como Currículo Profissional, Contrato de Serviços, Declaração ou Procuração) para abrir o formulário dinâmico.
+                      Escolha um modelo ao lado ou crie um novo modelo para abrir o formulário dinâmico e preencher.
                     </p>
                   </div>
                 )}

@@ -128,24 +128,11 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
         setActive(template.active !== false);
       } else {
         setTitle('');
-        setCategory('Declarações');
+        setCategory('Outros');
         setDescription('');
-        setDefaultPrice('30.00');
-        setTemplateBody('# DECLARAÇÃO\n\nEu, {{nome_completo}}, portador do CPF nº {{cpf}} e residente no endereço {{endereco}}, declaro para os devidos fins que...\n\nLocal e Data: {{cidade}}, {{data_atual}}\n\n_______________________________\n{{nome_completo}}\nCPF: {{cpf}}');
-
-        const defaultIds = ['nome_completo', 'cpf', 'endereco', 'cidade', 'data_atual'];
-        const initialFields: DocumentField[] = defaultIds.map((id) => {
-          const existing = globalMap.get(id);
-          if (existing) return { ...existing };
-          return {
-            id,
-            label: id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-            type: 'text',
-            required: id === 'nome_completo' || id === 'cpf',
-          };
-        });
-
-        setFields(initialFields);
+        setDefaultPrice('0.00');
+        setTemplateBody('');
+        setFields([]);
         setActive(true);
       }
 
@@ -193,6 +180,13 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
       return;
     }
     setFields((prev) => [...prev, { ...gf }]);
+  };
+
+  const handleDeleteGlobalField = (fieldId: string) => {
+    if (window.confirm(`Excluir permanentemente a tag {{${fieldId}}} da Biblioteca Global?`)) {
+      StorageService.deleteGlobalDocumentField(fieldId);
+      setGlobalFields(StorageService.getGlobalDocumentFields());
+    }
   };
 
   const handleSaveField = () => {
@@ -593,21 +587,32 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                               </div>
                             </div>
 
-                            <div className="pt-1 border-t border-slate-100 flex items-center justify-between">
+                            <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-1.5">
                               {isAlreadyUsed ? (
-                                <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 flex-1">
                                   <Check className="w-3 h-3" /> Adicionado
                                 </span>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleAddFromGlobal(gf)}
-                                  className="w-full py-1 bg-violet-50 hover:bg-violet-600 text-violet-700 hover:text-white font-bold text-[10px] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                  className="flex-1 py-1 bg-violet-50 hover:bg-violet-600 text-violet-700 hover:text-white font-bold text-[10px] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                 >
                                   <Plus className="w-3 h-3" />
-                                  <span>Adicionar ao Modelo</span>
+                                  <span>Adicionar</span>
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteGlobalField(gf.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                title="Excluir tag permanentemente da biblioteca global"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
                         );

@@ -4700,12 +4700,29 @@ export class StorageService {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.DOCUMENT_TEMPLATES);
       if (!stored) {
-        localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(INITIAL_DOCUMENT_TEMPLATES));
-        return INITIAL_DOCUMENT_TEMPLATES;
+        return [];
       }
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        // Automatically filter out any legacy fictional templates from existing client storage
+        const FICTIONAL_TEMPLATE_IDS = new Set([
+          'tmpl-curriculo-profissional',
+          'tmpl-contrato-prestacao-servicos',
+          'tmpl-declaracao-residencia',
+          'tmpl-procuracao-simples',
+          'tmpl-recibo-simples',
+          'tmpl-requerimento-administrativo',
+          'tmpl-carta-demissao',
+        ]);
+        const cleaned = parsed.filter((t) => !FICTIONAL_TEMPLATE_IDS.has(t.id));
+        if (cleaned.length !== parsed.length) {
+          this.saveDocumentTemplates(cleaned);
+        }
+        return cleaned;
+      }
+      return [];
     } catch {
-      return INITIAL_DOCUMENT_TEMPLATES;
+      return [];
     }
   }
 
@@ -4724,6 +4741,9 @@ export class StorageService {
     };
     templates.push(newTemplate);
     this.saveDocumentTemplates(templates);
+
+    // Sync with backend server
+    api.saveDocumentTemplate(newTemplate).catch(() => {});
 
     // Sync fields with Global Library so they become reusable across all templates
     if (newTemplate.fields && newTemplate.fields.length > 0) {
@@ -4747,6 +4767,9 @@ export class StorageService {
     };
     templates[index] = updated;
     this.saveDocumentTemplates(templates);
+
+    // Sync with backend server
+    api.saveDocumentTemplate(updated).catch(() => {});
 
     // Sync fields with Global Library so they become reusable across all templates
     if (updated.fields && updated.fields.length > 0) {
@@ -4775,6 +4798,9 @@ export class StorageService {
 
     templates.push(duplicated);
     this.saveDocumentTemplates(templates);
+
+    // Sync with backend server
+    api.saveDocumentTemplate(duplicated).catch(() => {});
     return duplicated;
   }
 
@@ -4786,6 +4812,9 @@ export class StorageService {
     templates[index].active = !templates[index].active;
     templates[index].updatedAt = new Date().toISOString();
     this.saveDocumentTemplates(templates);
+
+    // Sync with backend server
+    api.saveDocumentTemplate(templates[index]).catch(() => {});
     return templates[index];
   }
 
@@ -4793,6 +4822,9 @@ export class StorageService {
     const templates = this.getDocumentTemplates();
     const filtered = templates.filter((t) => t.id !== id);
     this.saveDocumentTemplates(filtered);
+
+    // Sync deletion with backend server
+    api.deleteDocumentTemplate(id).catch(() => {});
   }
 
   // --- GLOBAL DOCUMENT FIELDS LIBRARY ("Biblioteca Global de Campos / Tags") ---
@@ -4801,62 +4833,88 @@ export class StorageService {
       const stored = localStorage.getItem(STORAGE_KEYS.GLOBAL_DOCUMENT_FIELDS);
       if (stored) {
         const parsed: DocumentField[] = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge any fields from templates not yet registered in the global library (non-destructive)
-          const templates = this.getDocumentTemplates();
-          const map = new Map<string, DocumentField>();
-          parsed.forEach((f) => map.set(f.id, f));
-
-          let hasNew = false;
-          templates.forEach((t) => {
-            (t.fields || []).forEach((f) => {
-              if (!map.has(f.id)) {
-                map.set(f.id, { ...f });
-                hasNew = true;
-              }
-            });
-          });
-
-          if (hasNew) {
-            const merged = Array.from(map.values());
-            this.saveGlobalDocumentFields(merged);
-            return merged;
+        if (Array.isArray(parsed)) {
+          // Remove any legacy fictional tags associated exclusively with removed example templates
+          const FICTIONAL_FIELD_IDS = new Set([
+            'objetivo_profissional',
+            'resumo_qualificacoes',
+            'experiencias_profissionais',
+            'formacao_academica',
+            'cursos_habilidades',
+            'informacoes_adicionais',
+            'nacionalidade_estado_civil',
+            'bairro_endereco',
+            'contato_email',
+            'contato_telefone',
+            'cidade_estado',
+            'contratante_nome',
+            'contratante_nacionalidade_est_civil',
+            'contratante_profissao',
+            'contratante_rg',
+            'contratante_cpf',
+            'contratante_endereco',
+            'contratado_nome',
+            'contratado_cpf_cnpj',
+            'contratado_endereco',
+            'servico_objeto_descricao',
+            'servico_valor_total',
+            'servico_forma_pagamento',
+            'servico_prazo_execucao',
+            'cidade_data_assinatura',
+            'foro_comarca',
+            'declarante_nome',
+            'declarante_nacionalidade',
+            'declarante_estado_civil',
+            'declarante_profissao',
+            'declarante_rg',
+            'declarante_cpf',
+            'declarante_endereco_completo',
+            'declaracao_motivo_finalidade',
+            'cidade_data_declaracao',
+            'outorgante_nome',
+            'outorgante_nacionalidade_est_civil',
+            'outorgante_profissao',
+            'outorgante_rg',
+            'outorgante_cpf',
+            'outorgante_endereco',
+            'outorgado_nome',
+            'outorgado_nacionalidade_est_civil',
+            'outorgado_profissao',
+            'outorgado_rg',
+            'outorgado_cpf',
+            'outorgado_endereco',
+            'poderes_especificos',
+            'validade_procuracao',
+            'cidade_data_procuracao',
+            'recibo_valor_numerico',
+            'recibo_valor_extenso',
+            'pagador_nome',
+            'pagador_cpf_cnpj',
+            'referente_servico_produto',
+            'recebedor_nome',
+            'recebedor_cpf_cnpj',
+            'recebedor_telefone',
+            'cidade_data_recibo',
+            'orgao_destinatario',
+            'assunto_requerimento',
+            'fatos_justificativa',
+            'pedido_especifico',
+            'cidade_data_requerimento',
+            'empresa_nome',
+            'cargo_funcao',
+            'empregado_nome',
+            'empregado_cpf',
+            'aviso_previo_opcao',
+            'cidade_data',
+          ]);
+          const cleaned = parsed.filter((f) => !FICTIONAL_FIELD_IDS.has(f.id));
+          if (cleaned.length !== parsed.length) {
+            this.saveGlobalDocumentFields(cleaned);
           }
-          return parsed;
+          return cleaned;
         }
       }
-
-      // Initial harvest: extract unique fields from existing templates + core base fields
-      const map = new Map<string, DocumentField>();
-
-      // Base fields universally expected in documents
-      const baseFields: DocumentField[] = [
-        { id: 'nome_completo', label: 'Nome Completo', type: 'text', required: true, placeholder: 'Ex: Carlos Eduardo de Oliveira', customerFieldMapping: 'name' },
-        { id: 'cpf', label: 'CPF', type: 'text', required: true, placeholder: '000.000.000-00', customerFieldMapping: 'document' },
-        { id: 'rg', label: 'RG / Órgão Emissor', type: 'text', required: false, placeholder: '00.000.000-0 SSP/SP' },
-        { id: 'telefone', label: 'Telefone / WhatsApp', type: 'phone', required: true, placeholder: '(11) 98765-4321', customerFieldMapping: 'phone' },
-        { id: 'email', label: 'E-mail', type: 'email', required: false, placeholder: 'cliente@email.com', customerFieldMapping: 'email' },
-        { id: 'endereco', label: 'Endereço Completo', type: 'text', required: false, placeholder: 'Rua, número, bairro', customerFieldMapping: 'address' },
-        { id: 'cidade', label: 'Cidade e Estado', type: 'text', required: false, placeholder: 'São Paulo - SP', customerFieldMapping: 'city' },
-        { id: 'data_atual', label: 'Data Atual', type: 'text', required: false, customerFieldMapping: 'current_date' },
-        { id: 'nome_empresa', label: 'Nome da Empresa / Razão Social', type: 'text', required: false, customerFieldMapping: 'company_name' },
-      ];
-
-      baseFields.forEach((f) => map.set(f.id, f));
-
-      // Harvest from all registered document templates
-      const templates = this.getDocumentTemplates();
-      templates.forEach((t) => {
-        (t.fields || []).forEach((f) => {
-          if (!map.has(f.id)) {
-            map.set(f.id, { ...f });
-          }
-        });
-      });
-
-      const initialFields = Array.from(map.values());
-      this.saveGlobalDocumentFields(initialFields);
-      return initialFields;
+      return [];
     } catch {
       return [];
     }
@@ -4926,6 +4984,7 @@ export class StorageService {
     };
     docs.unshift(newDoc);
     this.saveGeneratedDocuments(docs);
+    api.saveGeneratedDocument(newDoc).catch(() => {});
     return newDoc;
   }
 
@@ -4942,6 +5001,7 @@ export class StorageService {
     };
     docs[index] = updated;
     this.saveGeneratedDocuments(docs);
+    api.saveGeneratedDocument(updated).catch(() => {});
     return updated;
   }
 
@@ -4950,6 +5010,7 @@ export class StorageService {
     const docs: GeneratedDocument[] = stored ? JSON.parse(stored) : [];
     const filtered = docs.filter((d) => d.id !== id);
     this.saveGeneratedDocuments(filtered);
+    api.deleteGeneratedDocument(id).catch(() => {});
   }
 
   // ==========================================
