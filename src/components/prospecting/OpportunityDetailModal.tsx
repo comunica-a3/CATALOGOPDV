@@ -24,7 +24,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import {
@@ -76,6 +76,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [customMessage, setCustomMessage] = useState<string>('');
   const [copiedToast, setCopiedToast] = useState(false);
+  const lastOpportunityIdRef = useRef<string | null>(null);
 
   // Nova anotação/atividade rápida
   const [newNoteText, setNewNoteText] = useState('');
@@ -86,43 +87,57 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   const [conversionSuccess, setConversionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && opportunity) {
-      const acts = StorageService.getOpportunityActivities(opportunity.id);
-      const tpls = StorageService.getApproachTemplates();
-      const pkgs = StorageService.getPackages();
-      setActivities(acts);
-      setTemplates(tpls);
-      setPackages(pkgs);
-      setConversionSuccess(null);
-      setNewNoteText('');
+    if (!isOpen || !opportunity) {
+      lastOpportunityIdRef.current = null;
+      return;
+    }
 
-      // Carrega ações executadas e modelos atualizados do servidor/rede
-      StorageService.loadOpportunityActivitiesAsync(opportunity.id).then((remoteActs) => {
-        if (remoteActs && remoteActs.length > 0) {
-          setActivities(remoteActs.filter((a) => a.opportunityId === opportunity.id));
-        }
-      });
-      StorageService.loadApproachTemplatesAsync().then((remoteTpls) => {
-        if (remoteTpls && remoteTpls.length > 0) {
-          setTemplates(remoteTpls);
-        }
-      });
+    const acts = StorageService.getOpportunityActivities(opportunity.id);
+    const tpls = StorageService.getApproachTemplates();
+    const pkgs = StorageService.getPackages();
+    setActivities(acts);
+    setTemplates(tpls);
+    setPackages(pkgs);
+    setConversionSuccess(null);
+    setNewNoteText('');
 
-      // Seleciona template padrão se houver
-      const matched = tpls.find((t) => t.targetStage === opportunity.stage) || tpls[0];
+    // Carrega ações executadas e modelos atualizados do servidor/rede
+    StorageService.loadOpportunityActivitiesAsync(opportunity.id).then((remoteActs) => {
+      if (remoteActs && remoteActs.length > 0) {
+        setActivities(remoteActs.filter((a) => a.opportunityId === opportunity.id));
+      }
+    });
+    StorageService.loadApproachTemplatesAsync().then((remoteTpls) => {
+      if (remoteTpls && remoteTpls.length > 0) {
+        setTemplates(remoteTpls);
+      }
+    });
+
+    // Seleciona template apenas na abertura inicial de uma nova oportunidade, preservando a escolha do usuário
+    if (lastOpportunityIdRef.current !== opportunity.id) {
+      lastOpportunityIdRef.current = opportunity.id;
+      const matched =
+        (opportunity.selectedTemplateId ? tpls.find((t) => t.id === opportunity.selectedTemplateId) : null) ||
+        tpls.find((t) => t.targetStage === opportunity.stage) ||
+        tpls[0];
+
       if (matched) {
         setSelectedTemplateId(matched.id);
-        const pkgName = opportunity.suggestedPackageIds && opportunity.suggestedPackageIds.length > 0
-          ? pkgs.find((p) => p.id === opportunity.suggestedPackageIds![0])?.name
-          : undefined;
-        const built = StorageService.buildApproachMessage(
-          matched.templateText,
-          opportunity,
-          currentUser.name,
-          companySettings.name,
-          pkgName
-        );
-        setCustomMessage(built);
+        if (opportunity.customApproachMessage) {
+          setCustomMessage(opportunity.customApproachMessage);
+        } else {
+          const pkgName = opportunity.suggestedPackageIds && opportunity.suggestedPackageIds.length > 0
+            ? pkgs.find((p) => p.id === opportunity.suggestedPackageIds![0])?.name
+            : undefined;
+          const built = StorageService.buildApproachMessage(
+            matched.templateText,
+            opportunity,
+            currentUser.name,
+            companySettings.name,
+            pkgName
+          );
+          setCustomMessage(built);
+        }
       }
     }
 
@@ -141,7 +156,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
       window.removeEventListener('opportunity-activities-updated', handleActivitiesUpdated);
       window.removeEventListener('approach-templates-updated', handleTemplatesUpdated);
     };
-  }, [isOpen, opportunity, currentUser, companySettings]);
+  }, [isOpen, opportunity?.id, currentUser?.name, companySettings?.name]);
 
   if (!opportunity) return null;
 
@@ -167,6 +182,18 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
         pkgName
       );
       setCustomMessage(built);
+
+      // Persiste a escolha do modelo e a mensagem gerada na oportunidade
+      try {
+        const updatedOpp: Opportunity = {
+          ...opportunity,
+          selectedTemplateId: tplId,
+          customApproachMessage: built,
+        };
+        StorageService.saveOpportunity(updatedOpp);
+      } catch (e) {
+        console.debug('Aviso ao persistir modelo na oportunidade:', e);
+      }
     }
   };
 
@@ -396,6 +423,19 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
           <textarea
             value={customMessage}
             onChange={(e) => setCustomMessage(e.target.value)}
+            onBlur={() => {
+              if (opportunity && customMessage) {
+                try {
+                  StorageService.saveOpportunity({
+                    ...opportunity,
+                    selectedTemplateId,
+                    customApproachMessage: customMessage,
+                  });
+                } catch (e) {
+                  console.debug('Aviso ao salvar mensagem editada:', e);
+                }
+              }
+            }}
             rows={5}
             className="w-full p-3 bg-white border border-emerald-200 rounded-lg text-xs text-slate-800 font-sans leading-relaxed focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             placeholder="Mensagem para o cliente..."

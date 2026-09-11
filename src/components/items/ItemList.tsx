@@ -80,13 +80,14 @@ export const ItemList: React.FC<ItemListProps> = ({
         (item.description && item.description.toLowerCase().includes(term));
 
       const matchType = typeFilter === 'TODOS' || item.type === typeFilter;
+      const isPublished = item.active !== false && (item as any).active !== 0 && Boolean(item.showInCatalog);
       const matchCatalog =
         catalogFilter === 'TODOS' ||
-        (catalogFilter === 'CATALOGO_SIM' && item.showInCatalog) ||
-        (catalogFilter === 'CATALOGO_NAO' && !item.showInCatalog);
+        (catalogFilter === 'CATALOGO_SIM' && isPublished) ||
+        (catalogFilter === 'CATALOGO_NAO' && !isPublished);
 
       return matchSearch && matchType && matchCatalog;
-    });
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id));
   }, [items, searchTerm, typeFilter, catalogFilter]);
 
   const handleOpenNew = () => {
@@ -470,12 +471,21 @@ export const ItemList: React.FC<ItemListProps> = ({
                         {canManageProducts ? (
                           <button
                             type="button"
+                            disabled={item.active === false}
                             onClick={() => handleToggleCatalog(item)}
-                            title={item.showInCatalog ? 'Publicado na Vitrine (clique para ocultar)' : 'Oculto na Vitrine (clique para publicar)'}
-                            className={`p-2 rounded-lg border transition-colors cursor-pointer ${
-                              item.showInCatalog
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                            title={
+                              item.active === false
+                                ? 'Item desativado (não pode ser exibido na vitrine)'
+                                : item.showInCatalog
+                                ? 'Publicado na Vitrine (clique para ocultar)'
+                                : 'Oculto na Vitrine (clique para publicar)'
+                            }
+                            className={`p-2 rounded-lg border transition-colors ${
+                              item.active === false
+                                ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
+                                : item.showInCatalog
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 cursor-pointer'
                             }`}
                           >
                             <Store className="w-4 h-4" />
@@ -483,9 +493,9 @@ export const ItemList: React.FC<ItemListProps> = ({
                         ) : (
                           <span
                             className={`inline-flex p-1.5 rounded-md border ${
-                              item.showInCatalog
+                              item.active !== false && item.showInCatalog
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                                : 'bg-slate-50 text-slate-400 border-slate-200 opacity-60'
                             }`}
                           >
                             <Store className="w-3.5 h-3.5" />

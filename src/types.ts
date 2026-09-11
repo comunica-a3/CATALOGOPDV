@@ -634,7 +634,7 @@ export interface ProductNicheCard {
   badge: string; // Etiqueta superior do card (e.g. 'Gráfica & Impressos')
   order?: number; // Ordem de exibição na grade
   active?: boolean; // Se está visível na vitrine pública
-  itemTypeMatch?: 'PRODUTO_GRAFICO' | 'PRODUTO_FISICO' | 'SERVICO' | 'ALL';
+  itemTypeMatch?: 'PRODUTO_GRAFICO' | 'PRODUTO_FISICO' | 'SERVICO' | 'ALL' | string;
   categoryMatchKeywords?: string[]; // Palavras-chave para associar produtos automaticamente
   customKeywords?: string[]; // Termos de busca adicionais
   createdAt?: string;
@@ -878,6 +878,8 @@ export interface Opportunity {
   convertedCustomerId?: string;
   convertedBudgetId?: string;
   convertedSaleId?: string;
+  selectedTemplateId?: string;
+  customApproachMessage?: string;
   convertedAt?: string;
 
   // Encerramento

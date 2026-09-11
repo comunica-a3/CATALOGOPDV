@@ -230,7 +230,7 @@ export const POSView: React.FC<POSViewProps> = ({
       }
 
       return matchSearch && matchCategory;
-    });
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id));
   }, [activeItems, allServiceItems, searchTerm, selectedCategoryTab, posMode]);
 
   // Filtered Online Services
@@ -890,27 +890,20 @@ export const POSView: React.FC<POSViewProps> = ({
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (targetUrl) {
+                        {Boolean(targetUrl?.trim()) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleOpenExternalService(targetUrl);
-                            } else {
-                              setToastMessage(`Nenhuma URL configurada para "${item.name}". Configure no cadastro de Itens e Produtos.`);
-                              setTimeout(() => setToastMessage(''), 4000);
-                            }
-                          }}
-                          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-colors cursor-pointer ${
-                            targetUrl
-                              ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border-cyan-200'
-                              : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                          }`}
-                          title={targetUrl ? `Abrir página do serviço: ${targetUrl}` : 'Nenhuma URL configurada no cadastro do item'}
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Abrir serviço</span>
-                        </button>
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 text-[11px] font-bold rounded-lg border bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border-cyan-200 transition-colors cursor-pointer"
+                            title={`Abrir página do serviço: ${targetUrl}`}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Abrir serviço</span>
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -918,7 +911,7 @@ export const POSView: React.FC<POSViewProps> = ({
                             e.stopPropagation();
                             handleItemClick(item);
                           }}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 text-[11px] font-bold rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs transition-colors cursor-pointer"
+                          className={`${Boolean(targetUrl?.trim()) ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 py-1.5 px-2 text-[11px] font-bold rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white shadow-xs transition-colors cursor-pointer`}
                           title="Adicionar serviço ao pedido"
                         >
                           <Plus className="w-3 h-3" />

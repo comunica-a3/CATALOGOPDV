@@ -66,10 +66,39 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
     if (partial) return partial.id;
   }
 
-  // 2. Classificação pelo Tipo de Item configurado no Nicho
-  const matchedByType = niches.find(
-    (n) => n.itemTypeMatch && n.itemTypeMatch !== 'ALL' && n.itemTypeMatch === item.type
+  // Obter separações conhecidas para suporte a correspondência por id ou nome
+  const knownSeparations = StorageService.getProductSeparations();
+  const currentItemSep = knownSeparations.find(
+    (s) => s.id === item.type || s.name.toLowerCase() === item.type?.toLowerCase()
   );
+
+  // 2. Classificação pelo Tipo/Separação de Item configurado no Nicho
+  const matchedByType = niches.find((n) => {
+    if (!n.itemTypeMatch || n.itemTypeMatch === 'ALL') return false;
+    // Correspondência direta por ID ou valor
+    if (n.itemTypeMatch === item.type) return true;
+    if (item.type && n.itemTypeMatch.toLowerCase() === item.type.toLowerCase()) return true;
+    // Correspondência cruzada por separação (ID x Nome)
+    if (currentItemSep) {
+      if (
+        n.itemTypeMatch === currentItemSep.id ||
+        n.itemTypeMatch.toLowerCase() === currentItemSep.name.toLowerCase()
+      ) {
+        return true;
+      }
+    }
+    const nicheSep = knownSeparations.find(
+      (s) => s.id === n.itemTypeMatch || s.name.toLowerCase() === n.itemTypeMatch.toLowerCase()
+    );
+    if (
+      nicheSep &&
+      (nicheSep.id === item.type || nicheSep.name.toLowerCase() === item.type?.toLowerCase())
+    ) {
+      return true;
+    }
+    return false;
+  });
+
   if (matchedByType) {
     return matchedByType.id;
   }
@@ -101,6 +130,14 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
         n.title.toLowerCase().includes('servico')
     );
     if (serv) return serv.id;
+  }
+
+  // 4. Fallback por nome da separação customizada no título do nicho
+  if (currentItemSep) {
+    const matchedBySepTitle = niches.find((n) =>
+      n.title.toLowerCase().includes(currentItemSep.name.toLowerCase())
+    );
+    if (matchedBySepTitle) return matchedBySepTitle.id;
   }
 
   // 4. Verificação por categoria e palavras-chave
@@ -310,9 +347,12 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     return niches.filter((n) => n.active !== false);
   }, [niches]);
 
-  // Filter only items marked with showInCatalog && active
+  // Filter only items strictly active && marked with showInCatalog
   const catalogItems = useMemo(() => {
-    return items.filter((i) => i.showInCatalog && i.active !== false);
+    return items.filter((i) => {
+      const isActive = i.active !== false && (i as any).active !== 0 && (i as any).active !== 'false';
+      return isActive && i.showInCatalog;
+    });
   }, [items]);
 
   // Contagem de itens por nicho
@@ -387,7 +427,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       return matchSearch && matchCategory && matchType;
     });
 
-    // Sorting
+    // Sorting com desempate determinístico e estável entre ciclos de sincronização
     return result.sort((a, b) => {
       const getBasePrice = (item: Item) => {
         if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2') {
@@ -400,15 +440,32 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       };
 
       if (sortBy === 'price_asc') {
-        return getBasePrice(a) - getBasePrice(b);
+        const diff = getBasePrice(a) - getBasePrice(b);
+        if (diff !== 0) return diff;
+        return (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id);
       }
       if (sortBy === 'price_desc') {
-        return getBasePrice(b) - getBasePrice(a);
+        const diff = getBasePrice(b) - getBasePrice(a);
+        if (diff !== 0) return diff;
+        return (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id);
       }
       if (sortBy === 'name_asc') {
-        return a.name.localeCompare(b.name, 'pt-BR');
+        return (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id);
       }
-      return 0;
+
+      // Ordenação padrão/destaque:
+      // 1. Destaque manual configurado no produto
+      const featDiff = (b.featuredInCatalog ? 1 : 0) - (a.featuredInCatalog ? 1 : 0);
+      if (featDiff !== 0) return featDiff;
+
+      // 2. Presença de foto
+      const hasImgA = Boolean(a.imageUrl && a.imageUrl.trim());
+      const hasImgB = Boolean(b.imageUrl && b.imageUrl.trim());
+      const imgDiff = (hasImgB ? 1 : 0) - (hasImgA ? 1 : 0);
+      if (imgDiff !== 0) return imgDiff;
+
+      // 3. Desempate estável e determinístico por nome e ID
+      return (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id);
     });
   }, [catalogItems, selectedNiche, searchTerm, selectedCategory, selectedType, sortBy]);
 

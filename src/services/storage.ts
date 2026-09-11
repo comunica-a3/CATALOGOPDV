@@ -1469,7 +1469,7 @@ export class StorageService {
     });
   }
 
-  static saveCustomer(customer: Customer): Customer {
+  static saveCustomer(customer: Customer, user?: User): Customer {
     const cleanPhone = normalizePhone(customer.phone);
     if (!cleanPhone) {
       throw new Error('O Telefone é obrigatório para o cadastro do cliente.');
@@ -1478,12 +1478,16 @@ export class StorageService {
       throw new Error('O Nome do cliente é obrigatório.');
     }
 
-    // Unicidade garantida por telefone normalizado
-    const duplicate = this.checkDuplicateCustomerPhone(customer.phone, customer.id);
-    if (duplicate) {
-      throw new Error(
-        `Já existe um cliente cadastrado com o telefone ${formatPhone(customer.phone)}: "${duplicate.name}".`
-      );
+    const isTest = this.isTestUserActive() || Boolean(user?.isTestUser) || Boolean((customer as any)?.isTestCustomer);
+
+    // Unicidade garantida por telefone normalizado (ignora em ambiente de teste para permitir simulação livre)
+    if (!isTest) {
+      const duplicate = this.checkDuplicateCustomerPhone(customer.phone, customer.id);
+      if (duplicate) {
+        throw new Error(
+          `Já existe um cliente cadastrado com o telefone ${formatPhone(customer.phone)}: "${duplicate.name}".`
+        );
+      }
     }
 
     const customers = this.getCustomers();
@@ -1491,11 +1495,11 @@ export class StorageService {
       ...customer,
       name: customer.name.trim(),
       phone: formatPhone(customer.phone),
+      ...(isTest ? { isTestCustomer: true } : {}),
     };
 
-    // If active user is test employee, do not persist to database or localStorage
-    if (this.isTestUserActive()) {
-      formattedCustomer.isTestCustomer = true;
+    // Se o usuário atual for de teste/simulação, não persiste no banco nem no armazenamento real
+    if (isTest) {
       return formattedCustomer;
     }
 
@@ -1754,6 +1758,8 @@ export class StorageService {
       sku: item.sku.trim().toUpperCase(),
       marginReais,
       marginPercent,
+      // Se o produto for inativo, garante que não fica publicado no catálogo público
+      showInCatalog: item.active === false ? false : Boolean(item.showInCatalog),
       createdAt: item.createdAt || now,
       updatedAt: now,
     };
@@ -1899,6 +1905,9 @@ export class StorageService {
     const item = this.getItemById(id);
     if (!item) return undefined;
     item.active = !item.active;
+    if (!item.active) {
+      item.showInCatalog = false;
+    }
     return await this.saveItem(item);
   }
 

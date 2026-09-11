@@ -2007,6 +2007,12 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
     const body = req.body;
     const now = new Date().toISOString();
 
+    // Check if test user operation: do not persist to real database
+    if (req.user?.isTestUser || body.isTestSale) {
+      res.json({ ...body, id, updatedAt: now, isTest: true });
+      return;
+    }
+
     const existingSale = await db.get<any>('SELECT * FROM sales WHERE id = ?', [id]);
     if (!existingSale) {
       res.status(404).json({ error: 'Venda não encontrada.' });

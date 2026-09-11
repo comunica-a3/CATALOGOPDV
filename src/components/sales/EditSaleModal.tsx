@@ -16,13 +16,14 @@ import {
 import { StorageService } from '../../services/storage';
 import {
   CompanySettings,
+  Customer,
   Item,
   PaymentRecord,
   Sale,
   SaleItem,
   User,
 } from '../../types';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatCurrency, formatDateTime, maskPhone } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
 
 interface EditSaleModalProps {
@@ -47,17 +48,30 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
   // Catalog items for "Add Item" picker
   const [catalogItems] = useState<Item[]>(() => StorageService.getItems());
   const [users] = useState<User[]>(() => StorageService.getUsers());
+  const [customers] = useState<Customer[]>(() => StorageService.getCustomers());
   const sellers = useMemo(
     () => users.filter((u) => u.role === 'VENDEDOR' || u.role === 'VENDEDOR_EXTERNO' || u.role === 'ADMINISTRADOR' || u.role === 'COLABORADOR'),
     [users]
   );
 
   // Form states initialized with original sale data
+  const [customerId, setCustomerId] = useState<string>(sale.customerId || '');
   const [customerName, setCustomerName] = useState(sale.customerName || '');
-  const [customerPhone, setCustomerPhone] = useState(sale.customerPhone || '');
+  const [customerPhone, setCustomerPhone] = useState(sale.customerPhone ? maskPhone(sale.customerPhone) : '');
   const [customerDocument, setCustomerDocument] = useState(sale.customerDocument || '');
   const [sellerId, setSellerId] = useState(sale.sellerId || '');
   const [sellerName, setSellerName] = useState(sale.sellerName || '');
+
+  const handleSelectCustomer = (selectedId: string) => {
+    setCustomerId(selectedId);
+    if (!selectedId) return;
+    const found = customers.find((c) => c.id === selectedId);
+    if (found) {
+      setCustomerName(found.name);
+      setCustomerPhone(maskPhone(found.phone));
+      setCustomerDocument(found.document || '');
+    }
+  };
 
   // Items state (cloned from sale.items)
   const [items, setItems] = useState<SaleItem[]>(() =>
@@ -254,7 +268,7 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
         saleId: sale.id,
         reason: cleanReason,
         user: currentUser || undefined,
-        customerId: sale.customerId,
+        customerId: customerId || sale.customerId,
         customerName: customerName.trim() || 'Consumidor Final',
         customerPhone: customerPhone.trim(),
         customerDocument: customerDocument.trim(),
@@ -291,6 +305,19 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh]">
         <div className="p-5 overflow-y-auto space-y-5 text-xs">
+          {/* Simulation Mode Banner */}
+          {(StorageService.isTestUserActive() || currentUser?.isTestUser) && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed">
+                <span className="font-bold">Modo Simulação Ativo (Usuário de Testes):</span>
+                <p className="text-amber-800 mt-0.5">
+                  Esta edição será testada visualmente em tela, sem gravar alterações no banco de dados real nem afetar o estoque oficial.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Info Banner */}
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-blue-900">
             <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
@@ -305,10 +332,31 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
 
           {/* Customer & Seller Section */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
-              <UserIcon className="w-3.5 h-3.5 text-blue-600" />
-              <span>Cliente e Vendedor</span>
-            </h4>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                <UserIcon className="w-3.5 h-3.5 text-blue-600" />
+                <span>Cliente e Vendedor</span>
+              </h4>
+
+              {customers.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-slate-500 font-medium">Cliente Cadastrado:</span>
+                  <select
+                    value={customerId}
+                    onChange={(e) => handleSelectCustomer(e.target.value)}
+                    className="text-xs py-1 px-2.5 rounded-lg border border-slate-300 bg-white font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[240px] truncate"
+                  >
+                    <option value="">-- Selecionar da Lista --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.phone ? `(${maskPhone(c.phone)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-slate-600 font-medium mb-1">Nome do Cliente</label>
@@ -325,8 +373,9 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
                 <input
                   type="text"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  onChange={(e) => setCustomerPhone(maskPhone(e.target.value))}
                   placeholder="(00) 00000-0000"
+                  maxLength={15}
                   className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>

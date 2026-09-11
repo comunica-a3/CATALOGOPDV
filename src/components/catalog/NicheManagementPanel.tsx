@@ -23,7 +23,7 @@ import React, { useEffect, useState } from 'react';
 import { PRESET_NICHE_IMAGES } from '../../data/initialCatalogNiches';
 import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
-import { ProductNicheCard } from '../../types';
+import { ProductNicheCard, ProductSeparation } from '../../types';
 import { compressImage } from '../../utils/imageCompressor';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 
@@ -39,6 +39,9 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
   const [niches, setNiches] = useState<ProductNicheCard[]>(() =>
     StorageService.getCatalogNiches()
   );
+  const [productSeparations, setProductSeparations] = useState<ProductSeparation[]>(() =>
+    StorageService.getProductSeparations()
+  );
   const [editingNiche, setEditingNiche] = useState<ProductNicheCard | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [nicheToDelete, setNicheToDelete] = useState<ProductNicheCard | null>(null);
@@ -53,7 +56,7 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
   const [formCtaText, setFormCtaText] = useState('Ver produtos');
   const [formBadge, setFormBadge] = useState('Destaque');
   const [formImageUrl, setFormImageUrl] = useState('');
-  const [formItemTypeMatch, setFormItemTypeMatch] = useState<'PRODUTO_GRAFICO' | 'PRODUTO_FISICO' | 'SERVICO' | 'ALL'>('ALL');
+  const [formItemTypeMatch, setFormItemTypeMatch] = useState<string>('ALL');
   const [formKeywords, setFormKeywords] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [formError, setFormError] = useState('');
@@ -64,8 +67,19 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
       const updated = StorageService.getCatalogNiches();
       setNiches(updated);
     };
+    const onSepsUpdate = () => {
+      setProductSeparations(StorageService.getProductSeparations());
+    };
     window.addEventListener('catalog-niches-updated', onUpdate);
-    return () => window.removeEventListener('catalog-niches-updated', onUpdate);
+    window.addEventListener('product-separations-updated', onSepsUpdate);
+    window.addEventListener('catalog-updated', onSepsUpdate);
+    window.addEventListener('items-updated', onSepsUpdate);
+    return () => {
+      window.removeEventListener('catalog-niches-updated', onUpdate);
+      window.removeEventListener('product-separations-updated', onSepsUpdate);
+      window.removeEventListener('catalog-updated', onSepsUpdate);
+      window.removeEventListener('items-updated', onSepsUpdate);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -80,6 +94,9 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
   };
 
   const handleStartCreate = () => {
+    // Recarrega separações ativas de produtos cadastradas em Itens e Produtos
+    const freshSeps = StorageService.getProductSeparations();
+    setProductSeparations(freshSeps);
     setEditingNiche(null);
     setIsCreatingNew(true);
     setFormTitle('');
@@ -95,6 +112,9 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
   };
 
   const handleStartEdit = (niche: ProductNicheCard) => {
+    // Recarrega separações ativas de produtos cadastradas em Itens e Produtos
+    const freshSeps = StorageService.getProductSeparations();
+    setProductSeparations(freshSeps);
     setIsCreatingNew(false);
     setEditingNiche(niche);
     setFormTitle(niche.title);
@@ -438,19 +458,25 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Vincular ao Tipo de Item
+                      Separação de Produtos Exibida no Nicho
                     </label>
                     <select
                       value={formItemTypeMatch}
                       onChange={(e) =>
-                        setFormItemTypeMatch(e.target.value as any)
+                        setFormItemTypeMatch(e.target.value)
                       }
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     >
-                      <option value="ALL">Qualquer Tipo (Personalizado por palavras-chave)</option>
-                      <option value="PRODUTO_GRAFICO">Produtos Gráficos / Impressos</option>
-                      <option value="PRODUTO_FISICO">Produtos Físicos / Eletrônicos</option>
-                      <option value="SERVICO">Serviços / Serviços Digitais</option>
+                      <option value="ALL">Qualquer Tipo / Separação (Filtro por Palavras-chave ou Amplo)</option>
+                      {productSeparations.map((sep) => (
+                        <option key={sep.id} value={sep.id}>
+                          {sep.name} {sep.isSystem ? '(Separação Padrão)' : '(Separação Customizada)'}
+                        </option>
+                      ))}
+                      {formItemTypeMatch !== 'ALL' &&
+                        !productSeparations.some((s) => s.id === formItemTypeMatch) && (
+                          <option value={formItemTypeMatch}>{formItemTypeMatch}</option>
+                        )}
                     </select>
                   </div>
                 </div>
@@ -691,7 +717,18 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
                     <span>Botão: <strong>{niche.ctaText}</strong></span>
                     {niche.itemTypeMatch && niche.itemTypeMatch !== 'ALL' && (
                       <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded text-[10px]">
-                        {niche.itemTypeMatch}
+                        {productSeparations.find(
+                          (s) =>
+                            s.id === niche.itemTypeMatch ||
+                            s.name.toLowerCase() === niche.itemTypeMatch?.toLowerCase()
+                        )?.name ||
+                          (niche.itemTypeMatch === 'PRODUTO_GRAFICO'
+                            ? 'Gráficos'
+                            : niche.itemTypeMatch === 'PRODUTO_FISICO'
+                            ? 'Físicos'
+                            : niche.itemTypeMatch === 'SERVICO'
+                            ? 'Serviços'
+                            : niche.itemTypeMatch)}
                       </span>
                     )}
                   </div>
