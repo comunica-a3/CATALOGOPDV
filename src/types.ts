@@ -7,6 +7,7 @@ export interface ProductSeparation {
   icon?: string;
   isSystem?: boolean;
   sortOrder?: number;
+  behavior?: 'GRAFICO' | 'FISICO' | 'SERVICO';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -610,12 +611,17 @@ export interface CompanySettings {
   city: string;
   state: string;
   logoUrl?: string;
+  logoDriveFileId?: string; // ID do arquivo da logo no Google Drive (zero armazenamento local)
+  logoDriveFileName?: string; // Nome original do arquivo da logo no Google Drive
+  logoDriveThumbnailUrl?: string; // URL da miniatura no Google Drive
+  logoDriveAccount?: string; // Conta Google associada
   receiptFooterMessage: string;
   paymentMethods: string[];
   defaultSupplierFreight?: number; // Frete padrão de fornecedor terceirizado (R$ 20,00)
   commissionRates?: ItemTypeCommissionRates; // Porcentagens de comissão por tipo de item
   promoterCommissionPercent?: number; // Porcentagem global destinada ao Promotor (retirada da comissão do Vendedor)
   catalogSubtitle?: string; // Frase de destaque / slogan exibida no catálogo digital
+  catalogHeaderType?: 'NAME' | 'LOGO'; // Exibição do Header do Catálogo: Nome da Marca ou Logo Personalizada
   prospectingTexts?: {
     mainTitle?: string;
     mainSubtitle?: string;

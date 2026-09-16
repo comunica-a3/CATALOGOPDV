@@ -87,6 +87,7 @@ import {
 } from '../utils/security';
 import { api } from './api';
 import { formatPhone, normalizePhone } from '../utils/formatters';
+import { isGraphicOrPersonalizedItem } from '../utils/productUtils';
 
 const STORAGE_KEYS = {
   SETTINGS: 'pdv_company_settings',
@@ -301,6 +302,9 @@ export class StorageService {
     if (!settings.catalogSubtitle) {
       settings.catalogSubtitle = 'Sua rotina, mais simples.';
     }
+    if (!settings.catalogHeaderType) {
+      settings.catalogHeaderType = settings.logoUrl || settings.logoDriveFileId ? 'LOGO' : 'NAME';
+    }
     return settings;
   }
 
@@ -368,6 +372,7 @@ export class StorageService {
         nichesRes,
         productionRes,
         separationsRes,
+        docTemplatesRes,
       ] = await Promise.allSettled([
         api.getSettings(),
         api.getUsers(),
@@ -387,6 +392,7 @@ export class StorageService {
         api.getCatalogNiches(),
         api.getProductionOrders(),
         api.getProductSeparations(),
+        api.getDocumentTemplates(),
       ]);
 
       if (settingsRes.status === 'fulfilled' && settingsRes.value) {
@@ -509,12 +515,25 @@ export class StorageService {
 
       // Robust Product Separations Sync (Server Authority)
       if (separationsRes.status === 'fulfilled' && Array.isArray(separationsRes.value)) {
-        const remoteSeps = separationsRes.value;
+        const remoteSeps = separationsRes.value.filter(
+          (s: any) => s.id !== 'PRODUTO_PERSONALIZADO' && s.description !== 'Brindes, canecas, camisetas e produtos personalizados'
+        );
         if (remoteSeps.length > 0) {
           setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, remoteSeps);
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('product-separations-updated'));
             window.dispatchEvent(new CustomEvent('catalog-updated'));
+          }
+        }
+      }
+
+      // Robust Document Templates Sync (Server Authority)
+      if (docTemplatesRes.status === 'fulfilled' && Array.isArray(docTemplatesRes.value)) {
+        const remoteTemplates = docTemplatesRes.value;
+        if (remoteTemplates.length > 0) {
+          this.saveDocumentTemplates(remoteTemplates);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('document-templates-updated', { detail: remoteTemplates }));
           }
         }
       }
@@ -880,6 +899,8 @@ export class StorageService {
 
   static saveSettings(settings: CompanySettings): void {
     setItemToStorage(STORAGE_KEYS.SETTINGS, settings);
+    notifyRealtime('catalog-updated', { type: 'settings' });
+    notifyRealtime('settings-updated', settings);
     api.saveSettings(settings).catch((e) => console.debug('Background saveSettings sync notice:', e));
   }
 
@@ -1530,7 +1551,7 @@ export class StorageService {
     let hasChanges = false;
 
     // Normalize any previous cat-servicos-digitais to cat-servicos
-    const updatedItems = items.map((it) => {
+    let updatedItems = items.map((it) => {
       if (it.categoryId === 'cat-servicos-digitais') {
         hasChanges = true;
         return { ...it, categoryId: 'cat-servicos' };
@@ -1538,7 +1559,7 @@ export class StorageService {
       return it;
     });
 
-    // Ensure all real online services are classified under the existing category 'cat-servicos' (Serviços)
+    // Ensure existing online services are enriched with their service URL (do not synthesize new items)
     for (const svc of onlineServices) {
       const itemId = `prod-srv-${svc.id.replace('srv-', '')}`;
       const existingItem = updatedItems.find(
@@ -1551,41 +1572,15 @@ export class StorageService {
           existingItem.url = svc.url;
           hasChanges = true;
         }
-      } else if (!existingIds.has(itemId) && !existingIds.has(svc.id) && !existingNames.has(svc.name.toLowerCase().trim())) {
-        const costPrice = svc.cost || 0;
-        const salePrice = svc.price || 15.0;
-        const marginReais = Number((salePrice - costPrice).toFixed(2));
-        const marginPercent = salePrice > 0 ? Number(((marginReais / salePrice) * 100).toFixed(2)) : 0;
-        const onlineItem: Item = {
-          id: itemId,
-          name: svc.name,
-          type: 'SERVICO',
-          categoryId: 'cat-servicos',
-          sku: `SRV-${svc.id.replace('srv-', '').toUpperCase()}`,
-          description: svc.description || 'Serviço online prestado no balcão',
-          supplierCost: costPrice,
-          supplierFreight: 0,
-          costPrice,
-          salePrice,
-          marginReais,
-          marginPercent,
-          stock: 999,
-          minStock: 0,
-          pricingModel: 'POR_UNIDADE',
-          productionType: 'PRODUCAO_PROPRIA',
-          serviceUrl: svc.url,
-          url: svc.url,
-          active: svc.active !== false,
-          showInCatalog: true,
-          featuredInCatalog: false,
-          createdAt: svc.createdAt,
-          updatedAt: svc.updatedAt,
-        };
-        updatedItems.push(onlineItem);
-        existingIds.add(itemId);
-        existingNames.add(svc.name.toLowerCase().trim());
-        hasChanges = true;
       }
+    }
+
+    // Filter out any items in deletedIds or marked as 'apagar'
+    const deletedIds = this.getDeletedItemIds();
+    const cleanItems = updatedItems.filter((it) => !deletedIds.has(it.id) && it.name !== 'apagar');
+    if (cleanItems.length !== updatedItems.length) {
+      updatedItems = cleanItems;
+      hasChanges = true;
     }
 
     if (hasChanges) {
@@ -1603,12 +1598,15 @@ export class StorageService {
       STORAGE_KEYS.PRODUCT_SEPARATIONS,
       INITIAL_PRODUCT_SEPARATIONS
     );
-    // Guarantee the 3 standard system separations are always present
+    // Guarantee the standard system separations are always present
     const idMap = new Map<string, ProductSeparation>();
     for (const s of seps) {
-      idMap.set(s.id, s);
+      if (s.id !== 'PRODUTO_PERSONALIZADO' && s.description !== 'Brindes, canecas, camisetas e produtos personalizados') {
+        idMap.set(s.id, s);
+      }
     }
     for (const initSep of INITIAL_PRODUCT_SEPARATIONS) {
+      if (initSep.id === 'PRODUTO_PERSONALIZADO') continue;
       if (!idMap.has(initSep.id)) {
         idMap.set(initSep.id, initSep);
       } else {
@@ -1616,11 +1614,15 @@ export class StorageService {
         idMap.set(initSep.id, {
           ...existing,
           isSystem: true,
+          behavior: existing.behavior || initSep.behavior,
           sortOrder: existing.sortOrder !== undefined ? existing.sortOrder : initSep.sortOrder,
         });
       }
     }
-    return Array.from(idMap.values()).sort((a, b) => (a.sortOrder ?? 10) - (b.sortOrder ?? 10));
+    idMap.delete('PRODUTO_PERSONALIZADO');
+    return Array.from(idMap.values())
+      .filter((s) => s.id !== 'PRODUTO_PERSONALIZADO' && s.description !== 'Brindes, canecas, camisetas e produtos personalizados')
+      .sort((a, b) => (a.sortOrder ?? 10) - (b.sortOrder ?? 10));
   }
 
   static async saveProductSeparation(separation: Partial<ProductSeparation>): Promise<ProductSeparation> {
@@ -1713,6 +1715,7 @@ export class StorageService {
     let prefix = 'GRF-';
     if (type === 'PRODUTO_FISICO') prefix = 'FIS-';
     else if (type === 'SERVICO') prefix = 'SRV-';
+    else if (type === 'PRODUTO_PERSONALIZADO' || (typeof type === 'string' && type.toLowerCase().includes('personaliz'))) prefix = 'PRS-';
     else {
       const clean = (type || 'PRD').replace(/^sep[_-]/, '').substring(0, 3).toUpperCase();
       prefix = (clean || 'PRD') + '-';
@@ -1894,6 +1897,14 @@ export class StorageService {
     const items = this.getItems().filter((i) => i.id !== id);
     setItemToStorage(STORAGE_KEYS.ITEMS, items);
     this.markItemAsDeleted(id);
+
+    // Also remove from online services if applicable
+    const srvId = id.startsWith('prod-srv-') ? id.replace('prod-srv-', 'srv-') : id;
+    try {
+      api.deleteOnlineService(srvId).catch(() => {});
+      const services = this.getOnlineServices().filter((s) => s.id !== srvId && s.id !== id);
+      this.saveOnlineServices(services);
+    } catch {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('items-updated', { detail: { id, deleted: true } }));
@@ -2538,8 +2549,13 @@ export class StorageService {
     const allProdOrders = this.getProductionOrders();
 
     saleItems.forEach((si, idx) => {
-      if (si.itemType === 'PRODUTO_GRAFICO') {
-        const itemObj = this.getItemById(si.itemId);
+      const itemObj = this.getItemById(si.itemId);
+      const isGraphicOrPers =
+        si.itemType === 'PRODUTO_GRAFICO' ||
+        si.itemType === 'PRODUTO_PERSONALIZADO' ||
+        isGraphicOrPersonalizedItem(itemObj);
+
+      if (isGraphicOrPers) {
         const orderNumber = `PRD-${new Date().getFullYear()}-${String(allProdOrders.length + productionOrdersCreated.length + 1).padStart(4, '0')}`;
         
         const prodOrder: ProductionOrder = {
@@ -3005,8 +3021,13 @@ export class StorageService {
     }
 
     params.items.forEach((si) => {
-      if (si.itemType === 'PRODUTO_GRAFICO') {
-        const itemObj = this.getItemById(si.itemId);
+      const itemObj = this.getItemById(si.itemId);
+      const isGraphicOrPers =
+        si.itemType === 'PRODUTO_GRAFICO' ||
+        si.itemType === 'PRODUTO_PERSONALIZADO' ||
+        isGraphicOrPersonalizedItem(itemObj);
+
+      if (isGraphicOrPers) {
         prodOrders.unshift({
           id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
           orderNumber: `PRD-${new Date().getFullYear()}-${String(prodOrders.length + 1).padStart(4, '0')}`,

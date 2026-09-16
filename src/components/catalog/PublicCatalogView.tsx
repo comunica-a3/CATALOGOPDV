@@ -33,6 +33,7 @@ import { Category, CompanySettings, Item, ProductNicheCard, VitrineCartItem } fr
 import { formatCurrency } from '../../utils/formatters';
 import { getItemTypeLabel } from '../../utils/commissions';
 import { Badge } from '../common/Badge';
+import { BrandLogo } from '../common/BrandLogo';
 import { ProductImage } from '../common/ProductImage';
 import { CatalogCartModal } from './CatalogCartModal';
 import { CatalogItemModal } from './CatalogItemModal';
@@ -527,9 +528,23 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       {isStandalone && (
         <div className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 -mx-4 sm:-mx-6 -mt-4 mb-6 shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
-              <Store className="w-4 h-4 text-white" />
-            </div>
+            {companySettings?.catalogHeaderType === 'LOGO' && (companySettings?.logoUrl || companySettings?.logoDriveFileId) ? (
+              <BrandLogo
+                logoUrl={companySettings.logoUrl}
+                logoDriveFileId={companySettings.logoDriveFileId}
+                alt={companySettings.name}
+                className="h-8 max-w-[120px] object-contain rounded"
+                fallback={
+                  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
+                    <Store className="w-4 h-4 text-white" />
+                  </div>
+                }
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
+                <Store className="w-4 h-4 text-white" />
+              </div>
+            )}
             <div>
               <span className="font-extrabold text-sm sm:text-base text-slate-900 leading-tight block">
                 {companySettings?.name || 'Catálogo Digital'}
@@ -577,22 +592,50 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       )}
 
       {/* Brand Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-10 shadow-xl">
-        <div className="relative z-10 max-w-3xl space-y-4">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-10 shadow-xl flex flex-col items-center justify-center text-center">
+        <div className="relative z-10 max-w-3xl w-full mx-auto space-y-4 flex flex-col items-center text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Catálogo Digital</span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
-            {companySettings.name}
-          </h1>
+          {companySettings?.catalogHeaderType === 'LOGO' ? (
+            companySettings?.logoUrl || companySettings?.logoDriveFileId ? (
+              <div className="flex items-center justify-center py-2 w-full">
+                <BrandLogo
+                  logoUrl={companySettings.logoUrl}
+                  logoDriveFileId={companySettings.logoDriveFileId}
+                  alt={companySettings.name}
+                  className="max-h-24 sm:max-h-32 w-auto max-w-[85%] object-contain drop-shadow-md mx-auto"
+                  fallback={
+                    <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+                      {companySettings.name}
+                    </h1>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                <div className="px-6 py-3.5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/20 flex items-center gap-3">
+                  <Store className="w-7 h-7 text-blue-400 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-xl sm:text-2xl font-black text-white">{companySettings.name}</p>
+                    <p className="text-[11px] text-blue-200">Exibição de Logo ativada no catálogo</p>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : (
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+              {companySettings.name}
+            </h1>
+          )}
 
-          <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed">
+          <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed max-w-2xl mx-auto">
             {companySettings.catalogSubtitle || 'Sua rotina, mais simples.'}
           </p>
 
-          <div className="pt-2 flex flex-wrap items-center gap-3">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
               onClick={handleGeneralWhatsApp}
@@ -1265,9 +1308,9 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
                                 : 'A partir de'}
                             </span>
                             <span className="text-base font-black text-blue-700">
-                              {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2'
-                                ? `${formatCurrency(item.areaPricing?.salePricePerM2)}/m²`
-                                : item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE'
+                              {item.pricingModel === 'POR_M2'
+                                ? `${formatCurrency(item.areaPricing?.salePricePerM2 || item.salePrice)}/m²`
+                                : item.pricingModel === 'POR_PACOTE'
                                 ? formatCurrency(item.packages?.[0]?.salePrice || item.salePrice)
                                 : formatCurrency(item.salePrice)}
                             </span>

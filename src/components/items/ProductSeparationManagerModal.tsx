@@ -22,6 +22,7 @@ import {
   FolderPlus,
   Loader2,
   Info,
+  Globe,
 } from 'lucide-react';
 import { ProductSeparation, Item } from '../../types';
 import { StorageService } from '../../services/storage';
@@ -91,6 +92,7 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('Package');
+  const [behavior, setBehavior] = useState<'GRAFICO' | 'FISICO' | 'SERVICO'>('GRAFICO');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
@@ -135,6 +137,7 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
     setName('');
     setDescription('');
     setIcon('Package');
+    setBehavior('GRAFICO');
     setErrorMsg('');
     setIsFormOpen(true);
   };
@@ -144,6 +147,14 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
     setName(sep.name);
     setDescription(sep.description || '');
     setIcon(sep.icon || 'Package');
+    setBehavior(
+      sep.behavior ||
+      (sep.id === 'PRODUTO_GRAFICO' || sep.id === 'PRODUTO_PERSONALIZADO' || (sep.name && sep.name.toLowerCase().includes('personaliz'))
+        ? 'GRAFICO'
+        : sep.id === 'SERVICO'
+        ? 'SERVICO'
+        : 'FISICO')
+    );
     setErrorMsg('');
     setIsFormOpen(true);
   };
@@ -190,6 +201,7 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
         description: description.trim() || undefined,
         icon,
         isSystem,
+        behavior,
         sortOrder: editingSeparation?.sortOrder ?? 10,
       });
 
@@ -334,8 +346,17 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Materiais, Insumos, Brindes, Uniformes"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setName(val);
+                      if (!editingSeparation) {
+                        const low = val.toLowerCase();
+                        if (low.includes('personaliz') || low.includes('grafi') || low.includes('brinde') || low.includes('sublima')) {
+                          setBehavior('GRAFICO');
+                        }
+                      }
+                    }}
+                    placeholder="Ex: Materiais, Insumos, Brindes, Uniformes, Personalizados"
                     className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 font-medium text-slate-900"
                   />
                 </div>
@@ -355,6 +376,67 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Comportamento e Recursos de Configuração
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBehavior('GRAFICO')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      behavior === 'GRAFICO'
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>Gráficos & Personalizados</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      M², Pacotes, Preço progressivo por faixas, acabamentos e ordem de produção.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBehavior('FISICO')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      behavior === 'FISICO'
+                        ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                      <Package className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span>Físicos & Estoque</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      Controle de saldo, grade de variantes e reposição.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBehavior('SERVICO')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      behavior === 'SERVICO'
+                        ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                      <Globe className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Serviços Digitais</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      Cobrança avulsa e atendimento rápido.
+                    </p>
+                  </button>
                 </div>
               </div>
 
@@ -484,7 +566,7 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-sm text-slate-900">{sep.name}</span>
                         {sep.isSystem ? (
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-bold border border-slate-200">
@@ -493,6 +575,22 @@ export const ProductSeparationManagerModal: React.FC<ProductSeparationManagerMod
                         ) : (
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[10px] font-bold border border-blue-200">
                             Personalizada
+                          </span>
+                        )}
+                        {sep.behavior === 'GRAFICO' || sep.id === 'PRODUTO_GRAFICO' || sep.id === 'PRODUTO_PERSONALIZADO' || (sep.name && sep.name.toLowerCase().includes('personaliz')) ? (
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-bold border border-indigo-200 flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>M², Pacotes & Faixas</span>
+                          </span>
+                        ) : sep.behavior === 'SERVICO' || sep.id === 'SERVICO' ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                            <Globe className="w-2.5 h-2.5" />
+                            <span>Serviços Digitais</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 flex items-center gap-1">
+                            <Package className="w-2.5 h-2.5" />
+                            <span>Estoque & Variantes</span>
                           </span>
                         )}
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-semibold">

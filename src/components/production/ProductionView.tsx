@@ -14,6 +14,7 @@ import {
   Filter,
   Layers,
   List,
+  MessageCircle,
   Package,
   Paperclip,
   Plus,
@@ -215,6 +216,77 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
       case 'CANCELADO':
         return 'Cancelado';
     }
+  };
+
+  const handleSendProductionStatusMessage = (order: ProductionOrder) => {
+    // 1. Identificar cliente e telefone associados à ordem do pedido
+    let phone = order.customerPhone;
+    if (!phone && order.customerId) {
+      const cust = StorageService.getCustomerById(order.customerId);
+      if (cust && cust.phone) {
+        phone = cust.phone;
+      }
+    }
+
+    if (!phone) {
+      showToast(`O cliente ${order.customerName} não possui telefone/WhatsApp cadastrado.`);
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      showToast(`Telefone do cliente ${order.customerName} é inválido.`);
+      return;
+    }
+
+    // 2. Obter estado/status atual da produção gráfica existente
+    const statusLabel = getStatusLabel(order.status);
+    let statusText = '';
+    switch (order.status) {
+      case 'AGUARDANDO_PRODUCAO':
+        statusText = 'está aguardando o início da produção gráfica.';
+        break;
+      case 'EM_PRODUCAO':
+        statusText = 'já está em produção em nossa gráfica!';
+        break;
+      case 'REFAZER':
+        statusText = 'está passando por ajustes e revisão na produção.';
+        break;
+      case 'PRONTO':
+        statusText = 'está pronto para entrega/retirada!';
+        break;
+      case 'ENTREGUE':
+        statusText = 'foi finalizado e entregue com sucesso.';
+        break;
+      case 'CANCELADO':
+        statusText = 'foi cancelado.';
+        break;
+      default:
+        statusText = `está com o status: ${statusLabel}.`;
+    }
+
+    const companyName = companySettings?.name || 'Nossa Gráfica';
+    const customerName = order.customerName || 'Cliente';
+    const orderRef = order.saleNumber
+      ? `Pedido #${order.saleNumber} (Ordem ${order.orderNumber})`
+      : `Ordem #${order.orderNumber}`;
+
+    let msg = `Olá, *${customerName}*!\n\n`;
+    msg += `Atualização sobre a produção gráfica na *${companyName}*:\n\n`;
+    msg += `📋 *Referência:* ${orderRef}\n`;
+    msg += `📦 *Item:* ${order.quantity}x ${order.itemName}\n`;
+    if (order.configuration?.variantName) {
+      msg += `🔹 *Variação:* ${order.configuration.variantName}\n`;
+    }
+    msg += `⚙️ *Status da Produção:* *${statusLabel}*\n\n`;
+    msg += `Seu material ${statusText}\n`;
+    if (order.leadTime) {
+      msg += `⏱️ *Previsão informada:* ${order.leadTime}\n`;
+    }
+    msg += `\nQualquer dúvida, estamos à disposição!`;
+
+    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const getStatusBadge = (status: ProductionStatus) => {
@@ -500,7 +572,18 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
                             {order.productionType === 'PRODUCAO_PROPRIA' ? 'Interna' : 'Terceirizada'}
                           </span>
 
-                          <div className="flex items-center gap-1 text-slate-500">
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSendProductionStatusMessage(order);
+                              }}
+                              title={`Enviar mensagem do status atual (${getStatusLabel(order.status)}) para ${order.customerName} via WhatsApp`}
+                              className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
                             {order.files.length > 0 && (
                               <span className="flex items-center gap-0.5 text-blue-600 font-bold">
                                 <Paperclip className="w-3 h-3" /> {order.files.length}
@@ -593,16 +676,26 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setNewNotes(order.notes || '');
-                          }}
-                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-lg text-xs transition-colors cursor-pointer"
-                        >
-                          Detalhes / Arquivos
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleSendProductionStatusMessage(order)}
+                            title={`Avisar ${order.customerName} sobre o status (${getStatusLabel(order.status)}) via WhatsApp`}
+                            className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-emerald-200"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setNewNotes(order.notes || '');
+                            }}
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                          >
+                            Detalhes / Arquivos
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -638,15 +731,28 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
                 <span className="text-xs font-bold text-slate-700 block">
                   Fase Atual da Produção:
                 </span>
-                <button
-                  type="button"
-                  id="btn-download-production-order-pdf"
-                  onClick={handleDownloadOrderPDF}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Baixar Ordem (PDF)</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="btn-notify-production-whatsapp"
+                    onClick={() => handleSendProductionStatusMessage(selectedOrder)}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    title="Enviar mensagem do status atual para o cliente via WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>Avisar Cliente</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-download-production-order-pdf"
+                    onClick={handleDownloadOrderPDF}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Baixar Ordem (PDF)</span>
+                  </button>
+                </div>
               </div>
 
               {canUpdateStatus ? (

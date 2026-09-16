@@ -1471,6 +1471,10 @@ router.delete('/items/:id', async (req: AuthRequest, res) => {
     const { id } = req.params;
     await db.run('DELETE FROM items WHERE id = ?', [id]);
 
+    // Also delete any associated online service entry to prevent resurrection
+    const srvId = id.startsWith('prod-srv-') ? id.replace('prod-srv-', 'srv-') : id;
+    await db.run('DELETE FROM online_services WHERE id = ? OR id = ?', [id, srvId]);
+
     await logAudit({
       userId: req.user?.id,
       userName: req.user?.name,
@@ -1626,46 +1630,45 @@ router.get('/product-separations', async (req, res) => {
         icon TEXT,
         is_system INTEGER DEFAULT 0,
         sort_order INTEGER DEFAULT 0,
+        behavior TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
     `);
 
+    // Ensure behavior column exists if table was created previously without it
+    try {
+      await db.run('ALTER TABLE product_separations ADD COLUMN behavior TEXT');
+    } catch {
+      // Column already exists
+    }
+
+    const defaultSeps = [
+      { id: 'PRODUTO_GRAFICO', name: 'Gráficos', description: 'Materiais gráficos e impressos', icon: 'Layers', sort_order: 1, behavior: 'GRAFICO' },
+      { id: 'PRODUTO_FISICO', name: 'Físicos', description: 'Produtos físicos e itens de estoque', icon: 'Package', sort_order: 2, behavior: 'FISICO' },
+      { id: 'SERVICO', name: 'Serviços', description: 'Serviços digitais e atendimento', icon: 'Globe', sort_order: 3, behavior: 'SERVICO' },
+    ];
+
+    // Ensure PRODUTO_PERSONALIZADO is purged from database
+    await db.run("DELETE FROM product_separations WHERE id = 'PRODUTO_PERSONALIZADO'");
+
+    const now = new Date().toISOString();
+    for (const s of defaultSeps) {
+      await db.run(
+        `INSERT OR IGNORE INTO product_separations (id, name, description, icon, is_system, sort_order, behavior, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        [s.id, s.name, s.description, s.icon, s.sort_order, s.behavior, now, now]
+      );
+    }
+
+    // Update behavior for any existing rows where behavior is null
+    await db.run("UPDATE product_separations SET behavior = 'GRAFICO' WHERE behavior IS NULL AND (id = 'PRODUTO_GRAFICO' OR LOWER(name) LIKE '%personaliz%' OR LOWER(id) LIKE '%personaliz%')");
+    await db.run("UPDATE product_separations SET behavior = 'SERVICO' WHERE behavior IS NULL AND id = 'SERVICO'");
+    await db.run("UPDATE product_separations SET behavior = 'FISICO' WHERE behavior IS NULL");
+
     const rows = await db.all<any>(
       'SELECT * FROM product_separations ORDER BY sort_order ASC, name ASC'
     );
-
-    // If table is empty, auto-seed defaults
-    if (!rows || rows.length === 0) {
-      const defaultSeps = [
-        { id: 'PRODUTO_GRAFICO', name: 'Gráficos', description: 'Materiais gráficos e impressos', icon: 'Layers', sort_order: 1 },
-        { id: 'PRODUTO_FISICO', name: 'Físicos', description: 'Produtos físicos e itens de estoque', icon: 'Package', sort_order: 2 },
-        { id: 'SERVICO', name: 'Serviços', description: 'Serviços digitais e atendimento', icon: 'Globe', sort_order: 3 },
-      ];
-      const now = new Date().toISOString();
-      for (const s of defaultSeps) {
-        await db.run(
-          `INSERT OR IGNORE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
-          [s.id, s.name, s.description, s.icon, s.sort_order, now, now]
-        );
-      }
-      const seeded = await db.all<any>(
-        'SELECT * FROM product_separations ORDER BY sort_order ASC, name ASC'
-      );
-      return res.json(
-        seeded.map((r) => ({
-          id: r.id,
-          name: r.name,
-          description: r.description || undefined,
-          icon: r.icon || undefined,
-          isSystem: Number(r.is_system) === 1,
-          sortOrder: Number(r.sort_order) || 0,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        }))
-      );
-    }
 
     res.json(
       rows.map((r) => ({
@@ -1675,6 +1678,7 @@ router.get('/product-separations', async (req, res) => {
         icon: r.icon || undefined,
         isSystem: Number(r.is_system) === 1,
         sortOrder: Number(r.sort_order) || 0,
+        behavior: r.behavior || (r.id === 'PRODUTO_GRAFICO' || (r.name && r.name.toLowerCase().includes('personaliz')) ? 'GRAFICO' : r.id === 'SERVICO' ? 'SERVICO' : 'FISICO'),
         createdAt: r.created_at,
         updatedAt: r.updated_at,
       }))
@@ -1706,19 +1710,27 @@ router.post('/product-separations', async (req: AuthRequest, res) => {
         icon TEXT,
         is_system INTEGER DEFAULT 0,
         sort_order INTEGER DEFAULT 0,
+        behavior TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
     `);
 
+    try {
+      await db.run('ALTER TABLE product_separations ADD COLUMN behavior TEXT');
+    } catch {
+      // ignore
+    }
+
     // Check if updating existing
     const existing = await db.get<any>('SELECT * FROM product_separations WHERE id = ?', [id]);
     const isSystem = isSystemId || (existing && Number(existing.is_system) === 1) ? 1 : 0;
     const sortOrder = s.sortOrder !== undefined ? Number(s.sortOrder) : (existing ? Number(existing.sort_order) : 10);
+    const behavior = s.behavior || (id === 'PRODUTO_GRAFICO' || cleanName.toLowerCase().includes('personaliz') ? 'GRAFICO' : id === 'SERVICO' ? 'SERVICO' : 'FISICO');
 
     await db.run(
-      `INSERT OR REPLACE INTO product_separations (id, name, description, icon, is_system, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO product_separations (id, name, description, icon, is_system, sort_order, behavior, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         cleanName,
@@ -1726,6 +1738,7 @@ router.post('/product-separations', async (req: AuthRequest, res) => {
         s.icon || 'Package',
         isSystem,
         sortOrder,
+        behavior,
         existing?.created_at || s.createdAt || now,
         now,
       ]
@@ -3598,6 +3611,18 @@ router.get('/online-services', async (req, res) => {
   }
 });
 
+router.delete('/online-services/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM online_services WHERE id = ?', [id]);
+    const prodSrvId = id.startsWith('srv-') ? `prod-srv-${id.replace('srv-', '')}` : id;
+    await db.run('DELETE FROM items WHERE id = ? OR id = ?', [id, prodSrvId]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir serviço online.' });
+  }
+});
+
 router.get('/document-templates', async (req, res) => {
   try {
     const rows = await db.all<any>('SELECT * FROM document_templates ORDER BY name ASC');
@@ -3607,6 +3632,7 @@ router.get('/document-templates', async (req, res) => {
       name: r.name,
       description: r.description || undefined,
       category: r.category,
+      defaultPrice: Number(r.default_price || 0),
       templateBody: r.content,
       content: r.content,
       fields: r.variables_json ? JSON.parse(r.variables_json) : [],

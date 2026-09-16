@@ -15,6 +15,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
   Upload,
   X,
@@ -23,6 +24,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
 import { compressImage } from '../../utils/imageCompressor';
+import { isGraphicOrPersonalizedType } from '../../utils/productUtils';
 import { GoogleDrivePickerModal } from './GoogleDrivePickerModal';
 import {
   checkGoogleDriveFileAvailability,
@@ -245,6 +247,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // Calculated Margins
   const marginReais = Number((salePrice - costPrice).toFixed(2));
   const marginPercent = salePrice > 0 ? Number(((marginReais / salePrice) * 100).toFixed(2)) : 0;
+
+  const selectedSeparation = productSeparations.find((s) => s.id === type);
+  const isGraphicOrPersonalized = isGraphicOrPersonalizedType(type, productSeparations);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -589,14 +594,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     const now = new Date().toISOString();
     const itemId = itemToEdit?.id || `item-${Date.now()}`;
 
-    const isPhysicalOrCustom = type !== 'PRODUTO_GRAFICO' && type !== 'SERVICO';
+    const isPhysicalOnly = !isGraphicOrPersonalized && type !== 'SERVICO';
 
     const computedStock =
-      isPhysicalOrCustom
+      isPhysicalOnly
         ? variants.length > 0
           ? variants.reduce((acc, v) => acc + (v.stock || 0), 0)
           : stock
-        : undefined;
+        : (stock !== undefined && stock > 0 ? stock : undefined);
 
     const itemData: Item = {
       id: itemId,
@@ -626,22 +631,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       createdAt: itemToEdit?.createdAt || now,
       updatedAt: now,
 
-      // Physical / Custom
-      brand: isPhysicalOrCustom ? brand : undefined,
-      supplier: isPhysicalOrCustom ? supplier : undefined,
+      // Physical / Stock / Supplies
+      brand: brand?.trim() || undefined,
+      supplier: supplier?.trim() || undefined,
       stock: computedStock,
-      minStock: isPhysicalOrCustom ? minStock : undefined,
-      variants: isPhysicalOrCustom ? variants : undefined,
+      minStock: isPhysicalOnly ? minStock : (minStock !== undefined && minStock > 0 ? minStock : undefined),
+      variants: isPhysicalOnly ? variants : undefined,
 
-      // Graphic
-      pricingModel: type === 'PRODUTO_GRAFICO' ? pricingModel : undefined,
-      productionType: type === 'PRODUTO_GRAFICO' ? productionType : undefined,
-      leadTime: type === 'PRODUTO_GRAFICO' ? leadTime : undefined,
-      requiresFile: type === 'PRODUTO_GRAFICO' ? requiresFile : undefined,
-      options: type === 'PRODUTO_GRAFICO' ? options : undefined,
-      priceRules: type === 'PRODUTO_GRAFICO' && pricingModel === 'POR_UNIDADE' ? priceRules : undefined,
-      packages: type === 'PRODUTO_GRAFICO' && pricingModel === 'POR_PACOTE' ? packages : undefined,
-      areaPricing: type === 'PRODUTO_GRAFICO' && pricingModel === 'POR_M2' ? areaPricing : undefined,
+      // Graphic & Personalized settings (M², Pacotes, Faixas de Preço, Acabamentos, Prazos)
+      pricingModel: isGraphicOrPersonalized ? pricingModel : undefined,
+      productionType: isGraphicOrPersonalized ? productionType : undefined,
+      leadTime: isGraphicOrPersonalized ? leadTime : undefined,
+      requiresFile: isGraphicOrPersonalized ? requiresFile : undefined,
+      options: isGraphicOrPersonalized ? options : undefined,
+      priceRules: isGraphicOrPersonalized && pricingModel === 'POR_UNIDADE' ? priceRules : undefined,
+      packages: isGraphicOrPersonalized && pricingModel === 'POR_PACOTE' ? packages : undefined,
+      areaPricing: isGraphicOrPersonalized && pricingModel === 'POR_M2' ? areaPricing : undefined,
 
       // Service
       estimatedTime: type === 'SERVICO' ? estimatedTime : undefined,
@@ -716,7 +721,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            2. Configurações de {type === 'PRODUTO_GRAFICO' ? 'Gráfica' : type === 'SERVICO' ? 'Serviço' : (productSeparations.find(s => s.id === type)?.name || 'Estoque / Físico')}
+            2. Configurações de {
+              isGraphicOrPersonalized
+                ? (selectedSeparation?.name || 'Gráfica / Personalizados')
+                : type === 'SERVICO'
+                ? 'Serviço'
+                : (selectedSeparation?.name || 'Estoque / Físico')
+            }
           </button>
           <button
             type="button"
@@ -1242,9 +1253,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* TAB 2: CONFIGURAÇÕES ESPECÍFICAS CONFORME O TIPO */}
         {activeTab === 'especifico' && (
           <div className="space-y-5">
-            {/* IF PRODUTO_GRAFICO */}
-            {type === 'PRODUTO_GRAFICO' && (
+            {/* IF PRODUTO_GRAFICO OU PERSONALIZADOS (M², PACOTES, FAIXAS, ACABAMENTOS) */}
+            {isGraphicOrPersonalized && (
               <div className="space-y-5">
+                <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                      <span className="font-bold text-slate-800">
+                        Configurações Avançadas: {selectedSeparation?.name || 'Gráficos e Personalizados'}
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        Configure cobrança por M², Pacotes fechados, Preço progressivo por faixas, acabamentos adicionais e ordens de produção.
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 {/* Production Model & Rules */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
@@ -1785,11 +1809,58 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {/* Optional Supplies & Base Stock for Personalized/Graphic Items */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Insumo, Fornecedor e Saldo Base (Opcional)</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Marca / Fabricante
+                      </label>
+                      <input
+                        type="text"
+                        value={brand}
+                        onChange={(e) => setBrand(e.target.value)}
+                        placeholder="Ex: Live, Mecolour, Sulpen"
+                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Fornecedor Padrão
+                      </label>
+                      <input
+                        type="text"
+                        value={supplier}
+                        onChange={(e) => setSupplier(e.target.value)}
+                        placeholder="Ex: Distribuidor Brasil"
+                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Estoque Base (unidades cruas)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={stock}
+                        onChange={(e) => setStock(parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* IF PRODUTO_FISICO OR CUSTOM SEPARATION */}
-            {type !== 'PRODUTO_GRAFICO' && type !== 'SERVICO' && (
+            {/* IF PRODUTO_FISICO TRADICIONAL (NÃO GRÁFICO / NÃO PERSONALIZADO) */}
+            {!isGraphicOrPersonalized && type !== 'SERVICO' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>

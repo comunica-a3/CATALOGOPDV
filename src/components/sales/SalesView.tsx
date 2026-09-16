@@ -12,6 +12,7 @@ import {
   Filter,
   History,
   Layers,
+  MessageCircle,
   MessageSquare,
   Percent,
   Printer,
@@ -166,6 +167,78 @@ export const SalesView: React.FC<SalesViewProps> = ({
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const getProductionStatusLabel = (status: string) => {
+    switch (status) {
+      case 'AGUARDANDO_PRODUCAO':
+        return 'Aguardando Produção';
+      case 'EM_PRODUCAO':
+        return 'Em Produção';
+      case 'REFAZER':
+        return 'Refazer';
+      case 'PRONTO':
+        return 'Pronto para Entrega';
+      case 'ENTREGUE':
+        return 'Entregue ao Cliente';
+      case 'CANCELADO':
+        return 'Cancelado';
+      default:
+        return status;
+    }
+  };
+
+  const handleSendProductionStatus = (sale: Sale) => {
+    // 1. Identificar cliente e telefone associados ao pedido
+    let phone = sale.customerPhone;
+    if (!phone && sale.customerId) {
+      const customer = StorageService.getCustomerById(sale.customerId);
+      if (customer && customer.phone) {
+        phone = customer.phone;
+      }
+    }
+
+    if (!phone) {
+      alert(`O cliente ${sale.customerName} não possui telefone/WhatsApp cadastrado.`);
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      alert(`O telefone do cliente ${sale.customerName} é inválido.`);
+      return;
+    }
+
+    // 2. Identificar as ordens de produção gráfica do pedido
+    const productionOrders = StorageService.getProductionOrders().filter(
+      (po) => po.saleId === sale.id || po.saleNumber === sale.saleNumber
+    );
+
+    if (productionOrders.length === 0) {
+      alert(`O pedido #${sale.saleNumber} não possui itens em produção gráfica gerados.`);
+      return;
+    }
+
+    const companyName = companySettings?.name || 'Nossa Gráfica';
+    const customerName = sale.customerName || 'Cliente';
+
+    let msg = `Olá, *${customerName}*!\n\n`;
+    msg += `Atualização sobre o estado da produção gráfica do seu *Pedido #${sale.saleNumber}* na *${companyName}*:\n\n`;
+
+    productionOrders.forEach((po, idx) => {
+      const statusLabel = getProductionStatusLabel(po.status);
+      msg += `📦 *Item ${idx + 1}:* ${po.quantity}x ${po.itemName}\n`;
+      msg += `⚙️ *Status da Produção:* *${statusLabel}*\n`;
+      if (po.leadTime) {
+        msg += `⏱️ *Previsão informada:* ${po.leadTime}\n`;
+      }
+      msg += `\n`;
+    });
+
+    msg += `Qualquer dúvida, estamos à disposição!`;
+
+    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const getStatusBadge = (sale: Sale) => {
@@ -464,6 +537,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               <Edit className="w-4 h-4" />
                             </button>
                           )}
+
+                          {/* Send Production Status via WhatsApp */}
+                          <button
+                            type="button"
+                            id={`sale-production-notify-btn-${sale.id}`}
+                            onClick={() => handleSendProductionStatus(sale)}
+                            title="Enviar status da produção gráfica para o cliente via WhatsApp"
+                            className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-emerald-200"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
 
                           {/* Download Receipt PDF with Format Chooser */}
                           <button

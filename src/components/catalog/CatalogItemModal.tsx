@@ -14,6 +14,7 @@ import React, { useMemo, useState } from 'react';
 import { CompanySettings, Item, ItemPackage, ItemPriceRule, VitrineCartItem } from '../../types';
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
+import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
@@ -35,8 +36,10 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 }) => {
   if (!item) return null;
 
+  const isGraphicOrPersonalized = isGraphicOrPersonalizedItem(item) || item.pricingModel !== undefined;
+
   const [quantity, setQuantity] = useState<number>(() => {
-    if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_UNIDADE') {
+    if (isGraphicOrPersonalized && item.pricingModel === 'POR_UNIDADE') {
       return item.priceRules?.[0]?.minQuantity || 100;
     }
     return 1;
@@ -118,12 +121,12 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
     let belowMin = false;
     let valMsg: string | undefined;
 
-    if (item.type === 'PRODUTO_FISICO') {
+    if (!isGraphicOrPersonalized && item.type !== 'SERVICO') {
       if (selectedVariant) {
         uPrice = selectedVariant.salePrice;
       }
       tPrice = uPrice * quantity;
-    } else if (item.type === 'PRODUTO_GRAFICO') {
+    } else if (isGraphicOrPersonalized) {
       let additionalPrice = 0;
       item.options?.forEach((opt) => {
         const chosenValLabel = selectedOptions[opt.name];
@@ -216,7 +219,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
   };
 
   const handleWhatsAppQuote = () => {
-    if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2' && isBelowTechnicalMin) {
+    if (isGraphicOrPersonalized && item.pricingModel === 'POR_M2' && isBelowTechnicalMin) {
       alert(
         validationMessage ||
         `A medida informada (${areaM2} m²) está abaixo do mínimo técnico permitido (${technicalMinArea} m²). Por favor, ajuste as dimensões.`
@@ -228,7 +231,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
     let details = `Olá! Tenho interesse no produto *${item.name}* (SKU: ${item.sku}).\n\n`;
     details += `*Especificações Solicitadas:*\n`;
 
-    if (item.type === 'PRODUTO_GRAFICO') {
+    if (isGraphicOrPersonalized) {
       if (item.pricingModel === 'POR_M2') {
         details += `📐 Medidas: ${width}${widthUnit} x ${height}${heightUnit} (${widthInMeters}m x ${heightInMeters}m = ${areaM2}m²)\n`;
       } else if (item.pricingModel === 'POR_PACOTE' && selectedPackage) {
@@ -239,7 +242,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
           .map(([k, v]) => `${k}: ${v}`)
           .join(', ')}\n`;
       }
-    } else if (item.type === 'PRODUTO_FISICO' && selectedVariant) {
+    } else if (!isGraphicOrPersonalized && selectedVariant) {
       details += `🎨 Variante: ${selectedVariant.name}\n`;
     }
 
@@ -250,7 +253,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
   };
 
   const handleAddToCart = () => {
-    if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2' && isBelowTechnicalMin) {
+    if (isGraphicOrPersonalized && item.pricingModel === 'POR_M2' && isBelowTechnicalMin) {
       alert(
         validationMessage ||
         `A medida informada (${areaM2} m²) está abaixo do mínimo técnico permitido (${technicalMinArea} m²). Por favor, ajuste as dimensões.`
@@ -259,7 +262,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
     }
 
     if (onAddToCart) {
-      const isM2 = item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2';
+      const isM2 = isGraphicOrPersonalized && item.pricingModel === 'POR_M2';
       let label = item.name;
       if (isM2) {
         label = `${item.name} (${width}${widthUnit} x ${height}${heightUnit} — ${areaM2}m²)`;
@@ -324,7 +327,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         </div>
 
         {/* 1. M2 CONFIG */}
-        {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2' && (
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_M2' && (
           <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
@@ -474,7 +477,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 2. PACKAGES */}
-        {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE' && item.packages && (
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && item.packages && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione o Pacote de Quantidade:
@@ -505,7 +508,7 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 3. PHYSICAL VARIANTS */}
-        {item.type === 'PRODUTO_FISICO' && item.variants && item.variants.length > 0 && (
+        {!isGraphicOrPersonalized && item.variants && item.variants.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione a Opção / Modelo:
@@ -534,8 +537,8 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
           </div>
         )}
 
-        {/* 4. GRAPHIC OPTIONS (ACABAMENTOS) */}
-        {item.type === 'PRODUTO_GRAFICO' && item.options && item.options.length > 0 && (
+        {/* 4. GRAPHIC & PERSONALIZED OPTIONS (ACABAMENTOS) */}
+        {isGraphicOrPersonalized && item.options && item.options.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Escolha os Acabamentos:

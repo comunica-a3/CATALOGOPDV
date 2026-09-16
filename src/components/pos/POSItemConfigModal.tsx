@@ -24,6 +24,7 @@ import {
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
 import { getItemTypeLabel } from '../../utils/commissions';
+import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
@@ -48,9 +49,11 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
   const { currentUser } = useAuth();
   const canViewCosts = currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'COLABORADOR';
 
+  const isGraphicOrPersonalized = isGraphicOrPersonalizedItem(item) || item.pricingModel !== undefined;
+
   // Configuration States
   const [quantity, setQuantity] = useState<number>(() => {
-    if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_UNIDADE') {
+    if (isGraphicOrPersonalized && item.pricingModel === 'POR_UNIDADE') {
       return item.priceRules?.[0]?.minQuantity || 100;
     }
     return 1;
@@ -165,7 +168,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
       });
     }
 
-    if (item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO') {
+    if (!isGraphicOrPersonalized && item.type !== 'SERVICO') {
       if (selectedVariant) {
         uPrice = selectedVariant.salePrice;
         uCost = selectedVariant.costPrice;
@@ -174,7 +177,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
       uCost = uCost + additionalCost;
       tPrice = uPrice * quantity;
       tCost = uCost * quantity;
-    } else if (item.type === 'PRODUTO_GRAFICO') {
+    } else if (isGraphicOrPersonalized) {
       if (item.pricingModel === 'POR_M2') {
         const pricingResult = calculateAreaPricing({
           width,
@@ -277,7 +280,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
 
   const handleAdd = () => {
     // Block sale if below technical minimum
-    if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2') {
+    if (isGraphicOrPersonalized && item.pricingModel === 'POR_M2') {
       if (isBelowTechnicalMin) {
         alert(
           validationMessage ||
@@ -354,7 +357,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
           <div className="min-w-0 flex-1">
             <p className="text-xs text-slate-600 line-clamp-2">{item.description}</p>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              {item.type === 'PRODUTO_GRAFICO' && (
+              {isGraphicOrPersonalized && (
                 <Badge variant="primary" size="sm">
                   {item.pricingModel === 'POR_UNIDADE'
                     ? 'Preço por Faixa'
@@ -363,12 +366,12 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
                     : 'Preço por m²'}
                 </Badge>
               )}
-              {item.type === 'PRODUTO_GRAFICO' && item.leadTime && (
+              {isGraphicOrPersonalized && item.leadTime && (
                 <span className="text-[11px] text-slate-500 font-medium">
                   Prazo: {item.leadTime}
                 </span>
               )}
-              {item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO' && item.stock !== undefined && (
+              {!isGraphicOrPersonalized && item.type !== 'SERVICO' && item.stock !== undefined && (
                 <Badge
                   variant={(item.stock || 0) <= (item.minStock || 5) ? 'danger' : 'success'}
                   size="sm"
@@ -381,7 +384,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
         </div>
 
         {/* 1. PHYSICAL / CUSTOM CONFIG: VARIANTS */}
-        {item.type !== 'PRODUTO_GRAFICO' && item.type !== 'SERVICO' && item.variants && item.variants.length > 0 && (
+        {!isGraphicOrPersonalized && item.type !== 'SERVICO' && item.variants && item.variants.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">
               Selecione a Variante / Cor / Tamanho *
@@ -419,8 +422,8 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
           </div>
         )}
 
-        {/* 2. GRAPHIC CONFIG: M2 CALCULATION */}
-        {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2' && (
+        {/* 2. GRAPHIC / PERSONALIZED CONFIG: M2 CALCULATION */}
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_M2' && (
           <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3.5">
             {/* Header & Pricing Parameters */}
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -668,8 +671,8 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
           </div>
         )}
 
-        {/* 3. GRAPHIC CONFIG: PACKAGES */}
-        {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE' && item.packages && (
+        {/* 3. GRAPHIC / PERSONALIZED CONFIG: PACKAGES */}
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && item.packages && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">
               Selecione o Pacote Desejado *

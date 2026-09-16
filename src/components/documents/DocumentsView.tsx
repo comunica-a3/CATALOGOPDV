@@ -28,8 +28,9 @@ import {
   User as UserIcon,
   X,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
 import {
   Customer,
@@ -103,9 +104,37 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
 
   // Reload helpers
-  const reloadTemplates = () => {
+  const reloadTemplates = async () => {
+    try {
+      const remote = await api.getDocumentTemplates();
+      if (Array.isArray(remote) && remote.length > 0) {
+        StorageService.saveDocumentTemplates(remote);
+        setTemplates(remote);
+        return;
+      }
+    } catch {}
     setTemplates(StorageService.getDocumentTemplates());
   };
+
+  useEffect(() => {
+    reloadTemplates();
+
+    const handleTemplatesUpdated = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setTemplates(e.detail);
+      } else {
+        setTemplates(StorageService.getDocumentTemplates());
+      }
+    };
+
+    window.addEventListener('document-templates-updated', handleTemplatesUpdated);
+    window.addEventListener('storage-sync-completed', reloadTemplates);
+
+    return () => {
+      window.removeEventListener('document-templates-updated', handleTemplatesUpdated);
+      window.removeEventListener('storage-sync-completed', reloadTemplates);
+    };
+  }, []);
 
   const reloadGeneratedDocs = () => {
     setGeneratedDocs(StorageService.getGeneratedDocuments(currentUser.id, isAdmin || isCollaborator));

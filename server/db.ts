@@ -859,6 +859,34 @@ export async function runMigrations(): Promise<void> {
     );
   }
 
+  // Migration 010: Ensure packages table exists
+  if (!appliedVersions.has('010_ensure_packages_table')) {
+    console.log('Applying migration 010_ensure_packages_table...');
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS packages (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        target_audience TEXT,
+        description TEXT,
+        items_json TEXT NOT NULL,
+        total_individual_price REAL DEFAULT 0,
+        package_price REAL DEFAULT 0,
+        discount_percent REAL DEFAULT 0,
+        pitch TEXT,
+        featured INTEGER DEFAULT 0,
+        active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    await db.run(
+      'INSERT INTO schema_migrations VALUES (?, ?, ?)',
+      ['010_ensure_packages_table', 'Ensure commercial packages table exists', new Date().toISOString()]
+    );
+  }
+
   // Always run unconditional column check to heal any existing database schema drift
   await ensureAllTableColumns();
 }
@@ -1106,6 +1134,24 @@ export async function ensureAllTableColumns(): Promise<void> {
     await db.run(`
       CREATE INDEX IF NOT EXISTS idx_catalog_niches_order ON catalog_niches(niche_order);
     `);
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS packages (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        target_audience TEXT,
+        description TEXT,
+        items_json TEXT NOT NULL,
+        total_individual_price REAL DEFAULT 0,
+        package_price REAL DEFAULT 0,
+        discount_percent REAL DEFAULT 0,
+        pitch TEXT,
+        featured INTEGER DEFAULT 0,
+        active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
   } catch {}
 }
 
@@ -1252,26 +1298,29 @@ export async function seedDefaultDataIfEmpty(): Promise<void> {
   }
 
   // 5. Online Services & Document Templates
-  const svcCount = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM online_services');
-  if (!svcCount || svcCount.count === 0) {
-    for (const svc of INITIAL_ONLINE_SERVICES as any[]) {
-      await db.run(
-        `INSERT OR REPLACE INTO online_services (
-          id, name, category, price, turnaround_time, requirements, description, active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          svc.id,
-          svc.name,
-          svc.category,
-          svc.price || 0,
-          svc.turnaroundTime || '',
-          svc.requirements || '',
-          svc.description || '',
-          svc.active ? 1 : 0,
-          svc.createdAt || new Date().toISOString(),
-          svc.updatedAt || new Date().toISOString(),
-        ]
-      );
+  const hasExistingData = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM items');
+  if (!hasExistingData || hasExistingData.count === 0) {
+    const svcCount = await db.get<{ count: number }>('SELECT COUNT(*) as count FROM online_services');
+    if (!svcCount || svcCount.count === 0) {
+      for (const svc of INITIAL_ONLINE_SERVICES as any[]) {
+        await db.run(
+          `INSERT OR REPLACE INTO online_services (
+            id, name, category, price, turnaround_time, requirements, description, active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            svc.id,
+            svc.name,
+            svc.category,
+            svc.price || 0,
+            svc.turnaroundTime || '',
+            svc.requirements || '',
+            svc.description || '',
+            svc.active ? 1 : 0,
+            svc.createdAt || new Date().toISOString(),
+            svc.updatedAt || new Date().toISOString(),
+          ]
+        );
+      }
     }
   }
 
@@ -1748,12 +1797,17 @@ export async function initializeDatabase(): Promise<Client> {
     authToken,
   });
 
-  // Run migrations on Turso
-  await runMigrations();
+  try {
+    // Run migrations on Turso
+    await runMigrations();
 
-  // Seed default data if remote database is fresh
-  await seedDefaultDataIfEmpty();
+    // Seed default data if remote database is fresh
+    await seedDefaultDataIfEmpty();
 
-  console.log('Connected and initialized Turso Cloud Database successfully.');
-  return tursoClient;
+    console.log('Connected and initialized Turso Cloud Database successfully.');
+    return tursoClient;
+  } catch (err) {
+    tursoClient = null;
+    throw err;
+  }
 }

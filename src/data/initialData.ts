@@ -104,6 +104,7 @@ export const INITIAL_PRODUCT_SEPARATIONS: ProductSeparation[] = [
     icon: 'Layers',
     isSystem: true,
     sortOrder: 1,
+    behavior: 'GRAFICO',
   },
   {
     id: 'PRODUTO_FISICO',
@@ -112,6 +113,7 @@ export const INITIAL_PRODUCT_SEPARATIONS: ProductSeparation[] = [
     icon: 'Package',
     isSystem: true,
     sortOrder: 2,
+    behavior: 'FISICO',
   },
   {
     id: 'SERVICO',
@@ -120,6 +122,7 @@ export const INITIAL_PRODUCT_SEPARATIONS: ProductSeparation[] = [
     icon: 'Globe',
     isSystem: true,
     sortOrder: 3,
+    behavior: 'SERVICO',
   },
 ];
 

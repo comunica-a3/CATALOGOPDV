@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Category, Item, ItemType, ProductSeparation } from '../../types';
 import { formatCurrency, formatPercent } from '../../utils/formatters';
+import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ProductImage } from '../common/ProductImage';
@@ -392,9 +393,9 @@ export const ItemList: React.FC<ItemListProps> = ({
 
                       {/* Sale Price */}
                       <td className="py-3.5 px-3 font-bold text-slate-900">
-                        {item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2' ? (
-                          <span className="text-blue-700">{formatCurrency(item.areaPricing?.salePricePerM2)}/m²</span>
-                        ) : item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE' ? (
+                        {item.pricingModel === 'POR_M2' ? (
+                          <span className="text-blue-700">{formatCurrency(item.areaPricing?.salePricePerM2 || item.salePrice)}/m²</span>
+                        ) : item.pricingModel === 'POR_PACOTE' ? (
                           <span className="text-blue-700">A partir de {formatCurrency(item.packages?.[0]?.salePrice || item.salePrice)}</span>
                         ) : (
                           <span className="text-blue-700 font-bold">{formatCurrency(item.salePrice)}</span>
@@ -417,7 +418,38 @@ export const ItemList: React.FC<ItemListProps> = ({
 
                       {/* Stock / Graphic Model / Service */}
                       <td className="py-3.5 px-3">
-                        {item.type === 'PRODUTO_FISICO' ? (
+                        {isGraphicOrPersonalizedItem(item, productSeparations) || item.pricingModel ? (
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-700 block">
+                              {item.pricingModel === 'POR_PACOTE' || (item.packages && item.packages.length > 0)
+                                ? 'Pacotes Fechados'
+                                : item.pricingModel === 'POR_M2' || item.areaPricing
+                                ? 'Cobrança por m²'
+                                : item.pricingModel === 'POR_UNIDADE' || (item.priceRules && item.priceRules.length > 0)
+                                ? 'Faixas de Preço'
+                                : 'Por Unidade'}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-slate-400">
+                                {item.productionType === 'PRODUCAO_TERCEIRIZADA' ? 'Terceirizada' : 'Própria'}
+                              </span>
+                              {item.stock !== undefined && item.stock > 0 && (
+                                <span className="text-[10px] text-indigo-600 font-medium">
+                                  • {item.stock} un insumo
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : item.type === 'SERVICO' ? (
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-700 block">
+                              Serviço Digital
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {(item as any).estimatedTime || 'Sob Demanda'}
+                            </span>
+                          </div>
+                        ) : (
                           <div>
                             <span
                               className={`font-bold text-xs ${
@@ -438,30 +470,6 @@ export const ItemList: React.FC<ItemListProps> = ({
                                 Estoque Baixo!
                               </span>
                             )}
-                          </div>
-                        ) : item.type === 'PRODUTO_GRAFICO' ? (
-                          <div>
-                            <span className="text-[11px] font-semibold text-slate-700 block">
-                              {item.pricingModel === 'POR_PACOTE' || (item.packages && item.packages.length > 0)
-                                ? 'Pacotes'
-                                : item.pricingModel === 'POR_M2' || item.areaPricing
-                                ? 'Preço por m²'
-                                : item.pricingModel === 'POR_UNIDADE' || (item.priceRules && item.priceRules.length > 0)
-                                ? 'Faixas de Qtd'
-                                : 'Por Unidade'}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {item.productionType === 'PRODUCAO_TERCEIRIZADA' ? 'Terceirizada' : 'Própria'}
-                            </span>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="text-[11px] font-semibold text-slate-700 block">
-                              Serviço Digital
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {(item as any).estimatedTime || 'Sob Demanda'}
-                            </span>
                           </div>
                         )}
                       </td>

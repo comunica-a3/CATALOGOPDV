@@ -24,6 +24,7 @@ import {
 } from '../../types';
 import { formatCurrency, formatPhone, isValidPhone } from '../../utils/formatters';
 import { PhoneInput } from '../common/PhoneInput';
+import { BrandLogo } from '../common/BrandLogo';
 
 interface PublicQuoteFormViewProps {
   companySettings: CompanySettings;
@@ -318,13 +319,16 @@ export const PublicQuoteFormView: React.FC<PublicQuoteFormViewProps> = ({
         {/* HEADER */}
         <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white">
           <div className="flex items-center gap-3">
-            {companySettings.logoUrl ? (
-              <img
-                src={companySettings.logoUrl}
-                alt={companySettings.name}
-                className="w-12 h-12 object-contain bg-white rounded-lg p-1"
-                referrerPolicy="no-referrer"
-              />
+            {companySettings.logoUrl || companySettings.logoDriveFileId ? (
+              <div className="w-12 h-12 bg-white rounded-lg p-1 flex items-center justify-center overflow-hidden">
+                <BrandLogo
+                  logoUrl={companySettings.logoUrl}
+                  logoDriveFileId={companySettings.logoDriveFileId}
+                  alt={companySettings.name}
+                  className="max-h-full max-w-full object-contain"
+                  fallback={<span className="text-xl">🖨️</span>}
+                />
+              </div>
             ) : (
               <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center text-xl font-bold">
                 🖨️

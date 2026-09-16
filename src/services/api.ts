@@ -467,6 +467,12 @@ export const api = {
     return request<any[]>('/online-services');
   },
 
+  async deleteOnlineService(id: string) {
+    return request<any>(`/online-services/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getDocumentTemplates() {
     return request<any[]>('/document-templates');
   },
