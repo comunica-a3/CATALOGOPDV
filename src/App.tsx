@@ -164,11 +164,6 @@ function MainApp() {
     };
 
     window.addEventListener('focus', handleFocus);
-    const interval = setInterval(() => {
-      StorageService.syncWithServer().then(() => {
-        loadAllData();
-      });
-    }, 15000);
 
     return () => {
       cleanupRealtime();
@@ -180,7 +175,6 @@ function MainApp() {
       window.removeEventListener('production-updated', handleDataEvent);
       window.removeEventListener('storage-sync-completed', handleDataEvent);
       window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
     };
   }, [loadAllData]);
 

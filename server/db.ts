@@ -24,43 +24,16 @@ import { ensureDefaultAdminUser } from './auth';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+export const DB_FILE_PATH = path.join(DATA_DIR, 'pdv_database.sqlite');
+export const DB_URL = `file:${DB_FILE_PATH}`;
 
-export interface LocalDbEngine {
-  raw: any;
-  run(sqlText: string, params?: any[]): void;
-  exec(sqlText: string): any[];
-  all<T = any>(sqlText: string, params?: any[]): T[];
-  get<T = any>(sqlText: string, params?: any[]): T | null;
-  batch(statements: InStatement[]): any[];
-  persist(): void;
-}
-
-let tursoClient: Client | null = null;
-let localEngine: LocalDbEngine | null = null;
+let localClient: Client | null = null;
 
 /**
- * Registers local SQLite engine (used exclusively for local offline development)
- */
-export function setLocalDbEngine(engine: LocalDbEngine): void {
-  localEngine = engine;
-}
-
-/**
- * Checks if Turso database environment variables are configured with a valid URL
- */
-export function isTursoConfigured(): boolean {
-  const url = process.env.TURSO_DATABASE_URL?.trim();
-  if (!url || url === '1' || url === '0' || url === 'true' || url === 'false') {
-    return false;
-  }
-  return /^(libsql|https?|wss?|file):/i.test(url);
-}
-
-/**
- * Helper to ensure data and backup folders exist when in local mode
+ * Garante que os diretórios locais de dados, backups e uploads existam
  */
 export function ensureDirectories(): void {
-  if (isTursoConfigured()) return;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -68,38 +41,35 @@ export function ensureDirectories(): void {
     if (!fs.existsSync(BACKUPS_DIR)) {
       fs.mkdirSync(BACKUPS_DIR, { recursive: true });
     }
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
   } catch (err) {
-    // Non-fatal in read-only serverless filesystems
+    // Ignorado em caso de permissão de leitura
   }
 }
 
 /**
- * Persists the local SQLite database to disk (local dev mode only)
+ * Persistência automática do SQLite local via @libsql/client
  */
 export function persistDatabase(): void {
-  if (tursoClient || !localEngine) return;
-  try {
-    localEngine.persist();
-  } catch (err) {
-    // Non-blocking in serverless/read-only mode
-  }
+  // Com o @libsql/client em modo arquivo local (file:data/pdv_database.sqlite),
+  // as alterações são gravadas diretamente no disco em tempo real de forma ACID.
 }
 
-/**
- * Schedules debounced database persistence
- */
 export function queueDatabaseSave(): void {
-  if (tursoClient || !localEngine) return;
   persistDatabase();
 }
 
 /**
- * Database wrapper interface supporting async operations across Turso and Local SQLite
+ * Database wrapper interface supporting async operations via local SQLite (@libsql/client)
  */
 export interface DbWrapper {
   get isTurso(): boolean;
+  get isLocal(): boolean;
   get raw(): any;
   get turso(): Client | null;
+  get client(): Client | null;
   run(sqlText: string, params?: any[]): Promise<void>;
   exec(sqlText: string): Promise<any[]>;
   all<T = any>(sqlText: string, params?: any[]): Promise<T[]>;
@@ -109,80 +79,61 @@ export interface DbWrapper {
 
 export const db: DbWrapper = {
   get isTurso(): boolean {
-    return !!tursoClient;
+    return false;
+  },
+
+  get isLocal(): boolean {
+    return true;
   },
 
   get raw(): any {
-    return localEngine ? localEngine.raw : null;
+    return localClient;
   },
 
   get turso(): Client | null {
-    return tursoClient;
+    return null;
+  },
+
+  get client(): Client | null {
+    return localClient;
   },
 
   async run(sqlText: string, params: any[] = []): Promise<void> {
-    if (tursoClient) {
-      await tursoClient.execute({ sql: sqlText, args: params });
-      return;
+    if (!localClient) {
+      throw new Error('Banco de dados local não inicializado.');
     }
-
-    if (localEngine) {
-      localEngine.run(sqlText, params);
-      return;
-    }
-
-    throw new Error('Database not initialized. Please configure TURSO_DATABASE_URL or initialize local database.');
+    await localClient.execute({ sql: sqlText, args: params });
   },
 
   async exec(sqlText: string): Promise<any[]> {
-    if (tursoClient) {
-      await tursoClient.executeMultiple(sqlText);
-      return [];
+    if (!localClient) {
+      throw new Error('Banco de dados local não inicializado.');
     }
-
-    if (localEngine) {
-      return localEngine.exec(sqlText);
-    }
-
-    throw new Error('Database not initialized. Please configure TURSO_DATABASE_URL or initialize local database.');
+    await localClient.executeMultiple(sqlText);
+    return [];
   },
 
   async all<T = any>(sqlText: string, params: any[] = []): Promise<T[]> {
-    if (tursoClient) {
-      const rs = await tursoClient.execute({ sql: sqlText, args: params });
-      return rs.rows as unknown as T[];
+    if (!localClient) {
+      throw new Error('Banco de dados local não inicializado.');
     }
-
-    if (localEngine) {
-      return localEngine.all<T>(sqlText, params);
-    }
-
-    throw new Error('Database not initialized. Please configure TURSO_DATABASE_URL or initialize local database.');
+    const rs = await localClient.execute({ sql: sqlText, args: params });
+    return rs.rows as unknown as T[];
   },
 
   async get<T = any>(sqlText: string, params: any[] = []): Promise<T | null> {
-    if (tursoClient) {
-      const rs = await tursoClient.execute({ sql: sqlText, args: params });
-      return (rs.rows.length > 0 ? (rs.rows[0] as unknown as T) : null);
+    if (!localClient) {
+      throw new Error('Banco de dados local não inicializado.');
     }
-
-    if (localEngine) {
-      return localEngine.get<T>(sqlText, params);
-    }
-
-    throw new Error('Database not initialized. Please configure TURSO_DATABASE_URL or initialize local database.');
+    const rs = await localClient.execute({ sql: sqlText, args: params });
+    return rs.rows.length > 0 ? (rs.rows[0] as unknown as T) : null;
   },
 
   async batch(statements: InStatement[]): Promise<any[]> {
-    if (tursoClient) {
-      return await tursoClient.batch(statements);
+    if (!localClient) {
+      throw new Error('Banco de dados local não inicializado.');
     }
-
-    if (localEngine) {
-      return localEngine.batch(statements);
-    }
-
-    throw new Error('Database not initialized. Please configure TURSO_DATABASE_URL or initialize local database.');
+    return await localClient.batch(statements);
   },
 };
 
@@ -1781,33 +1732,29 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
 }
 
 /**
- * Initializes Database for Turso Cloud (libSQL)
+ * Inicializa o banco de dados diretamente em arquivo SQLite local (data/pdv_database.sqlite) via @libsql/client
  */
 export async function initializeDatabase(): Promise<Client> {
-  if (!isTursoConfigured()) {
-    throw new Error('TURSO_DATABASE_URL is not configured. For local development, initialize using db-local.');
-  }
+  ensureDirectories();
 
-  const url = process.env.TURSO_DATABASE_URL!.trim();
-  const authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : undefined;
-  console.log(`Connecting to Turso Online Database: ${url}`);
+  console.log(`Conectando ao banco de dados SQLite local: ${DB_URL}`);
 
-  tursoClient = createClient({
-    url,
-    authToken,
+  localClient = createClient({
+    url: DB_URL,
   });
 
   try {
-    // Run migrations on Turso
+    // Executar migrações de esquema
     await runMigrations();
 
-    // Seed default data if remote database is fresh
+    // Se o banco estiver vazio, inicializar com dados padrão
     await seedDefaultDataIfEmpty();
 
-    console.log('Connected and initialized Turso Cloud Database successfully.');
-    return tursoClient;
+    console.log(`Banco de dados SQLite local pronto em: ${DB_FILE_PATH}`);
+    return localClient;
   } catch (err) {
-    tursoClient = null;
+    localClient = null;
+    console.error('Erro ao inicializar banco de dados SQLite local:', err);
     throw err;
   }
 }

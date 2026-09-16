@@ -35,6 +35,8 @@ import {
   Image as ImageIcon,
   HardDrive,
   Link as LinkIcon,
+  Globe,
+  Github,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -49,6 +51,7 @@ import { PhoneInput } from '../common/PhoneInput';
 import { BrandLogo } from '../common/BrandLogo';
 import { NicheManagementPanel } from '../catalog/NicheManagementPanel';
 import { GoogleDrivePickerModal } from '../items/GoogleDrivePickerModal';
+import { PublishCatalogModal } from '../catalog/PublishCatalogModal';
 import {
   extractGoogleDriveFileId,
   getGoogleDriveDisplayUrl,
@@ -141,6 +144,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [defaultSupplierFreight, setDefaultSupplierFreight] = useState<number>(
     companySettings.defaultSupplierFreight ?? 20.0
   );
+  const [isPublishCatalogModalOpen, setIsPublishCatalogModalOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<string[]>(
     companySettings.paymentMethods
   );
@@ -781,6 +785,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </p>
         </div>
 
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsPublishCatalogModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold rounded-xl shadow-xs hover:shadow-md transition-all cursor-pointer whitespace-nowrap"
+            title="Sincronizar vitrine estática no GitHub"
+          >
+            <Globe className="w-4 h-4" />
+            <span>Publicar Catálogo na Web</span>
+          </button>
+        </div>
+      </div>
+
         {/* Tab Selection */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl overflow-x-auto">
           <button
@@ -866,7 +883,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span>Nichos da Vitrine</span>
           </button>
         </div>
-      </div>
 
       {/* --- TAB 1: USUÁRIOS & HIERARQUIA DE ACESSO --- */}
       {activeTab === 'usuarios' && (
@@ -1369,6 +1385,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => setDocument(e.target.value)}
                     className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg"
                   />
+                </div>
+              </div>
+
+              {/* Sincronização da Vitrine Estática com o GitHub */}
+              <div className="p-4 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border border-blue-200 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-blue-950">
+                        Vitrine Pública Estática & Sincronização GitHub
+                      </h4>
+                      <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                        Exporte produtos públicos, categorias e dados da marca para o arquivo <code className="font-mono bg-blue-100 px-1 py-0.5 rounded text-blue-900 font-semibold">public/catalogo.json</code> no GitHub com segurança total (sem expor custos ou margens).
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPublishCatalogModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0"
+                  >
+                    <Globe className="w-4 h-4" />
+                    <span>Publicar Catálogo na Web</span>
+                  </button>
                 </div>
               </div>
 
@@ -2859,6 +2903,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         confirmLabel="Sim, Restaurar Dados"
         variant="danger"
       />
+
+      {/* Publicar Catálogo na Web (GitHub API) Modal */}
+      {isPublishCatalogModalOpen && (
+        <PublishCatalogModal
+          isOpen={isPublishCatalogModalOpen}
+          onClose={() => setIsPublishCatalogModalOpen(false)}
+          onSuccess={() => {
+            setToast('Catálogo atualizado com sucesso no GitHub! A vitrine será atualizada em instantes.');
+          }}
+        />
+      )}
     </div>
   );
 };
+

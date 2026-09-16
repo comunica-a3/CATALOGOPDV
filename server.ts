@@ -1,30 +1,15 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { initializeDatabase, isTursoConfigured } from './server/db';
+import { initializeDatabase } from './server/db';
 import { authMiddleware } from './server/auth';
 import apiRoutes from './server/routes';
 
 async function startServer() {
-  // Initialize central database with migrations & seed data
-  let dbInitialized = false;
-  if (isTursoConfigured()) {
-    try {
-      console.log('Connecting to Turso Cloud Database...');
-      await initializeDatabase();
-      console.log('Turso Cloud Database ready.');
-      dbInitialized = true;
-    } catch (tursoErr) {
-      console.warn('Could not initialize Turso Cloud Database, falling back to local SQLite:', tursoErr);
-    }
-  }
-
-  if (!dbInitialized) {
-    console.log('Initializing local SQLite database (sql.js)...');
-    const { initLocalSqlite } = await import('./server/db-local');
-    await initLocalSqlite();
-    console.log('Local SQLite database ready.');
-  }
+  // Inicializa diretamente o banco de dados SQLite local
+  console.log('Iniciando banco de dados SQLite local (data/pdv_database.sqlite)...');
+  await initializeDatabase();
+  console.log('Banco de dados local pronto.');
 
   const app = express();
   const PORT = 3000;
@@ -38,6 +23,9 @@ async function startServer() {
 
   // Mount API Endpoints FIRST
   app.use('/api', apiRoutes);
+
+  // Serve static files from public directory (e.g. /catalogo.json)
+  app.use(express.static(path.join(process.cwd(), 'public')));
 
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {

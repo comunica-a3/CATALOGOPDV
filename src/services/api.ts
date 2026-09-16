@@ -600,4 +600,35 @@ export const api = {
       body: JSON.stringify(params),
     });
   },
+
+  // Catalog Publishing to GitHub
+  async getCatalogPublishStatus() {
+    return request<{
+      configured: boolean;
+      owner?: string;
+      repo?: string;
+      branch?: string;
+      hasToken: boolean;
+    }>('/catalog/publish/status');
+  },
+
+  async publishCatalog(params?: {
+    githubToken?: string;
+    githubRepoOwner?: string;
+    githubRepoName?: string;
+    githubBranch?: string;
+  }) {
+    return request<{
+      success: boolean;
+      message: string;
+      itemsCount: number;
+      commitUrl?: string;
+      fileSha?: string;
+      targetRepo: string;
+    }>('/catalog/publish', {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    });
+  },
 };
+

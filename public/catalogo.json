@@ -1,0 +1,3298 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2026-09-16T17:11:13.817Z",
+  "company": {
+    "name": "Gráfica Rápida e Digital Express",
+    "tradingName": "Digital Express Impressões e Serviços",
+    "document": "12.345.678/0001-90",
+    "phone": "(11) 3456-7890",
+    "whatsapp": "11987654321",
+    "email": "contato@digitalexpress.com.br",
+    "address": "Rua do Comércio, 450 - Centro Comercial",
+    "city": "São Paulo",
+    "state": "SP",
+    "logoUrl": "https://images.unsplash.com/photo-1572044162444-ad60f128bdea?w=150&auto=format&fit=crop&q=80",
+    "receiptFooterMessage": "Agradecemos a preferência! Orçamentos e pedidos via WhatsApp (11) 98765-4321.",
+    "paymentMethods": [
+      "PIX",
+      "Cartão de Crédito",
+      "Cartão de Débito",
+      "Dinheiro",
+      "Boleto Bancário",
+      "Prazo / Crediário",
+      "Transferência Bancária"
+    ],
+    "catalogSubtitle": "Sua rotina, mais simples.",
+    "catalogHeaderType": "NAME",
+    "prospectingTexts": {}
+  },
+  "categories": [
+    {
+      "id": "cat-adesivos",
+      "name": "Adesivos",
+      "slug": "adesivos",
+      "description": "Adesivos vinil, BOPP, etiquetas escolares e DTF UV",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-banners",
+      "name": "Banners e Comunicação Visual",
+      "slug": "banners-comunicacao-visual",
+      "description": "Wind banner, banners em lona, placas de sinalização e ímãs de geladeira",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-blocos",
+      "name": "Blocos e comandas",
+      "slug": "blocos-e-comandas",
+      "description": "Talões de recibo, comandas, folhas blocadas para orçamento e rifas",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-cartoes",
+      "name": "Cartões de visita",
+      "slug": "cartoes-de-visita",
+      "description": "Cartões de visita couchê 250g/300g, mini cartões e tags",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-embalagens",
+      "name": "Embalagens",
+      "slug": "embalagens",
+      "description": "Sacolas personalizadas e materiais promocionais de embalagem",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-impressos",
+      "name": "Impressos",
+      "slug": "impressos",
+      "description": "Fotos, certificados, credenciais, convites e impressões gerais",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-panfletos",
+      "name": "Panfletos",
+      "slug": "panfletos",
+      "description": "Panfletos promocionais e folhetos em diversos tamanhos e gramaturas",
+      "itemType": "PRODUTO_GRAFICO",
+      "icon": ""
+    },
+    {
+      "id": "cat-servicos",
+      "name": "Serviços",
+      "slug": "servicos",
+      "description": "Serviços digitais, consultas, documentos e atendimento de balcão",
+      "itemType": "SERVICO",
+      "icon": ""
+    }
+  ],
+  "niches": [
+    {
+      "id": "grafica-e-personalizados",
+      "title": "Gráfica e Personalizados",
+      "description": "Materiais impressos e produtos personalizados",
+      "ctaText": "Ver produtos",
+      "imageUrl": "https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?w=800&auto=format&fit=crop&q=80",
+      "badge": "Gráfica & Impressos",
+      "itemTypeMatch": "PRODUTO_GRAFICO",
+      "categoryMatchKeywords": [
+        "grafica",
+        "personalizado",
+        "impresso",
+        "adesivo",
+        "panfleto",
+        "cartao",
+        "bloco",
+        "banner",
+        "embalagem",
+        "sublimacao",
+        "brinde"
+      ],
+      "order": 1,
+      "active": true
+    },
+    {
+      "id": "produtos-eletronicos",
+      "title": "Produtos Eletrônicos",
+      "description": "Equipamentos e acessórios eletrônicos.",
+      "ctaText": "Ver produtos",
+      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80",
+      "badge": "Eletrônicos & Acessórios",
+      "itemTypeMatch": "PRODUTO_FISICO",
+      "categoryMatchKeywords": [
+        "eletronico",
+        "acessorio",
+        "cabo",
+        "fone",
+        "carregador",
+        "celular",
+        "fisico",
+        "teclado",
+        "mouse"
+      ],
+      "order": 2,
+      "active": true
+    },
+    {
+      "id": "servicos-digitais",
+      "title": "Serviços Digitais",
+      "description": "Soluções para o seu dia a dia",
+      "ctaText": "Ver serviços",
+      "imageUrl": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80",
+      "badge": "Serviços Online",
+      "itemTypeMatch": "SERVICO",
+      "categoryMatchKeywords": [
+        "digital",
+        "servico",
+        "online",
+        "design",
+        "social",
+        "site",
+        "consulta",
+        "documento"
+      ],
+      "order": 3,
+      "active": true
+    }
+  ],
+  "items": [
+    {
+      "id": "prod-adesivo-vinil-m2",
+      "name": "Adesivo vinil M2",
+      "sku": "ADS-VINIL-M2",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressão digital látex em vinil adesivo branco por metro quadrado (100x100cm).",
+      "salePrice": 130,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_M2",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "areaPricing": {
+        "salePricePerM2": 130,
+        "minAreaM2": 0.5
+      },
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-adesivos-vinil-sra3",
+      "name": "Adesivos Vinil Folha SRA3",
+      "sku": "ADS-VIN-SRA3",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Folha inteira em vinil branco 31x46cm sem meio corte.",
+      "salePrice": 49.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-vsra3-1",
+          "name": "1 folha",
+          "quantity": 1,
+          "salePrice": 49.99
+        },
+        {
+          "id": "pkg-vsra3-5",
+          "name": "5 folhas",
+          "quantity": 5,
+          "salePrice": 94.99
+        },
+        {
+          "id": "pkg-vsra3-10",
+          "name": "10 folhas",
+          "quantity": 10,
+          "salePrice": 148.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-bopp-branco",
+      "name": "Adesivos etiqueta redondo BOPP branco",
+      "sku": "ADS-BOPP-BRANCO",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Etiquetas adesivas em BOPP 50x50mm, resistentes à água, com meio corte digital.",
+      "salePrice": 68,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-bopp-40",
+          "name": "40 unidades",
+          "quantity": 40,
+          "salePrice": 68
+        },
+        {
+          "id": "pkg-bopp-200",
+          "name": "200 unidades",
+          "quantity": 200,
+          "salePrice": 118
+        },
+        {
+          "id": "pkg-bopp-520",
+          "name": "520 unidades",
+          "quantity": 520,
+          "salePrice": 218
+        },
+        {
+          "id": "pkg-bopp-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 358
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-agendamentos",
+      "name": "Agendamentos",
+      "sku": "SRV-AGENDAMENTOS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Agendamento de serviços em órgãos públicos (Poupatempo, INSS, Detran, etc.).",
+      "salePrice": 15,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "15 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-antecedentes",
+      "name": "Atestado de bons antecedentes",
+      "sku": "SRV-ANTECEDENTES",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Emissão e validação de Certidão de Antecedentes Criminais.",
+      "salePrice": 15,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "10 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-banner-lona",
+      "name": "Banner",
+      "sku": "BAN-LONA-440G",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Banner em Lona 440g com acabamento em bastão de madeira, ponteira plástica e cordão de nylon.",
+      "salePrice": 68,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-ban-20x30",
+          "name": "20x30",
+          "quantity": 1,
+          "salePrice": 68
+        },
+        {
+          "id": "pkg-ban-20x60",
+          "name": "20x60",
+          "quantity": 1,
+          "salePrice": 82
+        },
+        {
+          "id": "pkg-ban-40x60",
+          "name": "40x60",
+          "quantity": 1,
+          "salePrice": 97
+        },
+        {
+          "id": "pkg-ban-70x100",
+          "name": "70x100",
+          "quantity": 1,
+          "salePrice": 112
+        },
+        {
+          "id": "pkg-ban-60x90",
+          "name": "60x90",
+          "quantity": 1,
+          "salePrice": 113
+        },
+        {
+          "id": "pkg-ban-80x120",
+          "name": "80x120",
+          "quantity": 1,
+          "salePrice": 147
+        },
+        {
+          "id": "pkg-ban-100x160",
+          "name": "100x160",
+          "quantity": 1,
+          "salePrice": 192
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-bloco-recibo-a6",
+      "name": "Bloco recibo A6 (10x15cm)",
+      "sku": "BLC-REC-A6",
+      "categoryId": "cat-blocos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Bloco de recibos no formato A6 (10x15cm) em papel apergaminhado 75g com 50 folhas por bloco.",
+      "salePrice": 60,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-blc-1",
+          "name": "1 Bloco",
+          "quantity": 1,
+          "salePrice": 60
+        },
+        {
+          "id": "pkg-blc-5",
+          "name": "5 Blocos",
+          "quantity": 5,
+          "salePrice": 106
+        },
+        {
+          "id": "pkg-blc-10",
+          "name": "10 Blocos",
+          "quantity": 10,
+          "salePrice": 159.99
+        },
+        {
+          "id": "pkg-blc-20",
+          "name": "20 blocos",
+          "quantity": 20,
+          "salePrice": 259
+        },
+        {
+          "id": "pkg-blc-50",
+          "name": "50 blocos",
+          "quantity": 50,
+          "salePrice": 559.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-boletim",
+      "name": "Boletim de ocorrência",
+      "sku": "SRV-BOLETIM",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Registro de Boletim de Ocorrência eletrônico junto à Polícia Civil.",
+      "salePrice": 35,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "25 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-crlv",
+      "name": "CRLV",
+      "sku": "SRV-CRLV",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Emissão e impressão do Certificado de Registro e Licenciamento de Veículo digital.",
+      "salePrice": 10,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "10 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-cadastros",
+      "name": "Cadastros",
+      "sku": "SRV-CADASTROS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Preenchimento e envio de cadastros em plataformas governamentais ou privadas.",
+      "salePrice": 25,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "20 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cardapio-pvc",
+      "name": "Cardápio PVC",
+      "sku": "CRD-PVC-05",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cardápios produzidos em Plástico Compacto PVC 0,5mm com acabamento canteado.",
+      "salePrice": 94,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-pvc-2f",
+          "name": "2 unid - frente",
+          "quantity": 2,
+          "salePrice": 94
+        },
+        {
+          "id": "pkg-pvc-2fv",
+          "name": "2 unid - frente verso",
+          "quantity": 2,
+          "salePrice": 104
+        },
+        {
+          "id": "pkg-pvc-8f",
+          "name": "8 unid - frente",
+          "quantity": 8,
+          "salePrice": 184
+        },
+        {
+          "id": "pkg-pvc-8fv",
+          "name": "8 unid - frente e verso",
+          "quantity": 8,
+          "salePrice": 194
+        },
+        {
+          "id": "pkg-pvc-12f",
+          "name": "12 unid - frente",
+          "quantity": 12,
+          "salePrice": 214
+        },
+        {
+          "id": "pkg-pvc-12fv",
+          "name": "12 unid - frente e verso",
+          "quantity": 12,
+          "salePrice": 254
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cardapio-plastificado",
+      "name": "Cardápio plastificado padrão",
+      "sku": "CRD-PLAST-RIG",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cardápios com plastificação rígida 0,10mm para estabelecimentos alimentícios.",
+      "salePrice": 19.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-cplast-1f",
+          "name": "1 unid - frente colorida",
+          "quantity": 1,
+          "salePrice": 19.99
+        },
+        {
+          "id": "pkg-cplast-1fv",
+          "name": "1 unid - frente e verso colorido",
+          "quantity": 1,
+          "salePrice": 24.99
+        },
+        {
+          "id": "pkg-cplast-5f",
+          "name": "5 unid - frente colorida",
+          "quantity": 5,
+          "salePrice": 52.99
+        },
+        {
+          "id": "pkg-cplast-5fv",
+          "name": "5 unid - frente e verso colorido",
+          "quantity": 5,
+          "salePrice": 62.99
+        },
+        {
+          "id": "pkg-cplast-8f",
+          "name": "8 unid - frente colorida",
+          "quantity": 8,
+          "salePrice": 79.99
+        },
+        {
+          "id": "pkg-cplast-8fv",
+          "name": "8 unid - frente e verso colorido",
+          "quantity": 8,
+          "salePrice": 89.99
+        },
+        {
+          "id": "pkg-cplast-10f",
+          "name": "10 unid - frente colorida",
+          "quantity": 10,
+          "salePrice": 94.99
+        },
+        {
+          "id": "pkg-cplast-10fv",
+          "name": "10 unid - frente e verso colorido",
+          "quantity": 10,
+          "salePrice": 97.99
+        },
+        {
+          "id": "pkg-cplast-24f",
+          "name": "24 unid - frente colorida",
+          "quantity": 24,
+          "salePrice": 299.99
+        },
+        {
+          "id": "pkg-cplast-24fv",
+          "name": "24 unid - frente e verso colorido",
+          "quantity": 24,
+          "salePrice": 319.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cartao-feed-insta",
+      "name": "Cartão Feed Instagram",
+      "sku": "CRT-FEED-INSTA",
+      "categoryId": "cat-cartoes",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cartão no formato Feed do Instagram em papel couchê brilho frente e verso personalizado.",
+      "salePrice": 86,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-insta-50",
+          "name": "50 unidades",
+          "quantity": 50,
+          "salePrice": 86
+        },
+        {
+          "id": "pkg-insta-100",
+          "name": "100 unidades",
+          "quantity": 100,
+          "salePrice": 125.99
+        },
+        {
+          "id": "pkg-insta-250",
+          "name": "250 unidades",
+          "quantity": 250,
+          "salePrice": 176
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cartao-250g",
+      "name": "Cartão de visitas 250G",
+      "sku": "CRT-250G",
+      "categoryId": "cat-cartoes",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cartão de visita em papel couchê brilho 250g com verniz UV total na frente.",
+      "salePrice": 79.9,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-c2-50f",
+          "name": "50 frente colorida",
+          "quantity": 50,
+          "salePrice": 66.9
+        },
+        {
+          "id": "pkg-c2-50fv",
+          "name": "50 frente e verso colorido",
+          "quantity": 50,
+          "salePrice": 69.9
+        },
+        {
+          "id": "pkg-c2-100f",
+          "name": "100 frente colorida",
+          "quantity": 100,
+          "salePrice": 78.9
+        },
+        {
+          "id": "pkg-c2-100fv",
+          "name": "100 frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 79.1
+        },
+        {
+          "id": "pkg-c2-250f",
+          "name": "250 - frente colorida",
+          "quantity": 250,
+          "salePrice": 79.9
+        },
+        {
+          "id": "pkg-c2-250fv",
+          "name": "250 - frente e verso colorido",
+          "quantity": 250,
+          "salePrice": 104.9
+        },
+        {
+          "id": "pkg-c2-500f",
+          "name": "500 - frente colorida",
+          "quantity": 500,
+          "salePrice": 109.9
+        },
+        {
+          "id": "pkg-c2-500fv",
+          "name": "500 - frente e verso colorido",
+          "quantity": 500,
+          "salePrice": 114.9
+        },
+        {
+          "id": "pkg-c2-1000f",
+          "name": "1000 - frente colorida",
+          "quantity": 1000,
+          "salePrice": 129.9
+        },
+        {
+          "id": "pkg-c2-1000fv",
+          "name": "1000 - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 179.9
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cartao-300g",
+      "name": "Cartão de visitas 300G",
+      "sku": "CRT-300G",
+      "categoryId": "cat-cartoes",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cartão de visita em papel couchê brilho premium 300g com verniz UV total frente.",
+      "salePrice": 94,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-c3-50f",
+          "name": "50 frente colorida",
+          "quantity": 50,
+          "salePrice": 94
+        },
+        {
+          "id": "pkg-c3-50fv",
+          "name": "50 frente e verso colorido",
+          "quantity": 50,
+          "salePrice": 104
+        },
+        {
+          "id": "pkg-c3-100f",
+          "name": "100 frente colorida",
+          "quantity": 100,
+          "salePrice": 119
+        },
+        {
+          "id": "pkg-c3-100fv",
+          "name": "100 frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 130
+        },
+        {
+          "id": "pkg-c3-250f",
+          "name": "250 - frente colorida",
+          "quantity": 250,
+          "salePrice": 146
+        },
+        {
+          "id": "pkg-c3-250fv",
+          "name": "250 - frente e verso colorido",
+          "quantity": 250,
+          "salePrice": 179
+        },
+        {
+          "id": "pkg-c3-500f",
+          "name": "500 - frente colorida",
+          "quantity": 500,
+          "salePrice": 184
+        },
+        {
+          "id": "pkg-c3-500fv",
+          "name": "500 - frente e verso colorido",
+          "quantity": 500,
+          "salePrice": 194
+        },
+        {
+          "id": "pkg-c3-1000f",
+          "name": "1000 - frente colorida",
+          "quantity": 1000,
+          "salePrice": 199
+        },
+        {
+          "id": "pkg-c3-1000fv",
+          "name": "1000 - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 214
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-certificados",
+      "name": "Certificados",
+      "sku": "IMP-CERTIFICADOS",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Certificados em papel linho texturizado 180g no formato 300x210mm.",
+      "salePrice": 80,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-cert-2",
+          "name": "2 unidades",
+          "quantity": 2,
+          "salePrice": 80
+        },
+        {
+          "id": "pkg-cert-5",
+          "name": "5 unidades",
+          "quantity": 5,
+          "salePrice": 110
+        },
+        {
+          "id": "pkg-cert-10",
+          "name": "10 unidades",
+          "quantity": 10,
+          "salePrice": 120
+        },
+        {
+          "id": "pkg-cert-20",
+          "name": "20 unidades",
+          "quantity": 20,
+          "salePrice": 160
+        },
+        {
+          "id": "pkg-cert-50",
+          "name": "50 unidades",
+          "quantity": 50,
+          "salePrice": 300
+        },
+        {
+          "id": "pkg-cert-100",
+          "name": "100 unidades",
+          "quantity": 100,
+          "salePrice": 430
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-contratos",
+      "name": "Contratos",
+      "sku": "SRV-CONTRATOS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Elaboração e formatação de contratos e minutas.",
+      "salePrice": 35,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "20 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-convites",
+      "name": "Convites",
+      "sku": "IMP-CONVITES",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Convites para celebrações e eventos em papel glossy paper ou linho texturizado.",
+      "salePrice": 3.6,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-conv-tipo",
+          "name": "Tipo",
+          "values": [
+            {
+              "id": "val-conv-brilho",
+              "label": "brilho",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-conv-fosco",
+              "label": "fosco texturizado",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            }
+          ]
+        },
+        {
+          "id": "opt-conv-pag",
+          "name": "Paginação",
+          "values": [
+            {
+              "id": "val-conv-frente",
+              "label": "Frente",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-conv-fv",
+              "label": "Frente e verso",
+              "additionalPrice": 3.25,
+              "additionalCost": 1.625
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-credenciais",
+      "name": "Credenciais",
+      "sku": "IMP-CREDENCIAL",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Credenciais em alto padrão para eventos e identificação de equipes.",
+      "salePrice": 5.95,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-crd-tipo",
+          "name": "Tipo",
+          "values": [
+            {
+              "id": "val-crd-sem",
+              "label": "Sem cordão",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-crd-com",
+              "label": "Com cordão",
+              "additionalPrice": 2,
+              "additionalCost": 1
+            }
+          ]
+        },
+        {
+          "id": "opt-crd-pag",
+          "name": "Paginação",
+          "values": [
+            {
+              "id": "val-crd-frente",
+              "label": "Frente",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-crd-fv",
+              "label": "Frente e verso",
+              "additionalPrice": 3,
+              "additionalCost": 1.5
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-digitalizar",
+      "name": "Digitalizar",
+      "sku": "SRV-DIGITALIZAR",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Digitalização em alta resolução de documentos para PDF ou imagem.",
+      "salePrice": 4,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-estampa-termo",
+      "name": "Estampa termocolante Folha",
+      "sku": "ADS-TERMO-FLH",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Estampa termocolante Dark Film 3.0 para aplicação com calor em roupas e tecidos (300x450mm).",
+      "salePrice": 164,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "7 a 10 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-etiquetas-papel",
+      "name": "Etiquetas adesivas papel",
+      "sku": "ADS-PAPEL-GLOSSY",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Etiquetas adesivas em papel glossy para identificação de produtos e selos.",
+      "salePrice": 15,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-tam-etq-papel",
+          "name": "Tamanho e Quantidade",
+          "values": [
+            {
+              "id": "val-p-3x3",
+              "label": "3x3cm - 35 unidades",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-p-4x4",
+              "label": "4x4cm - 20 unidades",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-p-5x5",
+              "label": "5x5cm - 12 unidades",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-p-6x6",
+              "label": "6x6cm - 12 unidades",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-p-semrecorte",
+              "label": "Folha sem recorte",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-etiquetas-vinil",
+      "name": "Etiquetas adesivas vinil",
+      "sku": "ADS-VINIL-FLH",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Etiquetas adesivas em vinil branco com verniz UV total e meio corte especial.",
+      "salePrice": 58.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-vin-1",
+          "name": "1 Folha",
+          "quantity": 1,
+          "salePrice": 58.99
+        },
+        {
+          "id": "pkg-vin-5",
+          "name": "5 Folhas",
+          "quantity": 5,
+          "salePrice": 112.99
+        },
+        {
+          "id": "pkg-vin-10",
+          "name": "10 Folhas",
+          "quantity": 10,
+          "salePrice": 183.99
+        },
+        {
+          "id": "pkg-vin-50",
+          "name": "50 Folhas",
+          "quantity": 50,
+          "salePrice": 718.99
+        }
+      ],
+      "options": [
+        {
+          "id": "opt-tam-etq-vinil",
+          "name": "Tamanho da etiqueta",
+          "values": [
+            {
+              "id": "v-3x3",
+              "label": "3x3cm - 96 unidades por folha",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "v-5x5",
+              "label": "5x5cm - 40 unidades por folha",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "v-8x8",
+              "label": "8x8cm - 15 unidades por folha",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "v-10x10",
+              "label": "10x10cm - 6 unidades por folha",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "v-proprio",
+              "label": "Tamanho próprio",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-etiquetas-escolares",
+      "name": "Etiquetas escolares",
+      "sku": "ADS-ESC-A4",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Etiquetas personalizadas para identificação de cadernos, livros, canetas e lápis em papel adesivo A4 115g.",
+      "salePrice": 25,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "options": [
+        {
+          "id": "opt-esc-cartela",
+          "name": "Cartelas",
+          "values": [
+            {
+              "id": "val-esc-padrao",
+              "label": "Cartela padrão",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-esc-lapis",
+              "label": "Cartela lápis e canetas",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-esc-cadernos",
+              "label": "Cartela cadernos e livros",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-foto-10x15",
+      "name": "FOTO 10X15",
+      "sku": "IMP-FOTO-AVULSA",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressão de fotos 10x15cm em papel fotográfico 180g.",
+      "salePrice": 3.5,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-foto-10",
+          "name": "Até 10 fotos",
+          "quantity": 1,
+          "salePrice": 3.5
+        },
+        {
+          "id": "pkg-foto-50",
+          "name": "Até 50 fotos",
+          "quantity": 1,
+          "salePrice": 3
+        },
+        {
+          "id": "pkg-foto-acima50",
+          "name": "Acima de 50 fotos",
+          "quantity": 1,
+          "salePrice": 2.5
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-foto-10x15-prem",
+      "name": "FOTO 10X15 PREMIUM",
+      "sku": "IMP-FOTO-PREM",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Revelação e impressão de fotos 10x15cm em papel Couchê 210g com verniz UV de proteção.",
+      "salePrice": 76,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-fotop-9",
+          "name": "9 unidades",
+          "quantity": 9,
+          "salePrice": 72
+        },
+        {
+          "id": "pkg-fotop-18",
+          "name": "18 unidades",
+          "quantity": 18,
+          "salePrice": 76
+        },
+        {
+          "id": "pkg-fotop-27",
+          "name": "27 unidades",
+          "quantity": 27,
+          "salePrice": 84
+        },
+        {
+          "id": "pkg-fotop-45",
+          "name": "45 unidades",
+          "quantity": 45,
+          "salePrice": 94
+        },
+        {
+          "id": "pkg-fotop-99",
+          "name": "99 unidades",
+          "quantity": 99,
+          "salePrice": 122.5
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-foto-polaroid",
+      "name": "FOTO POLAROID",
+      "sku": "IMP-POLAROID",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Fotos estilo Polaroid formato 10x7,5cm em papel couchê 210g com verniz UV resistente à água.",
+      "salePrice": 80,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-pol-18",
+          "name": "18 unidades",
+          "quantity": 18,
+          "salePrice": 80
+        },
+        {
+          "id": "pkg-pol-36",
+          "name": "36 unidades",
+          "quantity": 36,
+          "salePrice": 100
+        },
+        {
+          "id": "pkg-pol-72",
+          "name": "72 unidades",
+          "quantity": 72,
+          "salePrice": 108
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-dtf-uv",
+      "name": "Folha Adesiva DTF UV",
+      "sku": "ADS-DTF-UV",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Adesivo DTF UV resistente a riscos e intempéries para aplicação direta.",
+      "salePrice": 100,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-dtf-a4",
+          "name": "A4",
+          "quantity": 1,
+          "salePrice": 100
+        },
+        {
+          "id": "pkg-dtf-a3",
+          "name": "A3",
+          "quantity": 1,
+          "salePrice": 121
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-folha-adesiva-a4",
+      "name": "Folha adesiva A4",
+      "sku": "ADS-FLH-A4",
+      "categoryId": "cat-adesivos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Folha adesiva impressa no tamanho 29x21cm em papel glossy.",
+      "salePrice": 9.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-flh-corte",
+          "name": "Acabamento",
+          "values": [
+            {
+              "id": "val-sem-corte",
+              "label": "Sem Corte",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-meio-corte",
+              "label": "Meio Corte",
+              "additionalPrice": 5,
+              "additionalCost": 2.5
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-folhas-orc-a4",
+      "name": "Folhas pra orçamento blocadas A4 (30x21cm)",
+      "sku": "BLC-ORC-A4",
+      "categoryId": "cat-blocos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Bloco de folhas de orçamento A4 (30x21cm) em papel apergaminhado 56g, 50 folhas por bloco.",
+      "salePrice": 76,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-orcA4-1",
+          "name": "1 Bloco",
+          "quantity": 1,
+          "salePrice": 76
+        },
+        {
+          "id": "pkg-orcA4-5",
+          "name": "5 Blocos",
+          "quantity": 5,
+          "salePrice": 151.79
+        },
+        {
+          "id": "pkg-orcA4-10",
+          "name": "10 Blocos",
+          "quantity": 10,
+          "salePrice": 261
+        },
+        {
+          "id": "pkg-orcA4-20",
+          "name": "20 blocos",
+          "quantity": 20,
+          "salePrice": 475
+        },
+        {
+          "id": "pkg-orcA4-50",
+          "name": "50 blocos",
+          "quantity": 50,
+          "salePrice": 775
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-folhas-orc-a5",
+      "name": "Folhas pra orçamento blocadas A5 (15x21cm)",
+      "sku": "BLC-ORC-A5",
+      "categoryId": "cat-blocos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Bloco de folhas de orçamento A5 (15x21cm) em papel apergaminhado 56g, 50 folhas por bloco.",
+      "salePrice": 66,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-orcA5-1",
+          "name": "1 Bloco",
+          "quantity": 1,
+          "salePrice": 66
+        },
+        {
+          "id": "pkg-orcA5-5",
+          "name": "5 Blocos",
+          "quantity": 5,
+          "salePrice": 112
+        },
+        {
+          "id": "pkg-orcA5-10",
+          "name": "10 Blocos",
+          "quantity": 10,
+          "salePrice": 165.99
+        },
+        {
+          "id": "pkg-orcA5-20",
+          "name": "20 blocos",
+          "quantity": 20,
+          "salePrice": 265
+        },
+        {
+          "id": "pkg-orcA5-50",
+          "name": "50 blocos",
+          "quantity": 50,
+          "salePrice": 565.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-folheto-agradecimento",
+      "name": "Folheto de agradecimento",
+      "sku": "PNF-AGRADECIMENTO",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cartão / folheto de agradecimento ao cliente no formato 7x10cm em papel Glossy Matte 120g.",
+      "salePrice": 9.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-agr-16",
+          "name": "16 unidades",
+          "quantity": 16,
+          "salePrice": 9.99
+        },
+        {
+          "id": "pkg-agr-32",
+          "name": "32 unidades",
+          "quantity": 32,
+          "salePrice": 18.99
+        },
+        {
+          "id": "pkg-agr-64",
+          "name": "64 unidades",
+          "quantity": 64,
+          "salePrice": 28.99
+        },
+        {
+          "id": "pkg-agr-128",
+          "name": "128 unidades",
+          "quantity": 128,
+          "salePrice": 54.99
+        },
+        {
+          "id": "pkg-agr-256",
+          "name": "256 unidades",
+          "quantity": 256,
+          "salePrice": 109.99
+        },
+        {
+          "id": "pkg-agr-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 299.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-ipva",
+      "name": "Guia IPVA/Licenciamento",
+      "sku": "SRV-GUIA-IPVA",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Consulta de débitos e emissão de guias de IPVA / Licenciamento.",
+      "salePrice": 5,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-imp-a3",
+      "name": "Impressão A3",
+      "sku": "IMP-A3",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressão A3 de alta definição em papel padrão.",
+      "salePrice": 8,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-a3-1",
+          "name": "Até 3 páginas - P&B",
+          "quantity": 1,
+          "salePrice": 8
+        },
+        {
+          "id": "pkg-a3-2",
+          "name": "Até 3 páginas - Color",
+          "quantity": 1,
+          "salePrice": 10
+        },
+        {
+          "id": "pkg-a3-3",
+          "name": "Até 10 páginas - P&B",
+          "quantity": 1,
+          "salePrice": 6
+        },
+        {
+          "id": "pkg-a3-4",
+          "name": "Até 10 páginas - Color",
+          "quantity": 1,
+          "salePrice": 8
+        },
+        {
+          "id": "pkg-a3-5",
+          "name": "Até 20 páginas - P&B",
+          "quantity": 1,
+          "salePrice": 5
+        },
+        {
+          "id": "pkg-a3-6",
+          "name": "Até 20 páginas - Color",
+          "quantity": 1,
+          "salePrice": 7
+        },
+        {
+          "id": "pkg-a3-7",
+          "name": "Até 50 páginas - P&B",
+          "quantity": 1,
+          "salePrice": 3.5
+        },
+        {
+          "id": "pkg-a3-8",
+          "name": "Até 50 páginas - Color",
+          "quantity": 1,
+          "salePrice": 6.5
+        },
+        {
+          "id": "pkg-a3-9",
+          "name": "Acima de 50 páginas - P&B",
+          "quantity": 1,
+          "salePrice": 4
+        },
+        {
+          "id": "pkg-a3-10",
+          "name": "Acima de 50 páginas - Color",
+          "quantity": 1,
+          "salePrice": 6
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-imp-padrao-color",
+      "name": "Impressão padrão Color",
+      "sku": "IMP-PAD-COLOR",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressão colorida formato A4 em papel offset 75g.",
+      "salePrice": 3,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-col-3-f",
+          "name": "Até 3 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 3
+        },
+        {
+          "id": "pkg-col-3-fv",
+          "name": "Até 3 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 3
+        },
+        {
+          "id": "pkg-col-15-f",
+          "name": "Até 15 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 2.5
+        },
+        {
+          "id": "pkg-col-15-fv",
+          "name": "Até 15 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 2.5
+        },
+        {
+          "id": "pkg-col-35-f",
+          "name": "Até 35 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 2.25
+        },
+        {
+          "id": "pkg-col-35-fv",
+          "name": "Até 35 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 2.25
+        },
+        {
+          "id": "pkg-col-50-f",
+          "name": "Até 50 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 2
+        },
+        {
+          "id": "pkg-col-50-fv",
+          "name": "Até 50 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 2
+        },
+        {
+          "id": "pkg-col-ac50-f",
+          "name": "Acima de 50 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 1.5
+        },
+        {
+          "id": "pkg-col-ac50-fv",
+          "name": "Acima de 50 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 1.5
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-imp-padrao-pb",
+      "name": "Impressão padrão P&B",
+      "sku": "IMP-PAD-PB",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressão preto e branco formato A4 em papel offset 75g.",
+      "salePrice": 2,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-pb-3-f",
+          "name": "Até 3 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 2
+        },
+        {
+          "id": "pkg-pb-3-fv",
+          "name": "Até 3 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 2
+        },
+        {
+          "id": "pkg-pb-15-f",
+          "name": "Até 15 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 1.5
+        },
+        {
+          "id": "pkg-pb-15-fv",
+          "name": "Até 15 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 1.5
+        },
+        {
+          "id": "pkg-pb-35-f",
+          "name": "Até 35 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 1.25
+        },
+        {
+          "id": "pkg-pb-35-fv",
+          "name": "Até 35 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 1.25
+        },
+        {
+          "id": "pkg-pb-50-f",
+          "name": "Até 50 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 1
+        },
+        {
+          "id": "pkg-pb-50-fv",
+          "name": "Até 50 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 1
+        },
+        {
+          "id": "pkg-pb-ac50-f",
+          "name": "Acima de 50 páginas - Frente",
+          "quantity": 1,
+          "salePrice": 0.5
+        },
+        {
+          "id": "pkg-pb-ac50-fv",
+          "name": "Acima de 50 páginas - Frente e verso",
+          "quantity": 1,
+          "salePrice": 0.5
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-imp-papeis-especiais",
+      "name": "Impressão papéis especiais",
+      "sku": "IMP-PAP-ESP",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Impressões em papel glossy paper ou linho texturizado 180g.",
+      "salePrice": 7,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-esp-3",
+          "name": "Até 3 páginas",
+          "quantity": 1,
+          "salePrice": 7
+        },
+        {
+          "id": "pkg-esp-10",
+          "name": "Até 10 páginas",
+          "quantity": 1,
+          "salePrice": 5
+        },
+        {
+          "id": "pkg-esp-20",
+          "name": "Até 20 páginas",
+          "quantity": 1,
+          "salePrice": 4
+        },
+        {
+          "id": "pkg-esp-50",
+          "name": "Até 50 páginas",
+          "quantity": 1,
+          "salePrice": 3.5
+        },
+        {
+          "id": "pkg-esp-acima50",
+          "name": "Acima de 50 páginas",
+          "quantity": 1,
+          "salePrice": 3
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-ima-calendario",
+      "name": "Imã de geladeira com calendário",
+      "sku": "IMA-CALENDARIO",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Ímã de geladeira com calendário acoplado e manta magnética em papel couchê 250g.",
+      "salePrice": 178,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-ima-45",
+          "name": "45 unidades",
+          "quantity": 45,
+          "salePrice": 178
+        },
+        {
+          "id": "pkg-ima-90",
+          "name": "90 unidades",
+          "quantity": 90,
+          "salePrice": 288
+        },
+        {
+          "id": "pkg-ima-270",
+          "name": "270 unidades",
+          "quantity": 270,
+          "salePrice": 408
+        },
+        {
+          "id": "pkg-ima-500",
+          "name": "500 unidades",
+          "quantity": 500,
+          "salePrice": 648
+        },
+        {
+          "id": "pkg-ima-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 808
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-ima-corte-esp",
+      "name": "Imã de geladeira corte especial",
+      "sku": "IMA-CORTE-ESP",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Ímã com faca de corte especial personalizado e verniz UV total.",
+      "salePrice": 358.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "6 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-imce-500",
+          "name": "500 unidades",
+          "quantity": 500,
+          "salePrice": 358.99
+        },
+        {
+          "id": "pkg-imce-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 810.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-ima-padrao",
+      "name": "Imã de geladeira padrão",
+      "sku": "IMA-PADRAO-50X45",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Ímã com cantos arredondados no formato 50x45mm e verniz UV total frente.",
+      "salePrice": 339.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-imp-500",
+          "name": "500 unidades",
+          "quantity": 500,
+          "salePrice": 339.99
+        },
+        {
+          "id": "pkg-imp-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 781.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-mini-cartao",
+      "name": "Mini cartão",
+      "sku": "CRT-MINI",
+      "categoryId": "cat-cartoes",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Minicartão em papel Couchê 300g com laminação fosca frente e verso no formato 43x48mm.",
+      "salePrice": 190,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-mini-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 190
+        },
+        {
+          "id": "pkg-mini-2000",
+          "name": "2000 unidades",
+          "quantity": 2000,
+          "salePrice": 235
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-multas",
+      "name": "Multas",
+      "sku": "SRV-CONS-MULTAS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Consulta detalhada e emissão de guias para pagamento de multas de trânsito.",
+      "salePrice": 7,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-pvc-sra3",
+      "name": "PVC SRA3",
+      "sku": "PVC-SRA3-33X48",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Folha avulsa PVC SRA3 (330x480mm) com verniz total brilho frente.",
+      "salePrice": 49.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-pvcs-1f",
+          "name": "1 unid - frente colorida",
+          "quantity": 1,
+          "salePrice": 49.99
+        },
+        {
+          "id": "pkg-pvcs-1fv",
+          "name": "1 unid - frente e verso colorido",
+          "quantity": 1,
+          "salePrice": 59.99
+        },
+        {
+          "id": "pkg-pvcs-5f",
+          "name": "5 unid - frente colorida",
+          "quantity": 5,
+          "salePrice": 149.99
+        },
+        {
+          "id": "pkg-pvcs-5fv",
+          "name": "5 unid - frente e verso colorido",
+          "quantity": 5,
+          "salePrice": 179.99
+        },
+        {
+          "id": "pkg-pvcs-10f",
+          "name": "10 unid - frente colorida",
+          "quantity": 10,
+          "salePrice": 279.99
+        },
+        {
+          "id": "pkg-pvcs-10fv",
+          "name": "10 unid - frente e verso colorido",
+          "quantity": 10,
+          "salePrice": 319.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-10x15-115g",
+      "name": "Panfleto - 10x15cm - 115g",
+      "sku": "PNF-10X15-115G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfletos promocionais no formato 10x15cm em papel Couchê brilho 115g.",
+      "salePrice": 109.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "2 a 3 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-p115-100f",
+          "name": "100 unid - frente colorida",
+          "quantity": 100,
+          "salePrice": 109.99
+        },
+        {
+          "id": "pkg-p115-100fv",
+          "name": "100 unid - frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 139.99
+        },
+        {
+          "id": "pkg-p115-150fv",
+          "name": "150 unid - frente e verso colorido",
+          "quantity": 150,
+          "salePrice": 214.98
+        },
+        {
+          "id": "pkg-p115-200f",
+          "name": "200 unid - frente colorida",
+          "quantity": 200,
+          "salePrice": 179.99
+        },
+        {
+          "id": "pkg-p115-200fv",
+          "name": "200 unid - frente e verso colorido",
+          "quantity": 200,
+          "salePrice": 234.99
+        },
+        {
+          "id": "pkg-p115-1000f",
+          "name": "1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 239.99
+        },
+        {
+          "id": "pkg-p115-1000fv",
+          "name": "1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 251.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-10x15-90g",
+      "name": "Panfleto - 10x15cm - 90g",
+      "sku": "PNF-10X15-90G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfleto promocional formato 10x15cm em papel Couchê brilho 90g.",
+      "salePrice": 96,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p90-100f",
+          "name": "100 unid - frente colorida",
+          "quantity": 100,
+          "salePrice": 96
+        },
+        {
+          "id": "pkg-p90-100fv",
+          "name": "100 unid - frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 126
+        },
+        {
+          "id": "pkg-p90-200f",
+          "name": "200 unid - frente colorida",
+          "quantity": 200,
+          "salePrice": 166
+        },
+        {
+          "id": "pkg-p90-200fv",
+          "name": "200 unid - frente e verso colorido",
+          "quantity": 200,
+          "salePrice": 221
+        },
+        {
+          "id": "pkg-p90-500f",
+          "name": "500 unid - frente colorida",
+          "quantity": 500,
+          "salePrice": 181
+        },
+        {
+          "id": "pkg-p90-500fv",
+          "name": "500 unid - frente e verso colorido",
+          "quantity": 500,
+          "salePrice": 216
+        },
+        {
+          "id": "pkg-p90-1000f",
+          "name": "1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 206
+        },
+        {
+          "id": "pkg-p90-1000fv",
+          "name": "1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 216
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-15x21-150g",
+      "name": "Panfleto - 15x21cm - 150g",
+      "sku": "PNF-15X21-150G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfletos promocionais no formato 15x21cm em papel Couchê brilho 150g encorpado.",
+      "salePrice": 169.99,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p15-150-50f",
+          "name": "50 unidades - frente colorida",
+          "quantity": 50,
+          "salePrice": 169.99
+        },
+        {
+          "id": "pkg-p15-150-50fv",
+          "name": "50 unidades - frente e verso colorido",
+          "quantity": 50,
+          "salePrice": 189.99
+        },
+        {
+          "id": "pkg-p15-150-100f",
+          "name": "100 unidades - frente colorida",
+          "quantity": 100,
+          "salePrice": 189.99
+        },
+        {
+          "id": "pkg-p15-150-100fv",
+          "name": "100 unidades - frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 199.99
+        },
+        {
+          "id": "pkg-p15-150-300f",
+          "name": "300 unidades - frente colorida",
+          "quantity": 300,
+          "salePrice": 452.99
+        },
+        {
+          "id": "pkg-p15-150-300fv",
+          "name": "300 unidades - frente e verso colorido",
+          "quantity": 300,
+          "salePrice": 674.99
+        },
+        {
+          "id": "pkg-p15-150-1000f",
+          "name": "1000 unidades - frente colorida",
+          "quantity": 1000,
+          "salePrice": 397.99
+        },
+        {
+          "id": "pkg-p15-150-1000fv",
+          "name": "1000 unidades - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 422.99
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-15x21-90g",
+      "name": "Panfleto - 15x21cm - 90g",
+      "sku": "PNF-15X21-90G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfletos promocionais no formato 15x21cm em papel Couchê brilho 90g.",
+      "salePrice": 236,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p15-100fv",
+          "name": "100 unid - frente e verso colorido",
+          "quantity": 100,
+          "salePrice": 228
+        },
+        {
+          "id": "pkg-p15-500f",
+          "name": "15x21 - 500 unid - frente colorida",
+          "quantity": 500,
+          "salePrice": 236
+        },
+        {
+          "id": "pkg-p15-500fv",
+          "name": "15x21 - 500 unid - frente e verso colorido",
+          "quantity": 500,
+          "salePrice": 296
+        },
+        {
+          "id": "pkg-p15-1000f",
+          "name": "15x21 - 1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 436
+        },
+        {
+          "id": "pkg-p15-1000fv",
+          "name": "15x21 - 1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 456
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-20x28-90g",
+      "name": "Panfleto - 20x28cm - 90g",
+      "sku": "PNF-20X28-90G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfleto no formato 20x28cm em papel Couchê brilho 90g.",
+      "salePrice": 380,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p20x28-500f",
+          "name": "500 unid - frente colorida",
+          "quantity": 500,
+          "salePrice": 380
+        },
+        {
+          "id": "pkg-p20x28-500fv",
+          "name": "500 unid - frente e verso colorido",
+          "quantity": 500,
+          "salePrice": 490
+        },
+        {
+          "id": "pkg-p20x28-1000f",
+          "name": "1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 542
+        },
+        {
+          "id": "pkg-p20x28-1000fv",
+          "name": "1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 660
+        },
+        {
+          "id": "pkg-p20x28-2500f",
+          "name": "2500 unid - frente colorida",
+          "quantity": 2500,
+          "salePrice": 900
+        },
+        {
+          "id": "pkg-p20x28-2500fv",
+          "name": "2500 unid - frente e verso colorido",
+          "quantity": 2500,
+          "salePrice": 1039
+        },
+        {
+          "id": "pkg-p20x28-5000f",
+          "name": "5000 unid - frente colorida",
+          "quantity": 5000,
+          "salePrice": 1470
+        },
+        {
+          "id": "pkg-p20x28-5000fv",
+          "name": "5000 unid - frente e verso colorido",
+          "quantity": 5000,
+          "salePrice": 1660
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-20x30-115g",
+      "name": "Panfleto - 20x30cm - 115g",
+      "sku": "PNF-20X30-115G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfleto grande formato 20x30cm em papel Couchê brilho 115g.",
+      "salePrice": 740,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p20x30-115-1000f",
+          "name": "1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 740
+        },
+        {
+          "id": "pkg-p20x30-115-1000fv",
+          "name": "1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 820
+        },
+        {
+          "id": "pkg-p20x30-115-2500f",
+          "name": "2500 unid - frente colorida",
+          "quantity": 2500,
+          "salePrice": 1355
+        },
+        {
+          "id": "pkg-p20x30-115-2500fv",
+          "name": "2500 unid - frente e verso colorido",
+          "quantity": 2500,
+          "salePrice": 1320
+        },
+        {
+          "id": "pkg-p20x30-115-5000f",
+          "name": "5000 unid - frente colorida",
+          "quantity": 5000,
+          "salePrice": 1980
+        },
+        {
+          "id": "pkg-p20x30-115-5000fv",
+          "name": "5000 unid - frente e verso colorido",
+          "quantity": 5000,
+          "salePrice": 2260
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-panfleto-20x30-150g",
+      "name": "Panfleto - 20x30cm - 150g",
+      "sku": "PNF-20X30-150G",
+      "categoryId": "cat-panfletos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Panfleto grande formato 20x30cm em papel Couchê brilho 150g.",
+      "salePrice": 858,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-p20x30-150-1000f",
+          "name": "1000 unid - frente colorida",
+          "quantity": 1000,
+          "salePrice": 858
+        },
+        {
+          "id": "pkg-p20x30-150-1000fv",
+          "name": "1000 unid - frente e verso colorido",
+          "quantity": 1000,
+          "salePrice": 908
+        },
+        {
+          "id": "pkg-p20x30-150-2500f",
+          "name": "2500 unid - frente colorida",
+          "quantity": 2500,
+          "salePrice": 1618
+        },
+        {
+          "id": "pkg-p20x30-150-2500fv",
+          "name": "2500 unid - frente e verso colorido",
+          "quantity": 2500,
+          "salePrice": 1718
+        },
+        {
+          "id": "pkg-p20x30-150-5000f",
+          "name": "5000 unid - frente colorida",
+          "quantity": 5000,
+          "salePrice": 2368
+        },
+        {
+          "id": "pkg-p20x30-150-5000fv",
+          "name": "5000 unid - frente e verso colorido",
+          "quantity": 5000,
+          "salePrice": 3258
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-placa-pix",
+      "name": "Placa QR CODE PIX",
+      "sku": "VIS-PLACA-PIX",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Placa display em acrílico transparente 3mm com QR Code Pix em impressão digital com tinta branca especial.",
+      "salePrice": 92,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-pix-1",
+          "name": "1 unidade",
+          "quantity": 1,
+          "salePrice": 92
+        },
+        {
+          "id": "pkg-pix-5",
+          "name": "5 unidades",
+          "quantity": 5,
+          "salePrice": 237
+        },
+        {
+          "id": "pkg-pix-10",
+          "name": "10 unidades",
+          "quantity": 10,
+          "salePrice": 407
+        },
+        {
+          "id": "pkg-pix-25",
+          "name": "25 unidades",
+          "quantity": 25,
+          "salePrice": 892
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-placa-sinalizacao",
+      "name": "Placa de sinalização",
+      "sku": "VIS-PLACA-PS",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Placa em PSAI 2mm com adesivo vinil plotter de alta durabilidade e fita dupla face.",
+      "salePrice": 68,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "6 a 8 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-plc-1-25x20",
+          "name": "1 unid - 25x20",
+          "quantity": 1,
+          "salePrice": 68
+        },
+        {
+          "id": "pkg-plc-5-25x20",
+          "name": "5 unid - 25x20",
+          "quantity": 5,
+          "salePrice": 148
+        },
+        {
+          "id": "pkg-plc-10-25x20",
+          "name": "10 unid - 25x20",
+          "quantity": 10,
+          "salePrice": 243
+        },
+        {
+          "id": "pkg-plc-1-30x40",
+          "name": "1 unid - 30x40",
+          "quantity": 1,
+          "salePrice": 78
+        },
+        {
+          "id": "pkg-plc-5-30x40",
+          "name": "5 unid - 30x40",
+          "quantity": 5,
+          "salePrice": 173
+        },
+        {
+          "id": "pkg-plc-10-30x40",
+          "name": "10 unid - 30x40",
+          "quantity": 10,
+          "salePrice": 308
+        },
+        {
+          "id": "pkg-plc-1-60x40",
+          "name": "1 unid - 60x40",
+          "quantity": 1,
+          "salePrice": 131
+        },
+        {
+          "id": "pkg-plc-5-60x40",
+          "name": "5 unid - 60x40",
+          "quantity": 5,
+          "salePrice": 321
+        },
+        {
+          "id": "pkg-plc-10-60x40",
+          "name": "10 unid - 60x40",
+          "quantity": 10,
+          "salePrice": 698
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-plastificar",
+      "name": "Plastificar",
+      "sku": "SRV-PLASTIFICAR",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Plastificação térmica protetora de documentos.",
+      "salePrice": 5,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "options": [
+        {
+          "id": "opt-tam-plast",
+          "name": "Tamanho",
+          "values": [
+            {
+              "id": "val-plast-peq",
+              "label": "Pequeno",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-plast-grd",
+              "label": "Grande",
+              "additionalPrice": 5,
+              "additionalCost": 2.5
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-plastificacao",
+      "name": "Plastificação",
+      "sku": "SRV-PLASTIFICACAO",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Plastificação de documentos Grande ou Pequeno.",
+      "salePrice": 10,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "options": [
+        {
+          "id": "opt-plast-tipo",
+          "name": "Plastificar",
+          "values": [
+            {
+              "id": "val-plast-grd",
+              "label": "Grande",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-plast-peq",
+              "label": "Pequeno",
+              "additionalPrice": -5,
+              "additionalCost": -2.5
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-gov",
+      "name": "Recuperação de Senha GOV",
+      "sku": "SRV-SENHA-GOV",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Recuperação e redefinição de acesso à conta GOV.BR.",
+      "salePrice": 10,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "10 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-rifa",
+      "name": "Rifa",
+      "sku": "BLC-RIFA-75G",
+      "categoryId": "cat-blocos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Talões de rifa em papel apergaminhado 75g com numeração e picote digital (50 folhas por bloco).",
+      "salePrice": 71,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "4 a 5 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-rifa-1",
+          "name": "1 bloco - 50 unid",
+          "quantity": 1,
+          "salePrice": 71
+        },
+        {
+          "id": "pkg-rifa-2",
+          "name": "2 blocos - 100unid",
+          "quantity": 2,
+          "salePrice": 104
+        },
+        {
+          "id": "pkg-rifa-5",
+          "name": "5 blocos - 250unid",
+          "quantity": 5,
+          "salePrice": 194
+        },
+        {
+          "id": "pkg-rifa-10",
+          "name": "10 blocos - 500 unid",
+          "quantity": 10,
+          "salePrice": 268.4
+        },
+        {
+          "id": "pkg-rifa-20",
+          "name": "20 blocos - 1000 unid",
+          "quantity": 20,
+          "salePrice": 475
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-sacola-media",
+      "name": "Sacola personalizada média",
+      "sku": "EMB-SAC-MED",
+      "categoryId": "cat-embalagens",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Sacola plástica em polietileno de alta densidade 200x300mm com estampa silk 1x0, suporta até 6kg.",
+      "salePrice": 200,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "8 a 12 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-sac-50",
+          "name": "50 unidades",
+          "quantity": 50,
+          "salePrice": 200
+        },
+        {
+          "id": "pkg-sac-100",
+          "name": "100 unidades",
+          "quantity": 100,
+          "salePrice": 265
+        },
+        {
+          "id": "pkg-sac-250",
+          "name": "250 unidades",
+          "quantity": 250,
+          "salePrice": 530
+        },
+        {
+          "id": "pkg-sac-500",
+          "name": "500 unidades",
+          "quantity": 500,
+          "salePrice": 848
+        },
+        {
+          "id": "pkg-sac-1000",
+          "name": "1000 unidades",
+          "quantity": 1000,
+          "salePrice": 1510
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-2via",
+      "name": "Segunda via de contas",
+      "sku": "SRV-2VIA-CONTAS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Emissão de 2ª via de faturas (Água, Luz, Telefone, Internet, Bancos).",
+      "salePrice": 5,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "5 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-diversos",
+      "name": "Serviços Digitais / Consultas diversas",
+      "sku": "SRV-CONSULTAS-DIV",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Consultas diversas em sistemas públicos e suporte digital.",
+      "salePrice": 10,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "15 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-tags",
+      "name": "TAGS",
+      "sku": "CRT-TAGS-250G",
+      "categoryId": "cat-cartoes",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Tags personalizadas em papel Couchê brilho 250g com furo padrão 41,5x44mm.",
+      "salePrice": 72,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "6 a 7 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-tag-50f",
+          "name": "4x5cm - frente colorida - 50 unid",
+          "quantity": 50,
+          "salePrice": 72
+        },
+        {
+          "id": "pkg-tag-50fv",
+          "name": "4x5 - frente e verso colorido - 50 unid",
+          "quantity": 50,
+          "salePrice": 102
+        },
+        {
+          "id": "pkg-tag-100f",
+          "name": "4x5cm - frente colorida - 100unid",
+          "quantity": 100,
+          "salePrice": 87
+        },
+        {
+          "id": "pkg-tag-100fv",
+          "name": "4x5 - frente e verso colorido - 100 unid",
+          "quantity": 100,
+          "salePrice": 107
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-topo-bolo",
+      "name": "Topo de bolo",
+      "sku": "IMP-TOPO-BOLO",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Topos de bolo personalizados impressos em papel glossy 115g.",
+      "salePrice": 7,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-tb-tipo",
+          "name": "Tipo",
+          "values": [
+            {
+              "id": "tb-padrao",
+              "label": "Impressão padrão",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "tb-recorte",
+              "label": "Impressão + recorte digital",
+              "additionalPrice": 7.5,
+              "additionalCost": 3.75
+            },
+            {
+              "id": "tb-montagem",
+              "label": "Impressão + recorte digital + montagem",
+              "additionalPrice": 15,
+              "additionalCost": 7.5
+            }
+          ]
+        },
+        {
+          "id": "opt-tb-arte",
+          "name": "Arte",
+          "values": [
+            {
+              "id": "tb-minha-arte",
+              "label": "Enviar minha arte",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "tb-arte-pers",
+              "label": "Arte personalizada",
+              "additionalPrice": 20.5,
+              "additionalCost": 10.25
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-transf-pontos",
+      "name": "Transferência de pontos",
+      "sku": "SRV-TRANSF-PONTOS",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Indicação de real condutor e transferência de pontos na CNH.",
+      "salePrice": 35,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "20 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-srv-transf-veic",
+      "name": "Transferência de veículos",
+      "sku": "SRV-TRANSF-VEIC",
+      "categoryId": "cat-servicos",
+      "type": "SERVICO",
+      "description": "Auxílio completo e emissão de documentação para transferência veicular.",
+      "salePrice": 45,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "estimatedTime": "30 minutos",
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-wind-banner",
+      "name": "WIND BANNER",
+      "sku": "BAN-WIND",
+      "categoryId": "cat-banners",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Wind Banner em tecido Oxford para divulgação ao ar livre.",
+      "salePrice": 192,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "5 a 7 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": true,
+      "packages": [
+        {
+          "id": "pkg-wb-1",
+          "name": "Bandeira avulsa pena",
+          "quantity": 1,
+          "salePrice": 192
+        },
+        {
+          "id": "pkg-wb-2",
+          "name": "Bandeira avulsa vela",
+          "quantity": 1,
+          "salePrice": 192
+        },
+        {
+          "id": "pkg-wb-3",
+          "name": "Bandeira avulsa retangular",
+          "quantity": 1,
+          "salePrice": 192
+        },
+        {
+          "id": "pkg-wb-4",
+          "name": "kit completo pena",
+          "quantity": 1,
+          "salePrice": 349
+        },
+        {
+          "id": "pkg-wb-5",
+          "name": "kit completo vela",
+          "quantity": 1,
+          "salePrice": 349
+        },
+        {
+          "id": "pkg-wb-6",
+          "name": "kit completo retangular",
+          "quantity": 1,
+          "salePrice": 349
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-xerox",
+      "name": "Xerox",
+      "sku": "IMP-XEROX",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cópias e impressões em papel offset 75g.",
+      "salePrice": 2,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_UNIDADE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 dia útil",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "options": [
+        {
+          "id": "opt-xerox-tipo",
+          "name": "Tipo",
+          "values": [
+            {
+              "id": "val-xrx-pb",
+              "label": "P&B",
+              "additionalPrice": 0,
+              "additionalCost": 0
+            },
+            {
+              "id": "val-xrx-col",
+              "label": "Color",
+              "additionalPrice": 1,
+              "additionalCost": 0.5
+            }
+          ]
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-cartaz-a3",
+      "name": "cartaz A3",
+      "sku": "IMP-CARTAZ-A3",
+      "categoryId": "cat-impressos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Cartazes A3 e SRA3 em papel couchê ou sulfite para divulgação.",
+      "salePrice": 10,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "1 a 2 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-ctz-1-a3couche",
+          "name": "1 unid - A3 couhcê",
+          "quantity": 1,
+          "salePrice": 10
+        },
+        {
+          "id": "pkg-ctz-1-a3sulfite",
+          "name": "1unid - A3 Sulfite",
+          "quantity": 1,
+          "salePrice": 10
+        },
+        {
+          "id": "pkg-ctz-5-sra3",
+          "name": "5 unid - SRA3 couhcê",
+          "quantity": 5,
+          "salePrice": 94
+        },
+        {
+          "id": "pkg-ctz-10-sra3",
+          "name": "10 unid - SRA3 couchê",
+          "quantity": 10,
+          "salePrice": 182
+        },
+        {
+          "id": "pkg-ctz-25-sra3",
+          "name": "25 unid - SRA3 couchê",
+          "quantity": 25,
+          "salePrice": 232.25
+        },
+        {
+          "id": "pkg-ctz-50-sra3",
+          "name": "50 unid - SRA3 couchê",
+          "quantity": 50,
+          "salePrice": 306
+        },
+        {
+          "id": "pkg-ctz-100-sra3",
+          "name": "100 unid - SRA3 couchê",
+          "quantity": 100,
+          "salePrice": 465
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "prod-comandas",
+      "name": "comandas",
+      "sku": "BLC-COMANDAS",
+      "categoryId": "cat-blocos",
+      "type": "PRODUTO_GRAFICO",
+      "description": "Comandas em papel apergaminhado 75g para controle de bares, restaurantes e lanchonetes.",
+      "salePrice": 158,
+      "unit": "UN",
+      "stock": 0,
+      "imageUrl": "",
+      "imageSource": "upload",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_TERCEIRIZADA",
+      "leadTime": "3 a 4 dias úteis",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-cmd-10f",
+          "name": "10 blocos ( 50 unid cada) - frente",
+          "quantity": 10,
+          "salePrice": 158
+        },
+        {
+          "id": "pkg-cmd-10fv",
+          "name": "10 blocos (50 unid cada) - frente e verso",
+          "quantity": 10,
+          "salePrice": 178
+        }
+      ],
+      "active": true,
+      "showInCatalog": true
+    }
+  ]
+}

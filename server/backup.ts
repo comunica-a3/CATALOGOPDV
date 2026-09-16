@@ -39,7 +39,7 @@ const ALL_TABLES = [
 ];
 
 /**
- * Creates a structured JSON snapshot of all database tables (async across Turso/SQLite)
+ * Creates a structured JSON snapshot of all database tables
  */
 export async function exportDatabaseSnapshot(): Promise<DatabaseSnapshot> {
   const snapshot: DatabaseSnapshot = {

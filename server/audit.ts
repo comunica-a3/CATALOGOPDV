@@ -14,7 +14,7 @@ export interface AuditLogEntry {
 }
 
 /**
- * Records an audit trail log in Database (Turso or local SQLite)
+ * Records an audit trail log in local SQLite Database
  */
 export async function logAudit(entry: AuditLogEntry): Promise<void> {
   try {

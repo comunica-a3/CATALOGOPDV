@@ -25,6 +25,7 @@ import {
   restoreDatabaseSnapshot,
 } from './backup';
 import { generateAIContent } from './ai';
+import { buildPublicCatalogPayload, publishCatalogToGitHub } from './catalogPublisher';
 
 const router = express.Router();
 
@@ -60,24 +61,24 @@ export async function saveBase64Image(
   const filename = `${id}.${ext}`;
   const filePath = path.join(uploadsDir, filename);
 
-  // Write to disk cache
+  // Grava o arquivo de imagem diretamente no disco em data/uploads/
   const buffer = Buffer.from(base64Data, 'base64');
   try {
     fs.writeFileSync(filePath, buffer);
   } catch (err) {
-    console.warn('Notice writing image to disk:', err);
+    console.error('Erro ao gravar arquivo de imagem em data/uploads/:', err);
+    throw new Error('Falha ao salvar arquivo de imagem no disco.');
   }
 
-  // Write to database for durable cloud / multi-instance persistence
+  // Registra metadados do arquivo sem salvar o payload base64 no banco de dados
   const now = new Date().toISOString();
   try {
     await db.run(
       'INSERT OR REPLACE INTO uploaded_files (id, filename, mime_type, data_base64, created_at) VALUES (?, ?, ?, ?, ?)',
-      [id, filename, mimeType, base64Data, now]
+      [id, filename, mimeType, '', now]
     );
-    persistDatabase();
   } catch (err) {
-    console.warn('Notice saving to uploaded_files table:', err);
+    // Registro de metadados não bloqueante
   }
 
   return {
@@ -981,35 +982,14 @@ router.get('/uploads/:filename', async (req, res) => {
     const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
     const filePath = path.join(uploadsDir, filename);
 
-    // 1. If file exists on local disk, serve directly
+    // Servir arquivo de imagem diretamente do disco local
     if (fs.existsSync(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
       res.sendFile(filePath);
       return;
     }
 
-    // 2. If not on local disk, check database (e.g. fresh container or after restart)
-    const fileRow = await db.get<{ mime_type: string; data_base64: string }>(
-      'SELECT mime_type, data_base64 FROM uploaded_files WHERE filename = ?',
-      [filename]
-    );
-
-    if (fileRow && fileRow.data_base64) {
-      const buffer = Buffer.from(fileRow.data_base64, 'base64');
-      try {
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-        fs.writeFileSync(filePath, buffer);
-      } catch {}
-
-      res.setHeader('Content-Type', fileRow.mime_type || 'image/jpeg');
-      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-      res.send(buffer);
-      return;
-    }
-
-    res.status(404).json({ error: 'Imagem não encontrada.' });
+    res.status(404).json({ error: 'Imagem não encontrada no diretório local de uploads.' });
   } catch (err: any) {
     res.status(500).json({ error: 'Erro ao servir arquivo de imagem.' });
   }
@@ -3001,6 +2981,70 @@ router.delete('/catalog-niches/:id', async (req: AuthRequest, res) => {
     res.json({ success: true, id });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao excluir nicho do catálogo.' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// CATALOG PUBLISH TO GITHUB & STATIC JSON
+// -----------------------------------------------------------------------------
+
+router.get('/catalog/publish/status', async (req, res) => {
+  const hasToken = !!process.env.GITHUB_TOKEN;
+  const owner = process.env.GITHUB_REPO_OWNER || '';
+  const repo = process.env.GITHUB_REPO_NAME || '';
+  const branch = process.env.GITHUB_BRANCH || '';
+
+  res.json({
+    configured: !!(hasToken && owner && repo),
+    owner,
+    repo,
+    branch,
+    hasToken,
+  });
+});
+
+router.post('/catalog/publish', async (req: AuthRequest, res) => {
+  try {
+    const { githubToken, githubRepoOwner, githubRepoName, githubBranch } = req.body || {};
+
+    const result = await publishCatalogToGitHub({
+      token: githubToken,
+      owner: githubRepoOwner,
+      repo: githubRepoName,
+      branch: githubBranch,
+    });
+
+    await logAudit({
+      userId: req.user?.id || 'SYSTEM',
+      userName: req.user?.name || 'Administrador',
+      action: 'PUBLISH_CATALOG_GITHUB',
+      entityType: 'CATALOG',
+      entityId: 'public/catalogo.json',
+      details: {
+        targetRepo: result.targetRepo,
+        itemsCount: result.itemsCount,
+        commitUrl: result.commitUrl,
+      },
+      ipAddress: req.ip,
+    });
+
+    broadcastSync('catalog-updated', { type: 'published-github', itemsCount: result.itemsCount });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({
+      success: false,
+      error: err.message || 'Falha ao sincronizar catálogo com o GitHub.',
+    });
+  }
+});
+
+router.get('/catalog/data', async (req, res) => {
+  try {
+    const payload = await buildPublicCatalogPayload();
+    res.json(payload);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao carregar dados do catálogo.' });
   }
 });
 

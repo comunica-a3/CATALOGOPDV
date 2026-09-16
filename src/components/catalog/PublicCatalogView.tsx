@@ -25,6 +25,7 @@ import {
   Settings,
   Plus,
   ShoppingCart,
+  Loader2,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -156,24 +157,85 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
 }
 
 interface PublicCatalogViewProps {
-  items: Item[];
-  categories: Category[];
-  companySettings: CompanySettings;
+  items?: Item[];
+  categories?: Category[];
+  companySettings?: CompanySettings;
   onOpenManagement?: () => void;
   isStandalone?: boolean;
 }
 
 export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
-  items,
-  categories,
-  companySettings,
+  items: propItems,
+  categories: propCategories,
+  companySettings: propCompanySettings,
   onOpenManagement,
   isStandalone = false,
 }) => {
   const { isAdmin } = useAuth();
+  const [staticData, setStaticData] = useState<{
+    items: Item[];
+    categories: Category[];
+    companySettings: CompanySettings;
+    niches: ProductNicheCard[];
+  } | null>(null);
+  const [isLoadingStatic, setIsLoadingStatic] = useState(false);
+
+  // Se estiver rodando como vitrine estática ou se nenhuma prop com itens for passada,
+  // busca o arquivo estático /catalogo.json garantindo independência 100% do backend local
+  useEffect(() => {
+    const shouldFetch = isStandalone || !propItems || propItems.length === 0;
+    if (shouldFetch) {
+      setIsLoadingStatic(true);
+      fetch('/catalogo.json')
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((data) => {
+          if (data && (data.items || data.company)) {
+            setStaticData({
+              items: data.items || [],
+              categories: data.categories || [],
+              companySettings: data.company || {},
+              niches: data.niches || [],
+            });
+            if (data.niches && data.niches.length > 0) {
+              setNiches(data.niches);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Aviso: Não foi possível carregar dados de /catalogo.json:', err);
+        })
+        .finally(() => {
+          setIsLoadingStatic(false);
+        });
+    }
+  }, [propItems, isStandalone]);
+
+  const items = (propItems && propItems.length > 0) ? propItems : (staticData?.items || []);
+  const categories = (propCategories && propCategories.length > 0) ? propCategories : (staticData?.categories || []);
+  const companySettings: CompanySettings = propCompanySettings || staticData?.companySettings || {
+    name: 'Gráfica & Estúdio',
+    tradingName: '',
+    document: '',
+    phone: '',
+    whatsapp: '',
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    logoUrl: '',
+    receiptFooterMessage: '',
+    paymentMethods: [],
+    catalogSubtitle: 'Sua rotina, mais simples.',
+    catalogHeaderType: 'NAME',
+  };
+
   const [niches, setNiches] = useState<ProductNicheCard[]>(() =>
     StorageService.getCatalogNiches()
   );
+
   const [isNicheManagerOpen, setIsNicheManagerOpen] = useState(false);
   const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -521,6 +583,16 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     selectedType !== 'TODOS' ||
     sortBy !== 'featured' ||
     (selectedNiche !== null && selectedNiche !== 'TODOS');
+
+  if (isLoadingStatic && items.length === 0) {
+    return (
+      <div className="min-h-[400px] flex flex-col items-center justify-center p-12 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
+        <p className="text-sm font-bold text-slate-700">Carregando catálogo...</p>
+        <p className="text-xs text-slate-500 mt-1">Obtendo produtos e categorias da vitrine pública</p>
+      </div>
+    );
+  }
 
   return (
     <div id="public-catalog-view" className="space-y-6 animate-in fade-in duration-200">
