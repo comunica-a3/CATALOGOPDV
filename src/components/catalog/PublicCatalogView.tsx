@@ -180,19 +180,15 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
   } | null>(null);
   const [isLoadingStatic, setIsLoadingStatic] = useState(false);
 
-  // Se estiver rodando como vitrine estática ou se nenhuma prop com itens for passada,
-  // busca o arquivo estático /catalogo.json garantindo independência 100% do backend local
+ // Se estiver rodando como vitrine estática ou se nenhuma prop com itens for passada,
+  // busca o arquivo estático no GitHub garantindo independência 100% do backend local
   useEffect(() => {
     const shouldFetch = isStandalone || !propItems || propItems.length === 0;
     if (shouldFetch) {
       setIsLoadingStatic(true);
       const urlCatalogo = `https://raw.githubusercontent.com/comunica-a3/CATALOGOPDV/main/public/catalogo.json?t=${Date.now()}`;
-      const res = await fetch(urlCatalogo);
-if (res.ok) {
-  const data = await res.json();
-  setProducts(data.products || []);
-  setCategories(data.categories || []);
-}
+      
+      fetch(urlCatalogo)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -211,7 +207,7 @@ if (res.ok) {
           }
         })
         .catch((err) => {
-          console.warn('Aviso: Não foi possível carregar dados de /catalogo.json:', err);
+          console.warn('Aviso: Não foi possível carregar dados do catálogo remoto:', err);
         })
         .finally(() => {
           setIsLoadingStatic(false);
