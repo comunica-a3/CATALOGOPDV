@@ -186,7 +186,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     const shouldFetch = isStandalone || !propItems || propItems.length === 0;
     if (shouldFetch) {
       setIsLoadingStatic(true);
-      fetch(`/catalogo.json?t=${Date.now()}`)
+      fetch(`https://raw.githubusercontent.com/comunica-a3/CATALOGOPDV/main/public/catalogo.json?t=${Date.now()}`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
