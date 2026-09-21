@@ -134,16 +134,20 @@ function MainApp() {
 
   useEffect(() => {
     loadAllData();
-    // Initial sync from central SQLite database server
-    StorageService.syncWithServer().then(() => {
-      loadAllData();
-    });
+   const isLocal = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-    // Real-time synchronization (SSE + BroadcastChannel across simultaneous devices)
-    const cleanupRealtime = initRealtimeSync(() => {
-      loadAllData();
-    });
+    // Executa sincronização com o servidor SQLite e Realtime apenas se estiver na loja física (localhost)
+    let cleanupRealtime = () => {};
+    if (isLocal) {
+      StorageService.syncWithServer().then(() => {
+        loadAllData();
+      });
 
+      cleanupRealtime = initRealtimeSync(() => {
+        loadAllData();
+      });
+    }
     const handleDataEvent = () => {
       loadAllData();
     };
@@ -156,11 +160,13 @@ function MainApp() {
     window.addEventListener('production-updated', handleDataEvent);
     window.addEventListener('storage-sync-completed', handleDataEvent);
 
-    // Keep data fresh when window gets focus
+   // Keep data fresh when window gets focus
     const handleFocus = () => {
-      StorageService.syncWithServer().then(() => {
-        loadAllData();
-      });
+      if (isLocal) {
+        StorageService.syncWithServer().then(() => {
+          loadAllData();
+        });
+      }
     };
 
     window.addEventListener('focus', handleFocus);
@@ -286,8 +292,8 @@ function MainApp() {
     return (
       <div className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased selection:bg-blue-500 selection:text-white px-3 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto">
         <PublicCatalogView
-          items={items}
-          categories={categories}
+          items={isLocal ? items : []}
+          categories={isLocal ? categories : []}
           companySettings={companySettings}
           onOpenManagement={() => setCurrentView('login')}
           isStandalone={true}
