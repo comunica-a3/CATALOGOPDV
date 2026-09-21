@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-21T18:31:10.668Z",
+  "exportedAt": "2026-09-21T18:42:52.431Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -1232,7 +1232,7 @@
     },
     {
       "id": "item-1789490398867",
-      "name": "Etiquetas adesivas redondas",
+      "name": "Etiquetas adesivas quadradas",
       "sku": "ETQ-ADV-RED",
       "categoryId": "cat-adesivos",
       "type": "sep_personalizados_1789070149013",
