@@ -59,6 +59,9 @@ type AppView =
 
 function MainApp() {
   const { isAuthenticated, mustChangePassword, logout, isAdmin, isSeller, canViewFinancialReports, canManageStock } = useAuth();
+
+  const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   
   // URL search params check
   const [selectedSegmentSlug, setSelectedSegmentSlug] = useState<string>('todos');
@@ -134,8 +137,6 @@ function MainApp() {
 
   useEffect(() => {
     loadAllData();
-   const isLocal = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
     // Executa sincronização com o servidor SQLite e Realtime apenas se estiver na loja física (localhost)
     let cleanupRealtime = () => {};
