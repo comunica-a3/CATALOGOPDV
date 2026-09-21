@@ -191,10 +191,21 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
-        .then((data) => {
+       .then((data) => {
           if (data && (data.items || data.company)) {
+            // Corrige links de upload caso tenham sido salvos com prefixo local /api/uploads/
+            const sanitizedItems = (data.items || []).map((item: any) => {
+              let img = item.imageUrl || '';
+              if (img.startsWith('/api/uploads/')) {
+                img = img.replace('/api/uploads/', 'uploads/');
+              } else if (img.startsWith('api/uploads/')) {
+                img = img.replace('api/uploads/', 'uploads/');
+              }
+              return { ...item, imageUrl: img };
+            });
+
             setStaticData({
-              items: data.items || [],
+              items: sanitizedItems,
               categories: data.categories || [],
               companySettings: data.company || {},
               niches: data.niches || [],
