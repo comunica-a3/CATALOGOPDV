@@ -295,7 +295,7 @@ function MainApp() {
         <PublicCatalogView
           items={isLocal ? items : []}
           categories={isLocal ? categories : []}
-          companySettings={companySettings}
+          companySettings={isLocal ? companySettings : undefined}
           onOpenManagement={() => setCurrentView('login')}
           isStandalone={true}
         />
