@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-18T18:27:55.876Z",
+  "exportedAt": "2026-09-21T13:53:41.357Z",
   "company": {
     "name": "DUMORRO",
-    "tradingName": "Impressões e Serviços digitais",
+    "tradingName": "Digital Express Impressões e Serviços",
     "document": "66884814000144",
     "phone": "(31) 986200503",
-    "whatsapp": "31986200503",
+    "whatsapp": "11987654321",
     "email": "falecomdumorro@gmail.com",
     "address": "",
     "city": "BH",
@@ -19,7 +19,8 @@
       "Cartão de Crédito",
       "Cartão de Débito",
       "Dinheiro",
-      "Prazo / Crediário"
+      "Prazo / Crediário",
+      "Transferência Bancária"
     ],
     "catalogSubtitle": "Sua rotina, mais simples.",
     "catalogHeaderType": "LOGO",
@@ -209,7 +210,7 @@
       "categoryId": "cat-1788350843601",
       "type": "PRODUTO_FISICO",
       "description": "Carregadores e Cabos para celulares.",
-      "salePrice": 19.99,
+      "salePrice": 20,
       "unit": "UN",
       "stock": 4,
       "imageUrl": "https://drive.google.com/thumbnail?id=1dlVnpfsOQJUhD_7x9_LJFOIuSoeDRsgV&sz=w1200",
