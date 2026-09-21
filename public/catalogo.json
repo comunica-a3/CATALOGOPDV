@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-18T18:11:47.840Z",
+  "exportedAt": "2026-09-18T18:27:55.876Z",
   "company": {
     "name": "DUMORRO",
-    "tradingName": "Digital Express Impressões e Serviços",
+    "tradingName": "Impressões e Serviços digitais",
     "document": "66884814000144",
     "phone": "(31) 986200503",
-    "whatsapp": "11987654321",
+    "whatsapp": "31986200503",
     "email": "falecomdumorro@gmail.com",
     "address": "",
     "city": "BH",
@@ -19,8 +19,7 @@
       "Cartão de Crédito",
       "Cartão de Débito",
       "Dinheiro",
-      "Prazo / Crediário",
-      "Transferência Bancária"
+      "Prazo / Crediário"
     ],
     "catalogSubtitle": "Sua rotina, mais simples.",
     "catalogHeaderType": "LOGO",
