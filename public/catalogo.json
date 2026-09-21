@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-21T14:28:45.921Z",
+  "exportedAt": "2026-09-21T18:31:10.668Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -2957,25 +2957,55 @@
       "options": [
         {
           "id": "opt-1789999275971",
-          "name": "Novo Acabamento",
+          "name": "Arte",
           "values": [
             {
               "id": "val-1789999275971-1",
-              "label": "Recorte Digital",
-              "additionalCost": 7,
-              "additionalPrice": 12
+              "label": "Enviar minha Arte",
+              "additionalCost": 0,
+              "additionalPrice": 0
             },
             {
               "id": "val-1789999349419",
-              "label": "Arte personalizada",
-              "additionalCost": 11.5,
-              "additionalPrice": 23
+              "label": "Arte Personalizada",
+              "additionalCost": 10,
+              "additionalPrice": 20
+            }
+          ]
+        },
+        {
+          "id": "opt-1790015133691",
+          "name": "Corte ",
+          "values": [
+            {
+              "id": "val-1790015133691-1",
+              "label": "Sem recorte",
+              "additionalCost": 0,
+              "additionalPrice": 0
             },
             {
-              "id": "val-1789999495450",
-              "label": "Topo de bolo montado completo ",
-              "additionalCost": 19,
-              "additionalPrice": 38
+              "id": "val-1790015229770",
+              "label": "Recorte digital",
+              "additionalCost": 0,
+              "additionalPrice": 5
+            }
+          ]
+        },
+        {
+          "id": "opt-1790015293410",
+          "name": "Montagem",
+          "values": [
+            {
+              "id": "val-1790015293410-1",
+              "label": "Sem montagem",
+              "additionalCost": 0,
+              "additionalPrice": 0
+            },
+            {
+              "id": "val-1790015324961",
+              "label": "Montado ",
+              "additionalCost": 0,
+              "additionalPrice": 10
             }
           ]
         }
