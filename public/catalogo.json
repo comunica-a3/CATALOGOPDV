@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-21T18:42:52.431Z",
+  "exportedAt": "2026-09-22T12:40:02.482Z",
   "company": {
     "name": "DUMORRO",
-    "tradingName": "Sua rotina, mais simples.",
+    "tradingName": "Digital Express Impressões e Serviços",
     "document": "66884814000144",
     "phone": "(31) 986200503",
     "whatsapp": "11987654321",
@@ -1274,6 +1274,58 @@
         {
           "id": "pkg-1789490398867-3",
           "name": "Tamanho - 6x6CM",
+          "quantity": 12,
+          "salePrice": 14.99
+        }
+      ],
+      "options": [],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "item-1789156022384",
+      "name": "Etiquetas adesivas redondas",
+      "sku": "PER-00001",
+      "categoryId": "cat-adesivos",
+      "type": "sep_personalizados_1789070149013",
+      "description": "Etiquetas adesivas em papel glossy para identificação de produtos e selos.",
+      "salePrice": 14.99,
+      "unit": "UN",
+      "stock": 5,
+      "imageUrl": "https://drive.google.com/thumbnail?id=1gP8zpVQHZFXyZSuITvVeVluwo7Jf5_LZ&sz=w1200",
+      "imageSource": "google_drive",
+      "imageOriginalUrl": "https://drive.google.com/file/d/1gP8zpVQHZFXyZSuITvVeVluwo7Jf5_LZ/view?usp=drivesdk",
+      "googleDriveFileId": "1gP8zpVQHZFXyZSuITvVeVluwo7Jf5_LZ",
+      "googleDriveFileName": "etiqueta adesiva.jpg",
+      "googleDriveMimeType": "image/jpeg",
+      "googleDriveThumbnailUrl": "https://lh3.googleusercontent.com/drive-storage/AJQWtBMfFJy8YKy1e_nO4FYDM41A_Aj_rXYiOuBwnEJWCDeFlRRW73kf3EJbUOJjEyRPxrL6b0bf2CYPB9Kcpx7oWv1zKyQhU8iUZJKVoDF8dgS0LqpZLg=s220",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_PROPRIA",
+      "leadTime": "1 dia útil",
+      "requiresFile": false,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-1789999018170",
+          "name": "Tamanho 3x3 CM",
+          "quantity": 30,
+          "salePrice": 14.99
+        },
+        {
+          "id": "pkg-1789999057612",
+          "name": "Tamanho 4x4 CM",
+          "quantity": 20,
+          "salePrice": 14.99
+        },
+        {
+          "id": "pkg-1789999074012",
+          "name": "Tamanho 5x5 CM",
+          "quantity": 12,
+          "salePrice": 14.99
+        },
+        {
+          "id": "pkg-1789999102288",
+          "name": "Tamanho 6x6 CM",
           "quantity": 12,
           "salePrice": 14.99
         }
