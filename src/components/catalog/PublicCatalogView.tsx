@@ -611,29 +611,13 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       {isStandalone && (
         <div className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 -mx-4 sm:-mx-6 -mt-4 mb-6 shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            {companySettings?.catalogHeaderType === 'LOGO' && (companySettings?.logoUrl || companySettings?.logoDriveFileId) ? (
-              <BrandLogo
-                logoUrl={companySettings.logoUrl}
-                logoDriveFileId={companySettings.logoDriveFileId}
-                alt={companySettings.name}
-                className="h-8 max-w-[120px] object-contain rounded"
-                fallback={
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
-                    <Store className="w-4 h-4 text-white" />
-                  </div>
-                }
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
-                <Store className="w-4 h-4 text-white" />
-              </div>
-            )}
+            
             <div>
               <span className="font-extrabold text-sm sm:text-base text-slate-900 leading-tight block">
                 {companySettings?.name || 'Catálogo Digital'}
               </span>
               <span className="text-[10px] text-slate-400 font-medium">
-                Vitrine Pública de Produtos
+                {companySettings?.catalogSubtitle || 'Catálogo Digital.'}
               </span>
             </div>
           </div>
@@ -677,10 +661,6 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       {/* Brand Hero Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-10 shadow-xl flex flex-col items-center justify-center text-center">
         <div className="relative z-10 max-w-3xl w-full mx-auto space-y-4 flex flex-col items-center text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Catálogo Digital</span>
-          </div>
 
           {companySettings?.catalogHeaderType === 'LOGO' ? (
             companySettings?.logoUrl || companySettings?.logoDriveFileId ? (
