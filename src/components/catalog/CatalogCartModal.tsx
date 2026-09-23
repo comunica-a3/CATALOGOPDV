@@ -14,6 +14,7 @@ import {
 import React, { useState } from 'react';
 import { CompanySettings, VitrineCartItem } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { buildCatalogCartQuoteMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
 
@@ -61,37 +62,8 @@ export const CatalogCartModal: React.FC<CatalogCartModalProps> = ({
     // 1x Kit Corporativo — R$ 120,00
     //
     // Total: R$ 310,00
-    let message = `Olá! Gostaria de solicitar um orçamento para:\n\n`;
-
-    cartItems.forEach((item) => {
-      const itemSubtotal = formatCurrency(item.unitPrice * item.quantity);
-      let itemLineTitle = item.labelDisplay || item.name;
-
-      // Adiciona detalhes adicionais concisos se houver
-      const extraDetails: string[] = [];
-      if (item.dimensions) {
-        extraDetails.push(
-          `${item.dimensions.width}${item.dimensions.unit} x ${item.dimensions.height}${item.dimensions.unit}`
-        );
-      }
-      if (item.variantName) {
-        extraDetails.push(item.variantName);
-      }
-      if (item.packageName) {
-        extraDetails.push(item.packageName);
-      }
-
-      if (extraDetails.length > 0 && !item.labelDisplay?.includes(extraDetails[0])) {
-        itemLineTitle += ` (${extraDetails.join(', ')})`;
-      }
-
-      message += `${item.quantity}x ${itemLineTitle} — ${itemSubtotal}\n`;
-    });
-
-    message += `\nTotal: ${formatCurrency(totalGeneral)}`;
-
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    const message = buildCatalogCartQuoteMessage(cartItems, totalGeneral);
+    openWhatsApp(cleanPhone, message);
   };
 
   return (

@@ -15,6 +15,11 @@ import { CompanySettings, Item, ItemPackage, ItemPriceRule, VitrineCartItem } fr
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';
+import {
+  buildCatalogItemInterestMessage,
+  buildCatalogItemQuoteMessage,
+  openWhatsApp,
+} from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
@@ -214,8 +219,8 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   const handleDirectInterestWhatsApp = () => {
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    const text = encodeURIComponent(`Olá! Tenho interesse no produto ${item.name}.`);
-    window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
+    const message = buildCatalogItemInterestMessage(item.name);
+    openWhatsApp(cleanPhone, message);
   };
 
   const handleWhatsAppQuote = () => {
@@ -228,28 +233,26 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
     }
 
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    let details = `Olá! Tenho interesse no produto *${item.name}* (SKU: ${item.sku}).\n\n`;
-    details += `*Especificações Solicitadas:*\n`;
+    const details = buildCatalogItemQuoteMessage({
+      itemName: item.name,
+      sku: item.sku,
+      isGraphicOrPersonalized,
+      pricingModel: item.pricingModel,
+      width,
+      height,
+      widthUnit,
+      heightUnit,
+      widthInMeters,
+      heightInMeters,
+      areaM2,
+      selectedPackage,
+      selectedOptions,
+      selectedVariant,
+      quantity,
+      totalPrice,
+    });
 
-    if (isGraphicOrPersonalized) {
-      if (item.pricingModel === 'POR_M2') {
-        details += `📐 Medidas: ${width}${widthUnit} x ${height}${heightUnit} (${widthInMeters}m x ${heightInMeters}m = ${areaM2}m²)\n`;
-      } else if (item.pricingModel === 'POR_PACOTE' && selectedPackage) {
-        details += `📦 Pacote: ${selectedPackage.name} (${selectedPackage.quantity} un)\n`;
-      }
-      if (Object.keys(selectedOptions).length > 0) {
-        details += `✨ Acabamentos: ${Object.entries(selectedOptions)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ')}\n`;
-      }
-    } else if (!isGraphicOrPersonalized && selectedVariant) {
-      details += `🎨 Variante: ${selectedVariant.name}\n`;
-    }
-
-    details += `🔢 Quantidade: ${quantity}\n`;
-    details += `💰 Valor Estimado: ${formatCurrency(totalPrice)}\n\nPodem me orientar sobre o envio da arte e prazo de entrega?`;
-
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(details)}`, '_blank');
+    openWhatsApp(cleanPhone, details);
   };
 
   const handleAddToCart = () => {

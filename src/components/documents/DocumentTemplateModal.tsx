@@ -98,9 +98,12 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
         setTitle(template.title);
         setCategory(template.category);
         setDescription(template.description || '');
-        const priceVal = typeof template.defaultPrice === 'number'
-          ? template.defaultPrice.toString()
-          : (template.defaultPrice !== undefined && template.defaultPrice !== null ? String(template.defaultPrice) : '0.00');
+        const rawPrice = (template as any).defaultPrice !== undefined
+          ? (template as any).defaultPrice
+          : (template as any).default_price;
+        const priceVal = typeof rawPrice === 'number'
+          ? (isNaN(rawPrice) ? '0.00' : rawPrice.toString())
+          : (rawPrice !== undefined && rawPrice !== null && rawPrice !== '' ? String(rawPrice) : '0.00');
         setDefaultPrice(priceVal);
 
         // Safe rehydration of fields: enrich template fields with global metadata
@@ -309,9 +312,8 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
       return;
     }
 
-    const priceNum = isNaN(parseFloat(defaultPrice.replace(',', '.')))
-      ? 0
-      : parseFloat(defaultPrice.replace(',', '.'));
+    const cleanPrice = String(defaultPrice || '').replace(/[^\d.,]/g, '').replace(',', '.');
+    const priceNum = isNaN(parseFloat(cleanPrice)) ? 0 : Math.max(0, parseFloat(cleanPrice));
 
     setIsSubmitting(true);
     setErrorMsg('');
@@ -344,7 +346,11 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
       // Explicitly await server sync so the SQLite backend is 100% saved before reload
       if (savedTemplate) {
         try {
-          await api.saveDocumentTemplate(savedTemplate);
+          await api.saveDocumentTemplate({
+            ...savedTemplate,
+            defaultPrice: priceNum,
+            default_price: priceNum,
+          });
         } catch (apiErr) {
           console.error('Erro ao sincronizar template com backend:', apiErr);
         }

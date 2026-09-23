@@ -35,7 +35,9 @@ import { StorageService } from '../../services/storage';
 import { CompanySettings, ProductionOrder, ProductionOrderFile, ProductionStatus } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { downloadProductionOrderPDF } from '../../utils/pdfReceipt';
+import { buildProductionOrderWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 
 interface ProductionViewProps {
@@ -65,6 +67,7 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('TODAS');
   const [typeFilter, setTypeFilter] = useState<string>('TODOS');
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
+  const [fileToRemove, setFileToRemove] = useState<{ orderId: string; fileId: string } | null>(null);
   const [newNotes, setNewNotes] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -181,14 +184,7 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
 
   const handleRemoveFile = (orderId: string, fileId: string) => {
     if (!canAttachFiles) return;
-    if (confirm('Deseja realmente remover este arquivo anexo?')) {
-      StorageService.removeProductionOrderFile(orderId, fileId);
-      onOrdersChange();
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(StorageService.getProductionOrderById(orderId) || null);
-      }
-      showToast('Arquivo removido.');
-    }
+    setFileToRemove({ orderId, fileId });
   };
 
   const handleSaveNotes = (orderId: string) => {
@@ -271,22 +267,19 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
       ? `Pedido #${order.saleNumber} (Ordem ${order.orderNumber})`
       : `Ordem #${order.orderNumber}`;
 
-    let msg = `Olá, *${customerName}*!\n\n`;
-    msg += `Atualização sobre a produção gráfica na *${companyName}*:\n\n`;
-    msg += `📋 *Referência:* ${orderRef}\n`;
-    msg += `📦 *Item:* ${order.quantity}x ${order.itemName}\n`;
-    if (order.configuration?.variantName) {
-      msg += `🔹 *Variação:* ${order.configuration.variantName}\n`;
-    }
-    msg += `⚙️ *Status da Produção:* *${statusLabel}*\n\n`;
-    msg += `Seu material ${statusText}\n`;
-    if (order.leadTime) {
-      msg += `⏱️ *Previsão informada:* ${order.leadTime}\n`;
-    }
-    msg += `\nQualquer dúvida, estamos à disposição!`;
+    const msg = buildProductionOrderWhatsAppMessage({
+      customerName,
+      companyName,
+      orderRef,
+      itemName: order.itemName,
+      quantity: order.quantity,
+      variantName: order.configuration?.variantName,
+      statusLabel,
+      statusText,
+      leadTime: order.leadTime,
+    });
 
-    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (status: ProductionStatus) => {
@@ -949,6 +942,30 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Remove Attachment Confirmation */}
+      {fileToRemove && (
+        <ConfirmDialog
+          isOpen={!!fileToRemove}
+          title="Remover Anexo"
+          message="Deseja realmente remover este arquivo anexo da ordem de produção? Esta ação não pode ser desfeita."
+          confirmText="Sim, remover"
+          cancelText="Cancelar"
+          type="danger"
+          onConfirm={() => {
+            if (fileToRemove) {
+              StorageService.removeProductionOrderFile(fileToRemove.orderId, fileToRemove.fileId);
+              onOrdersChange();
+              if (selectedOrder && selectedOrder.id === fileToRemove.orderId) {
+                setSelectedOrder(StorageService.getProductionOrderById(fileToRemove.orderId) || null);
+              }
+              showToast('Arquivo removido.');
+              setFileToRemove(null);
+            }
+          }}
+          onCancel={() => setFileToRemove(null)}
+        />
       )}
     </div>
   );

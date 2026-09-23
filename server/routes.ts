@@ -3670,21 +3670,27 @@ router.delete('/online-services/:id', async (req, res) => {
 router.get('/document-templates', async (req, res) => {
   try {
     const rows = await db.all<any>('SELECT * FROM document_templates ORDER BY name ASC');
-    res.json(rows.map((r) => ({
-      id: r.id,
-      title: r.name,
-      name: r.name,
-      description: r.description || undefined,
-      category: r.category,
-      defaultPrice: typeof r.default_price === 'number' ? r.default_price : (r.default_price !== null && r.default_price !== undefined ? Number(r.default_price) : 0),
-      templateBody: r.content,
-      content: r.content,
-      fields: r.variables_json ? JSON.parse(r.variables_json) : [],
-      variables: r.variables_json ? JSON.parse(r.variables_json) : [],
-      active: Number(r.active) === 1,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    })));
+    res.json(rows.map((r) => {
+      const parsedPrice = typeof r.default_price === 'number'
+        ? (isNaN(r.default_price) ? 0 : r.default_price)
+        : (r.default_price !== null && r.default_price !== undefined ? (parseFloat(String(r.default_price).replace(',', '.')) || 0) : 0);
+      return {
+        id: r.id,
+        title: r.name,
+        name: r.name,
+        description: r.description || undefined,
+        category: r.category,
+        defaultPrice: parsedPrice,
+        default_price: parsedPrice,
+        templateBody: r.content,
+        content: r.content,
+        fields: r.variables_json ? JSON.parse(r.variables_json) : [],
+        variables: r.variables_json ? JSON.parse(r.variables_json) : [],
+        active: Number(r.active) === 1,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao buscar templates.' });
   }
@@ -3700,9 +3706,16 @@ router.post('/document-templates', async (req, res) => {
     const content = tmpl.templateBody || tmpl.content || '';
     const fields = tmpl.fields || tmpl.variables || [];
     const now = new Date().toISOString();
-    const defaultPrice = typeof tmpl.defaultPrice === 'number'
-      ? tmpl.defaultPrice
-      : (tmpl.default_price !== undefined && tmpl.default_price !== null ? Number(tmpl.default_price) : 0);
+    
+    // Parse defaultPrice robustly from number or string (handles "45,00", "45.00", "R$ 45,00", etc.)
+    const rawPrice = tmpl.defaultPrice !== undefined ? tmpl.defaultPrice : tmpl.default_price;
+    let defaultPrice = 0;
+    if (typeof rawPrice === 'number') {
+      defaultPrice = isNaN(rawPrice) ? 0 : rawPrice;
+    } else if (typeof rawPrice === 'string') {
+      const cleaned = rawPrice.replace(/[^\d.,]/g, '').replace(',', '.');
+      defaultPrice = isNaN(parseFloat(cleaned)) ? 0 : parseFloat(cleaned);
+    }
 
     await db.run(
       `INSERT OR REPLACE INTO document_templates (
@@ -3735,9 +3748,15 @@ router.put('/document-templates/:id', async (req, res) => {
     const content = tmpl.templateBody || tmpl.content || '';
     const fields = tmpl.fields || tmpl.variables || [];
     const now = new Date().toISOString();
-    const defaultPrice = typeof tmpl.defaultPrice === 'number'
-      ? tmpl.defaultPrice
-      : (tmpl.default_price !== undefined && tmpl.default_price !== null ? Number(tmpl.default_price) : 0);
+    
+    const rawPrice = tmpl.defaultPrice !== undefined ? tmpl.defaultPrice : tmpl.default_price;
+    let defaultPrice = 0;
+    if (typeof rawPrice === 'number') {
+      defaultPrice = isNaN(rawPrice) ? 0 : rawPrice;
+    } else if (typeof rawPrice === 'string') {
+      const cleaned = rawPrice.replace(/[^\d.,]/g, '').replace(',', '.');
+      defaultPrice = isNaN(parseFloat(cleaned)) ? 0 : parseFloat(cleaned);
+    }
 
     await db.run(
       `UPDATE document_templates SET
@@ -3785,6 +3804,7 @@ router.get('/generated-documents', async (req, res) => {
       renderedContent: r.rendered_content,
       createdByUserId: r.created_by_user_id || undefined,
       createdByUserName: r.created_by_user_name || undefined,
+      priceCharged: typeof r.price_charged === 'number' ? r.price_charged : (r.price_charged !== null && r.price_charged !== undefined ? Number(r.price_charged) : undefined),
       createdAt: r.created_at,
     })));
   } catch (err: any) {
@@ -3798,11 +3818,20 @@ router.post('/generated-documents', async (req, res) => {
     if (!doc || !doc.id) {
       return res.status(400).json({ error: 'Documento gerado inválido.' });
     }
+    const rawPrice = doc.priceCharged !== undefined ? doc.priceCharged : doc.price_charged;
+    let priceCharged = 0;
+    if (typeof rawPrice === 'number') {
+      priceCharged = isNaN(rawPrice) ? 0 : rawPrice;
+    } else if (typeof rawPrice === 'string') {
+      const cleaned = rawPrice.replace(/[^\d.,]/g, '').replace(',', '.');
+      priceCharged = isNaN(parseFloat(cleaned)) ? 0 : parseFloat(cleaned);
+    }
+
     await db.run(
       `INSERT OR REPLACE INTO generated_documents (
         id, template_id, template_name, title, customer_id, customer_name, customer_cpf_cnpj,
-        rendered_content, created_by_user_id, created_by_user_name, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        rendered_content, created_by_user_id, created_by_user_name, price_charged, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         doc.id,
         doc.templateId || null,
@@ -3814,6 +3843,7 @@ router.post('/generated-documents', async (req, res) => {
         doc.renderedContent || '',
         doc.createdByUserId || null,
         doc.createdByUserName || null,
+        priceCharged,
         doc.createdAt || new Date().toISOString(),
       ]
     );

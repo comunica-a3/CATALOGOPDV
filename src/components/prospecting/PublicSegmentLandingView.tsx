@@ -15,6 +15,7 @@ import React, { useMemo, useState } from 'react';
 import { StorageService } from '../../services/storage';
 import { CompanySettings, PublicSegmentPage } from '../../types';
 import { formatCurrency, formatWhatsAppLink } from '../../utils/formatters';
+import { buildSegmentLandingWhatsAppMessage } from '../../utils/whatsappMessages';
 import { PublicQuoteFormView } from './PublicQuoteFormView';
 
 interface PublicSegmentLandingViewProps {
@@ -167,7 +168,7 @@ export const PublicSegmentLandingView: React.FC<PublicSegmentLandingViewProps> =
           </p>
           {cleanWhatsapp && (
             <a
-              href={`https://wa.me/55${cleanWhatsapp}?text=${encodeURIComponent(`Olá! Gostaria de um orçamento para ${segmentDisplayName}.`)}`}
+              href={formatWhatsAppLink(cleanWhatsapp, buildSegmentLandingWhatsAppMessage(segmentDisplayName))}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"

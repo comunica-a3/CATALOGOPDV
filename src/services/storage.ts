@@ -88,6 +88,7 @@ import {
 import { api } from './api';
 import { formatPhone, normalizePhone } from '../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../utils/productUtils';
+import { buildApproachWhatsAppMessage } from '../utils/whatsappMessages';
 
 const STORAGE_KEYS = {
   SETTINGS: 'pdv_company_settings',
@@ -4880,7 +4881,23 @@ export class StorageService {
           'tmpl-requerimento-administrativo',
           'tmpl-carta-demissao',
         ]);
-        const cleaned = parsed.filter((t) => !FICTIONAL_TEMPLATE_IDS.has(t.id));
+        const cleaned = parsed
+          .filter((t) => !FICTIONAL_TEMPLATE_IDS.has(t.id))
+          .map((t) => {
+            const rawPrice = (t as any).defaultPrice !== undefined ? (t as any).defaultPrice : (t as any).default_price;
+            let numPrice = 0;
+            if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+              numPrice = rawPrice;
+            } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+              const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+              numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+            }
+            return {
+              ...t,
+              defaultPrice: numPrice,
+            };
+          });
+
         if (cleaned.length !== parsed.length) {
           this.saveDocumentTemplates(cleaned);
         }
@@ -4893,14 +4910,38 @@ export class StorageService {
   }
 
   static saveDocumentTemplates(templates: DocumentTemplate[]): void {
-    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(templates));
+    const normalized = (templates || []).map((t) => {
+      const rawPrice = (t as any).defaultPrice !== undefined ? (t as any).defaultPrice : (t as any).default_price;
+      let numPrice = 0;
+      if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+        numPrice = rawPrice;
+      } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+        numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+      }
+      return {
+        ...t,
+        defaultPrice: numPrice,
+      };
+    });
+    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(normalized));
   }
 
   static addDocumentTemplate(template: Omit<DocumentTemplate, 'id' | 'createdAt' | 'updatedAt'>): DocumentTemplate {
     const templates = this.getDocumentTemplates();
     const now = new Date().toISOString();
+    const rawPrice = (template as any).defaultPrice !== undefined ? (template as any).defaultPrice : (template as any).default_price;
+    let numPrice = 0;
+    if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+      numPrice = rawPrice;
+    } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+      const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+      numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+    }
+
     const newTemplate: DocumentTemplate = {
       ...template,
+      defaultPrice: numPrice,
       id: `tmpl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       createdAt: now,
       updatedAt: now,
@@ -4926,9 +4967,21 @@ export class StorageService {
     const index = templates.findIndex((t) => t.id === id);
     if (index === -1) return undefined;
 
+    let numPrice = templates[index].defaultPrice;
+    if (updates.defaultPrice !== undefined || (updates as any).default_price !== undefined) {
+      const rawPrice = updates.defaultPrice !== undefined ? updates.defaultPrice : (updates as any).default_price;
+      if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+        numPrice = rawPrice;
+      } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+        numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+      }
+    }
+
     const updated: DocumentTemplate = {
       ...templates[index],
       ...updates,
+      defaultPrice: numPrice,
       updatedAt: new Date().toISOString(),
     };
     templates[index] = updated;
@@ -5656,23 +5709,13 @@ export class StorageService {
     companyName?: string,
     suggestedPackageName?: string
   ): string {
-    const seller = sellerName || this.getCurrentUser().name || 'Equipe Comercial';
-    const company = companyName || this.getCompanySettings().name || 'Nossa Gráfica';
-    const oppName = opportunity.contactName || opportunity.name || 'Amigo(a)';
-    const bizName = opportunity.name || 'seu negócio';
-    const need = opportunity.needs && opportunity.needs.length > 0 ? opportunity.needs[0] : 'divulgação e impressos';
-    const pkg = suggestedPackageName || 'Kit Promocional de Divulgação';
-
-    let text = templateText;
-    text = text.replace(/\[NOME\]/g, oppName);
-    text = text.replace(/\[VENDEDOR\]/g, seller);
-    text = text.replace(/\[EMPRESA\]/g, company);
-    text = text.replace(/\[NOME_DO_NEGOCIO\]/g, bizName);
-    text = text.replace(/\[NECESSIDADE\]/g, need);
-    text = text.replace(/\[PACOTE_SUGERIDO\]/g, pkg);
-    text = text.replace(/\[PRODUTO_SUGERIDO\]/g, pkg);
-
-    return text;
+    return buildApproachWhatsAppMessage(
+      templateText,
+      opportunity,
+      sellerName || this.getCurrentUser().name,
+      companyName || this.getCompanySettings().name,
+      suggestedPackageName
+    );
   }
 
   // --- REGRAS DE SUGESTÃO POR SEGMENTO ---

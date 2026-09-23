@@ -16,6 +16,7 @@ import { CompanySettings, ProductionOrder, Sale } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { getCustomerFacingPresentation } from '../../utils/freightUtils';
 import { downloadOrderReceiptPDF, formatReceiptDate, ReceiptFormat } from '../../utils/pdfReceipt';
+import { buildReceiptWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Modal } from '../common/Modal';
 
 interface POSReceiptModalProps {
@@ -96,12 +97,16 @@ export const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
       return;
     }
     const cleanPhone = sale.customerPhone.replace(/\D/g, '');
-    const text = encodeURIComponent(
-      `Olá, ${sale.customerName}! Segue o comprovante do seu pedido na *${companySettings.name}*:\n\n*Pedido:* ${sale.saleNumber}\n*Data:* ${formatReceiptDate(sale.createdAt)}\n*Total:* ${formatCurrency(sale.total)}\n*Pago:* ${formatCurrency(sale.paidAmount)}\n${
-        sale.remainingAmount > 0 ? `*Saldo a Pagar:* ${formatCurrency(sale.remainingAmount)}\n` : ''
-      }\nAgradecemos a preferência!`
-    );
-    window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
+    const message = buildReceiptWhatsAppMessage({
+      customerName: sale.customerName,
+      companyName: companySettings.name,
+      saleNumber: sale.saleNumber,
+      formattedDate: formatReceiptDate(sale.createdAt),
+      totalFormatted: formatCurrency(sale.total),
+      paidAmountFormatted: formatCurrency(sale.paidAmount),
+      remainingAmountFormatted: sale.remainingAmount > 0 ? formatCurrency(sale.remainingAmount) : undefined,
+    });
+    openWhatsApp(cleanPhone, message);
   };
 
   const getDownloadButtonLabel = () => {

@@ -48,7 +48,9 @@ import {
   PublicSegmentPage,
 } from '../../types';
 import { formatCurrency, formatPhone } from '../../utils/formatters';
+import { openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { ApproachTemplateModal } from './ApproachTemplateModal';
 import { CaptureFormEditModal } from './CaptureFormEditModal';
 import { LandingPageEditModal } from './LandingPageEditModal';
@@ -123,6 +125,13 @@ export const ProspectingView: React.FC<ProspectingViewProps> = ({
 
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ApproachMessageTemplate | null>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Modais e Filtros de Captação Direta / Landing Pages
   const [isCaptureFormModalOpen, setIsCaptureFormModalOpen] = useState(false);
@@ -259,7 +268,7 @@ export const ProspectingView: React.FC<ProspectingViewProps> = ({
     }
 
     loadAllData();
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
+    openWhatsApp(cleanPhone, text);
   };
 
   const handleMoveStage = (oppId: string, newStage: OpportunityStage, e?: React.MouseEvent) => {
@@ -1081,12 +1090,18 @@ export const ProspectingView: React.FC<ProspectingViewProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`Excluir o pacote "${pkg.name}"?`)) {
-                          StorageService.deletePackage(pkg.id);
-                          loadAllData();
-                        }
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Excluir Pacote',
+                          message: `Deseja realmente excluir o pacote de produtos "${pkg.name}"?`,
+                          onConfirm: () => {
+                            StorageService.deletePackage(pkg.id);
+                            loadAllData();
+                            setConfirmDialog(null);
+                          },
+                        });
                       }}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg text-xs"
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg text-xs cursor-pointer"
                       title="Excluir Pacote"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1164,12 +1179,19 @@ export const ProspectingView: React.FC<ProspectingViewProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`Excluir o modelo "${tpl.title}"?`)) {
-                          StorageService.deleteApproachTemplate(tpl.id);
-                          loadAllData();
-                        }
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: 'Excluir Modelo de Abordagem',
+                          message: `Deseja realmente excluir o modelo de abordagem "${tpl.title}"?`,
+                          onConfirm: () => {
+                            StorageService.deleteApproachTemplate(tpl.id);
+                            loadAllData();
+                            setConfirmDialog(null);
+                          },
+                        });
                       }}
-                      className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+                      className="p-1 text-rose-500 hover:bg-rose-50 rounded cursor-pointer"
+                      title="Excluir Modelo"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1841,6 +1863,20 @@ export const ProspectingView: React.FC<ProspectingViewProps> = ({
           window.location.reload();
         }}
       />
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText="Confirmar Exclusão"
+          cancelText="Cancelar"
+          type="danger"
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 };

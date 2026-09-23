@@ -21,6 +21,7 @@ import React, { useState } from 'react';
 import { Budget, CompanySettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { downloadBudgetPDF } from '../../utils/pdfReceipt';
+import { buildDetailedBudgetWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 
@@ -66,47 +67,8 @@ export const BudgetDetailModal: React.FC<BudgetDetailModalProps> = ({
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) return;
 
-    let msg = `Olá *${budget.customerName}*!\n\nSegue a proposta *Orçamento #${budget.budgetNumber}* da *${companySettings.name}*:\n\n`;
-    msg += `📅 *Data de Emissão:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
-    msg += `⏳ *Validade da Proposta:* ${new Date(budget.validUntil).toLocaleDateString('pt-BR')}\n\n`;
-    msg += `*ITENS DO ORÇAMENTO:*\n`;
-
-    (budget.items || []).forEach((item, index) => {
-      const itemName = item.itemName || item.item?.name || 'Item';
-      msg += `${index + 1}. *${itemName}* (Qtd: ${item.quantity})\n`;
-      if (item.configuration?.notes) {
-        msg += `   • Detalhes: ${item.configuration.notes}\n`;
-      }
-      if (item.configuration?.variantName) {
-        msg += `   • Variação: ${item.configuration.variantName}\n`;
-      }
-      if (item.configuration?.calculatedAreaM2) {
-        msg += `   • Medida: ${item.configuration.width}x${item.configuration.height}${item.configuration.dimensionUnit || 'm'} (${item.configuration.calculatedAreaM2}m²)\n`;
-      }
-      if (item.configuration?.selectedOptions) {
-        msg += `   • Acabamentos: ${Object.entries(item.configuration.selectedOptions)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ')}\n`;
-      }
-      msg += `   • Valor: ${formatCurrency(item.totalPrice)}\n`;
-    });
-
-    if (budget.discount && budget.discount > 0) {
-      msg += `\nSubtotal: ${formatCurrency(budget.subtotal)}\nDesconto: -${formatCurrency(budget.discount)}`;
-    }
-    msg += `\n💰 *VALOR TOTAL: ${formatCurrency(budget.total)}*\n\n`;
-    if (budget.paymentConditions) {
-      msg += `💳 *Condições:* ${budget.paymentConditions}\n`;
-    }
-    if (budget.productionLeadTime) {
-      msg += `⏱️ *Prazo de Produção:* ${budget.productionLeadTime}\n`;
-    }
-    if (budget.notes) {
-      msg += `📝 *Obs:* ${budget.notes}\n\n`;
-    }
-    msg += `Podemos dar andamento ao seu pedido? Ficamos no seu aguardo!`;
-
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    const msg = buildDetailedBudgetWhatsAppMessage(budget, companySettings.name);
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (status: Budget['status']) => {

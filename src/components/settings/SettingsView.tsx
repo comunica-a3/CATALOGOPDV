@@ -742,14 +742,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setCommissionError('');
   };
 
-  const handleDeleteCategory = async (catId: string) => {
-    if (confirm('Deseja excluir esta categoria?')) {
-      try {
-        await StorageService.deleteCategory(catId);
-        onSettingsSaved();
-      } catch (err: any) {
-        showToast(err.message || 'Erro ao excluir categoria.');
-      }
+  const handleDeleteCategory = (catId: string) => {
+    const cat = categories.find((c) => c.id === catId);
+    if (cat) {
+      setCategoryToDelete(cat);
     }
   };
 

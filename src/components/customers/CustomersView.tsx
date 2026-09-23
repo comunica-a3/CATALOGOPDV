@@ -17,6 +17,7 @@ import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Customer } from '../../types';
+import { openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { CustomerModal } from './CustomerModal';
@@ -82,7 +83,7 @@ export const CustomersView: React.FC = () => {
   const handleOpenWhatsApp = (phone?: string) => {
     if (!phone) return;
     const clean = phone.replace(/\D/g, '');
-    window.open(`https://wa.me/55${clean}`, '_blank');
+    openWhatsApp(clean);
   };
 
   return (

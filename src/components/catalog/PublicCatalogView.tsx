@@ -33,6 +33,11 @@ import { StorageService } from '../../services/storage';
 import { Category, CompanySettings, Item, ProductNicheCard, VitrineCartItem } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getItemTypeLabel } from '../../utils/commissions';
+import {
+  buildCatalogGeneralAttendanceMessage,
+  buildCatalogItemInterestMessage,
+  openWhatsApp,
+} from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { BrandLogo } from '../common/BrandLogo';
 import { ProductImage } from '../common/ProductImage';
@@ -567,17 +572,15 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
 
   const handleGeneralWhatsApp = () => {
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    const text = encodeURIComponent(
-      `Olá! Estava navegando no catálogo da *${companySettings.name}* e gostaria de solicitar um atendimento/orçamento!`
-    );
-    window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
+    const message = buildCatalogGeneralAttendanceMessage(companySettings.name);
+    openWhatsApp(cleanPhone, message);
   };
 
   const handleDirectProductWhatsApp = (e: React.MouseEvent, item: Item) => {
     e.stopPropagation();
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    const text = encodeURIComponent(`Olá! Tenho interesse no produto ${item.name}.`);
-    window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
+    const message = buildCatalogItemInterestMessage(item.name);
+    openWhatsApp(cleanPhone, message);
   };
 
   const clearAllFilters = () => {

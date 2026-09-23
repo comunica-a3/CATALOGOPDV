@@ -33,6 +33,7 @@ import { CompanySettings, PaymentStatus, Sale } from '../../types';
 import { calculateSaleCommission } from '../../utils/commissions';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { downloadOrderReceiptPDF } from '../../utils/pdfReceipt';
+import { buildSaleProductionTrackingWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSReceiptModal } from '../pos/POSReceiptModal';
@@ -222,23 +223,21 @@ export const SalesView: React.FC<SalesViewProps> = ({
     const companyName = companySettings?.name || 'Nossa Gráfica';
     const customerName = sale.customerName || 'Cliente';
 
-    let msg = `Olá, *${customerName}*!\n\n`;
-    msg += `Atualização sobre o estado da produção gráfica do seu *Pedido #${sale.saleNumber}* na *${companyName}*:\n\n`;
+    const ordersData = productionOrders.map((po) => ({
+      quantity: po.quantity,
+      itemName: po.itemName,
+      statusLabel: getProductionStatusLabel(po.status),
+      leadTime: po.leadTime,
+    }));
 
-    productionOrders.forEach((po, idx) => {
-      const statusLabel = getProductionStatusLabel(po.status);
-      msg += `📦 *Item ${idx + 1}:* ${po.quantity}x ${po.itemName}\n`;
-      msg += `⚙️ *Status da Produção:* *${statusLabel}*\n`;
-      if (po.leadTime) {
-        msg += `⏱️ *Previsão informada:* ${po.leadTime}\n`;
-      }
-      msg += `\n`;
+    const msg = buildSaleProductionTrackingWhatsAppMessage({
+      customerName,
+      companyName,
+      saleNumber: sale.saleNumber,
+      orders: ordersData,
     });
 
-    msg += `Qualquer dúvida, estamos à disposição!`;
-
-    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (sale: Sale) => {

@@ -57,6 +57,7 @@ import {
 } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 import { CustomerSearchModal } from '../customers/CustomerSearchModal';
 import { OpenCashModal } from '../finance/OpenCashModal';
@@ -128,6 +129,7 @@ export const POSFacil: React.FC<POSFacilProps> = ({
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
   // Feedback State
   const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
@@ -390,16 +392,7 @@ export const POSFacil: React.FC<POSFacilProps> = ({
   // Clear Cart
   const handleClearCart = () => {
     if (cart.length === 0) return;
-    if (window.confirm('Deseja realmente cancelar a venda atual e limpar o carrinho?')) {
-      setCart([]);
-      setSelectedCustomer(null);
-      setDiscountInput('0');
-      setCashReceivedInput('');
-      setSaleNotes('');
-      setErrorMessage('');
-      searchInputRef.current?.focus();
-      showToast('Venda cancelada e carrinho limpo.');
-    }
+    setIsCancelConfirmOpen(true);
   };
 
   // Finalize Sale (Checkout in 1 single screen)
@@ -1697,6 +1690,28 @@ export const POSFacil: React.FC<POSFacilProps> = ({
           </div>
         </Modal>
       )}
+
+      {/* Cancel Sale / Clear Cart Confirmation */}
+      <ConfirmDialog
+        isOpen={isCancelConfirmOpen}
+        title="Cancelar Venda e Limpar Carrinho"
+        message="Deseja realmente cancelar a venda atual e limpar todos os produtos do carrinho?"
+        confirmText="Sim, cancelar venda"
+        cancelText="Voltar"
+        type="danger"
+        onConfirm={() => {
+          setCart([]);
+          setSelectedCustomer(null);
+          setDiscountInput('0');
+          setCashReceivedInput('');
+          setSaleNotes('');
+          setErrorMessage('');
+          setIsCancelConfirmOpen(false);
+          searchInputRef.current?.focus();
+          showToast('Venda cancelada e carrinho limpo.');
+        }}
+        onCancel={() => setIsCancelConfirmOpen(false)}
+      />
     </div>
   );
 };

@@ -15,6 +15,7 @@ import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { OnlineService, OnlineServiceCategory } from '../../types';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 
 interface OnlineServicesViewProps {
@@ -52,6 +53,7 @@ export const OnlineServicesView: React.FC<OnlineServicesViewProps> = ({
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<OnlineService | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<OnlineService | null>(null);
   const [formName, setFormName] = useState('');
   const [formCategory, setFormCategory] = useState<string>('Governo');
   const [formDescription, setFormDescription] = useState('');
@@ -128,10 +130,7 @@ export const OnlineServicesView: React.FC<OnlineServicesViewProps> = ({
   };
 
   const handleDeleteService = (svc: OnlineService) => {
-    if (window.confirm(`Deseja realmente remover o serviço "${svc.name}"?`)) {
-      StorageService.deleteOnlineService(svc.id);
-      reloadServices();
-    }
+    setServiceToDelete(svc);
   };
 
   const handleSaveSubmit = (e: React.FormEvent) => {
@@ -533,6 +532,26 @@ export const OnlineServicesView: React.FC<OnlineServicesViewProps> = ({
             </div>
           </form>
         </Modal>
+      )}
+
+      {/* Delete Service Confirmation */}
+      {serviceToDelete && (
+        <ConfirmDialog
+          isOpen={!!serviceToDelete}
+          title="Remover Serviço Online"
+          message={`Deseja realmente remover o serviço "${serviceToDelete.name}"? Ele deixará de ser exibido na lista e no catálogo do PDV.`}
+          confirmText="Sim, remover"
+          cancelText="Cancelar"
+          type="danger"
+          onConfirm={() => {
+            if (serviceToDelete) {
+              StorageService.deleteOnlineService(serviceToDelete.id);
+              reloadServices();
+              setServiceToDelete(null);
+            }
+          }}
+          onCancel={() => setServiceToDelete(null)}
+        />
       )}
     </div>
   );

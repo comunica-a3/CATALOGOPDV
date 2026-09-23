@@ -560,9 +560,13 @@ export async function runMigrations(): Promise<void> {
         rendered_content TEXT NOT NULL,
         created_by_user_id TEXT,
         created_by_user_name TEXT,
+        price_charged REAL DEFAULT 0,
         created_at TEXT NOT NULL
       );
     `);
+
+    // Migrate generated_documents table columns if missing
+    try { await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;'); } catch {}
 
     await db.run(
       'INSERT INTO schema_migrations VALUES (?, ?, ?)',

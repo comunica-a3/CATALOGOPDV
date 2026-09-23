@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Budget, CompanySettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { buildBudgetWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSBudgetModal } from '../pos/POSBudgetModal';
@@ -108,23 +109,16 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   };
 
   const handleSendWhatsApp = (b: Budget) => {
-    let phone = b.customerPhone || '';
-    if (!phone) {
-      phone = prompt('Informe o número de WhatsApp do cliente (com DDD):', '') || '';
-    }
+    const phone = b.customerPhone || '';
     const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone) return;
+    if (!cleanPhone) {
+      setToastMessage('Este orçamento não possui telefone de cliente cadastrado para envio.');
+      setTimeout(() => setToastMessage(''), 3500);
+      return;
+    }
 
-    let msg = `Olá *${b.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${b.budgetNumber}* da *${companySettings.name || 'Nossa Empresa'}*:\n`;
-    msg += `📅 *Emitido:* ${new Date(b.createdAt).toLocaleDateString('pt-BR')}\n`;
-    msg += `⏳ *Validade:* ${new Date(b.validUntil).toLocaleDateString('pt-BR')}\n\n`;
-    (b.items || []).forEach((item, index) => {
-      const itemName = (item as any)?.itemName || item.item?.name || 'Item';
-      msg += `${index + 1}. ${itemName} (Qtd: ${item.quantity}) - ${formatCurrency(item.totalPrice)}\n`;
-    });
-    msg += `\n💰 *VALOR TOTAL: ${formatCurrency(b.total)}*\n\nPodemos confirmar o seu pedido?`;
-
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    const msg = buildBudgetWhatsAppMessage(b, companySettings.name || 'Nossa Empresa');
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (status: Budget['status']) => {
