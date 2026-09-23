@@ -137,6 +137,9 @@ export const DocumentVisualEditor: React.FC<DocumentVisualEditorProps> = ({
   // Initialize editor content once or on major content reset
   useEffect(() => {
     if (editorRef.current) {
+      if (document.activeElement === editorRef.current) {
+        return;
+      }
       const html = convertTemplateToHtml(initialContent);
       if (editorRef.current.innerHTML !== html) {
         editorRef.current.innerHTML = html;
@@ -840,8 +843,14 @@ export const DocumentVisualEditor: React.FC<DocumentVisualEditorProps> = ({
             ref={editorRef}
             contentEditable={!readOnly}
             onInput={handleInput}
-            onBlur={saveCurrentSelection}
-            onKeyUp={saveCurrentSelection}
+            onBlur={() => {
+              saveCurrentSelection();
+              handleInput();
+            }}
+            onKeyUp={() => {
+              saveCurrentSelection();
+              handleInput();
+            }}
             onMouseUp={saveCurrentSelection}
             data-placeholder={placeholder}
             className="outline-none flex-1 text-[12pt] leading-relaxed text-slate-900 font-sans cursor-text selection:bg-violet-100 selection:text-violet-900"

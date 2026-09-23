@@ -716,7 +716,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
         <div className="text-center space-y-2 max-w-2xl mx-auto">
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">
-              Encontre o que precisa
+              Aqui tem o que você precisa!
             </h2>
             {isAdmin && (
               <button
@@ -732,7 +732,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
             )}
           </div>
           <p className="text-sm sm:text-base text-slate-600 font-medium">
-            Escolha uma categoria para começar sua busca
+            Escolha uma categoria
           </p>
         </div>
 

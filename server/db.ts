@@ -539,10 +539,14 @@ export async function runMigrations(): Promise<void> {
         content TEXT NOT NULL,
         variables_json TEXT,
         active INTEGER DEFAULT 1,
+        default_price REAL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
     `);
+
+    // Migrate document_templates table columns if missing
+    try { await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;'); } catch {}
 
     await db.run(`
       CREATE TABLE IF NOT EXISTS generated_documents (

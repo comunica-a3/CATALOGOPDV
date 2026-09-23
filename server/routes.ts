@@ -3676,7 +3676,7 @@ router.get('/document-templates', async (req, res) => {
       name: r.name,
       description: r.description || undefined,
       category: r.category,
-      defaultPrice: Number(r.default_price || 0),
+      defaultPrice: typeof r.default_price === 'number' ? r.default_price : (r.default_price !== null && r.default_price !== undefined ? Number(r.default_price) : 0),
       templateBody: r.content,
       content: r.content,
       fields: r.variables_json ? JSON.parse(r.variables_json) : [],
@@ -3700,11 +3700,14 @@ router.post('/document-templates', async (req, res) => {
     const content = tmpl.templateBody || tmpl.content || '';
     const fields = tmpl.fields || tmpl.variables || [];
     const now = new Date().toISOString();
+    const defaultPrice = typeof tmpl.defaultPrice === 'number'
+      ? tmpl.defaultPrice
+      : (tmpl.default_price !== undefined && tmpl.default_price !== null ? Number(tmpl.default_price) : 0);
 
     await db.run(
       `INSERT OR REPLACE INTO document_templates (
-        id, name, description, category, content, variables_json, active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, name, description, category, content, variables_json, active, default_price, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tmpl.id,
         name,
@@ -3713,6 +3716,7 @@ router.post('/document-templates', async (req, res) => {
         content,
         JSON.stringify(fields),
         tmpl.active !== false ? 1 : 0,
+        defaultPrice,
         tmpl.createdAt || now,
         tmpl.updatedAt || now,
       ]
@@ -3731,10 +3735,13 @@ router.put('/document-templates/:id', async (req, res) => {
     const content = tmpl.templateBody || tmpl.content || '';
     const fields = tmpl.fields || tmpl.variables || [];
     const now = new Date().toISOString();
+    const defaultPrice = typeof tmpl.defaultPrice === 'number'
+      ? tmpl.defaultPrice
+      : (tmpl.default_price !== undefined && tmpl.default_price !== null ? Number(tmpl.default_price) : 0);
 
     await db.run(
       `UPDATE document_templates SET
-        name = ?, description = ?, category = ?, content = ?, variables_json = ?, active = ?, updated_at = ?
+        name = ?, description = ?, category = ?, content = ?, variables_json = ?, active = ?, default_price = ?, updated_at = ?
       WHERE id = ?`,
       [
         name,
@@ -3743,6 +3750,7 @@ router.put('/document-templates/:id', async (req, res) => {
         content,
         JSON.stringify(fields),
         tmpl.active !== false ? 1 : 0,
+        defaultPrice,
         now,
         id,
       ]

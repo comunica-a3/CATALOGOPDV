@@ -53,6 +53,7 @@ import {
 import {
   compileDocumentTemplate,
   formatDocumentToHtml,
+  normalizeTemplateFieldInstances,
   printDocumentContent,
 } from '../../utils/documentGenerator';
 import { formatCurrency } from '../../utils/formatters';
@@ -362,12 +363,18 @@ export const POSView: React.FC<POSViewProps> = ({
 
   // Quick Open Document Generator Modal inside POS
   const handleOpenDocModal = (tmpl: DocumentTemplate) => {
-    setSelectedDocTemplate(tmpl);
+    const normalized = normalizeTemplateFieldInstances(tmpl.templateBody, tmpl.fields);
+    const effectiveTemplate: DocumentTemplate = {
+      ...tmpl,
+      templateBody: normalized.templateBody,
+      fields: normalized.fields,
+    };
+    setSelectedDocTemplate(effectiveTemplate);
     setIsDocEditing(false);
 
     // Initial form state pre-filled with selected customer
     const initialValues: Record<string, string> = {};
-    tmpl.fields.forEach((f) => {
+    effectiveTemplate.fields.forEach((f) => {
       if (selectedCustomer && f.customerFieldMapping) {
         if (f.customerFieldMapping === 'name') initialValues[f.id] = selectedCustomer.name || '';
         if (f.customerFieldMapping === 'document') initialValues[f.id] = selectedCustomer.document || '';
@@ -381,7 +388,7 @@ export const POSView: React.FC<POSViewProps> = ({
     });
 
     setDocFormData(initialValues);
-    const compiled = compileDocumentTemplate(tmpl.templateBody, initialValues, tmpl.fields);
+    const compiled = compileDocumentTemplate(effectiveTemplate.templateBody, initialValues, effectiveTemplate.fields);
     setDocPreviewContent(compiled);
     setIsDocModalOpen(true);
   };
@@ -398,7 +405,7 @@ export const POSView: React.FC<POSViewProps> = ({
   const handleAddDocToCart = () => {
     if (!selectedDocTemplate) return;
 
-    const price = selectedDocTemplate.defaultPrice || 30.0;
+    const price = typeof selectedDocTemplate.defaultPrice === 'number' ? selectedDocTemplate.defaultPrice : 0;
     const docTitle = `${selectedDocTemplate.title} - ${selectedCustomer?.name || docFormData['nome_completo'] || 'Cliente'}`;
 
     // Also persist to history
@@ -1302,11 +1309,23 @@ export const POSView: React.FC<POSViewProps> = ({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Preenchimento dos Campos
                 </h4>
-                {selectedDocTemplate.fields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </label>
+                {selectedDocTemplate.fields.map((field, idx) => {
+                  const sameLabelCount = selectedDocTemplate.fields.filter(
+                    (f) => f.label.toLowerCase() === field.label.toLowerCase()
+                  ).length;
+                  let instanceLabel = field.label;
+                  if (sameLabelCount > 1) {
+                    const occIndex = selectedDocTemplate.fields
+                      .slice(0, idx + 1)
+                      .filter((f) => f.label.toLowerCase() === field.label.toLowerCase()).length;
+                    instanceLabel = `${field.label} (${occIndex}ª ocorrência)`;
+                  }
+
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        {instanceLabel} {field.required && <span className="text-red-500">*</span>}
+                      </label>
                     {field.type === 'textarea' ? (
                       <textarea
                         rows={2}
@@ -1325,7 +1344,8 @@ export const POSView: React.FC<POSViewProps> = ({
                       />
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Live Preview */}

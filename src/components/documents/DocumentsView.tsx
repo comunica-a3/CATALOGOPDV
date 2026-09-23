@@ -43,6 +43,7 @@ import {
   compileDocumentTemplate,
   downloadDocumentFile,
   formatDocumentToHtml,
+  normalizeTemplateFieldInstances,
 } from '../../utils/documentGenerator';
 import { downloadCustomDocumentPDF } from '../../utils/pdfReceipt';
 import { downloadDocumentAsPDF } from '../../utils/pdfDocumentExporter';
@@ -155,7 +156,13 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   // Select Template Handler
   const handleSelectTemplate = (tmpl: DocumentTemplate) => {
-    setSelectedTemplate(tmpl);
+    const normalized = normalizeTemplateFieldInstances(tmpl.templateBody, tmpl.fields);
+    const effectiveTemplate: DocumentTemplate = {
+      ...tmpl,
+      templateBody: normalized.templateBody,
+      fields: normalized.fields,
+    };
+    setSelectedTemplate(effectiveTemplate);
     setIsGenerated(false);
     setIsEditingContent(false);
     setSavedSuccessMsg('');
@@ -163,7 +170,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
     // Initial form state with default values or customer values
     const initialValues: Record<string, string> = {};
-    tmpl.fields.forEach((f) => {
+    effectiveTemplate.fields.forEach((f) => {
       if (selectedCustomer && f.customerFieldMapping) {
         if (f.customerFieldMapping === 'name') initialValues[f.id] = selectedCustomer.name || '';
         if (f.customerFieldMapping === 'document') initialValues[f.id] = selectedCustomer.document || '';
@@ -286,7 +293,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     onAddToCart({
       id: selectedTemplate.id,
       name: `Doc: ${selectedTemplate.title}`,
-      price: selectedTemplate.defaultPrice || 30.0,
+      price: typeof selectedTemplate.defaultPrice === 'number' ? selectedTemplate.defaultPrice : 0,
       category: selectedTemplate.category,
       documentContent: generatedContent,
     });
@@ -553,7 +560,18 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                     {/* Dynamic Fields Form */}
                     <form onSubmit={handleGenerate} className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {selectedTemplate.fields.map((field) => {
+                        {selectedTemplate.fields.map((field, idx) => {
+                          const sameLabelCount = selectedTemplate.fields.filter(
+                            (f) => f.label.toLowerCase() === field.label.toLowerCase()
+                          ).length;
+                          let instanceLabel = field.label;
+                          if (sameLabelCount > 1) {
+                            const occIndex = selectedTemplate.fields
+                              .slice(0, idx + 1)
+                              .filter((f) => f.label.toLowerCase() === field.label.toLowerCase()).length;
+                            instanceLabel = `${field.label} (${occIndex}ª ocorrência)`;
+                          }
+
                           const isFullWidth =
                             field.type === 'textarea' ||
                             field.id.includes('endereco') ||
@@ -566,7 +584,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                               className={isFullWidth ? 'sm:col-span-2 space-y-1' : 'space-y-1'}
                             >
                               <label className="block text-xs font-semibold text-slate-700">
-                                {field.label} {field.required && <span className="text-red-500">*</span>}
+                                {instanceLabel} {field.required && <span className="text-red-500">*</span>}
                               </label>
 
                               {field.type === 'textarea' ? (

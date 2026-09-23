@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
 import {
   DocumentCategory,
@@ -25,7 +26,7 @@ import {
   DocumentSystemMapping,
   DocumentTemplate,
 } from '../../types';
-import { compileDocumentTemplate, formatDocumentToHtml } from '../../utils/documentGenerator';
+import { compileDocumentTemplate, formatDocumentToHtml, normalizeTemplateFieldInstances } from '../../utils/documentGenerator';
 import { Modal } from '../common/Modal';
 import { DocumentVisualEditor } from './DocumentVisualEditor';
 
@@ -47,11 +48,12 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<string>('Declarações');
   const [description, setDescription] = useState('');
-  const [defaultPrice, setDefaultPrice] = useState('30.00');
+  const [defaultPrice, setDefaultPrice] = useState('0.00');
   const [templateBody, setTemplateBody] = useState('');
   const [fields, setFields] = useState<DocumentField[]>([]);
   const [active, setActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Field editing mini-form state
   const [fieldId, setFieldId] = useState('');
@@ -65,6 +67,9 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
   const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
   const [isFieldFormOpen, setIsFieldFormOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<'visual' | 'code'>('visual');
+  const [confirmDeleteFieldId, setConfirmDeleteFieldId] = useState<string | null>(null);
+  const [confirmDeleteGlobalId, setConfirmDeleteGlobalId] = useState<string | null>(null);
+  const [fieldFormError, setFieldFormError] = useState('');
 
   // Global Library state
   const [globalFields, setGlobalFields] = useState<DocumentField[]>([]);
@@ -93,38 +98,22 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
         setTitle(template.title);
         setCategory(template.category);
         setDescription(template.description || '');
-        setDefaultPrice(template.defaultPrice ? template.defaultPrice.toString() : '30.00');
-        setTemplateBody(template.templateBody || '');
+        const priceVal = typeof template.defaultPrice === 'number'
+          ? template.defaultPrice.toString()
+          : (template.defaultPrice !== undefined && template.defaultPrice !== null ? String(template.defaultPrice) : '0.00');
+        setDefaultPrice(priceVal);
 
         // Safe rehydration of fields: enrich template fields with global metadata
         let loadedFields: DocumentField[] = (template.fields || []).map((tf) => {
-          const globalDef = globalMap.get(tf.id);
+          const baseId = tf.id.replace(/_\d+$/, '');
+          const globalDef = globalMap.get(tf.id) || globalMap.get(baseId);
           return globalDef ? { ...globalDef, ...tf } : { ...tf };
         });
 
-        // Sync with tags present in templateBody so no field is ever lost
-        if (template.templateBody) {
-          const tagMatches = [...template.templateBody.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)];
-          const foundTagIds = Array.from(new Set(tagMatches.map((m) => m[1])));
-          foundTagIds.forEach((tagId) => {
-            if (!loadedFields.some((f) => f.id === tagId)) {
-              const globalDef = globalMap.get(tagId);
-              if (globalDef) {
-                loadedFields.push({ ...globalDef });
-              } else {
-                const label = tagId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                loadedFields.push({
-                  id: tagId,
-                  label,
-                  type: 'text',
-                  required: false,
-                });
-              }
-            }
-          });
-        }
-
-        setFields(loadedFields);
+        // Normalize template field instances so multiple occurrences of the same tag have unique IDs
+        const normalized = normalizeTemplateFieldInstances(template.templateBody || '', loadedFields);
+        setTemplateBody(normalized.templateBody);
+        setFields(normalized.fields);
         setActive(template.active !== false);
       } else {
         setTitle('');
@@ -141,6 +130,9 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
       setIsFieldFormOpen(false);
       setIsGlobalLibraryOpen(false);
       setEditingFieldIndex(null);
+      setConfirmDeleteFieldId(null);
+      setConfirmDeleteGlobalId(null);
+      setFieldFormError('');
       lastLoadedSessionRef.current = currentKey;
     }
   }, [template?.id, isOpen]);
@@ -155,6 +147,7 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
     setFieldOptions('');
     setFieldMapping('');
     setEditingFieldIndex(null);
+    setFieldFormError('');
     setIsFieldFormOpen(true);
     setIsGlobalLibraryOpen(false);
   };
@@ -170,35 +163,44 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
     setFieldOptions(f.options ? f.options.join(', ') : '');
     setFieldMapping(f.customerFieldMapping || '');
     setEditingFieldIndex(index);
+    setFieldFormError('');
     setIsFieldFormOpen(true);
     setIsGlobalLibraryOpen(false);
   };
 
   const handleAddFromGlobal = (gf: DocumentField) => {
-    if (fields.some((f) => f.id === gf.id)) {
-      alert(`O campo "{{${gf.id}}}" (${gf.label}) já está presente neste modelo.`);
-      return;
+    let nextId = gf.id;
+    if (fields.some((f) => f.id === nextId)) {
+      let counter = 2;
+      while (fields.some((f) => f.id === `${gf.id}_${counter}`)) {
+        counter++;
+      }
+      nextId = `${gf.id}_${counter}`;
     }
-    setFields((prev) => [...prev, { ...gf }]);
+    setFields((prev) => [...prev, { ...gf, id: nextId }]);
+  };
+
+  const executeDeleteGlobalField = (fieldId: string) => {
+    StorageService.deleteGlobalDocumentField(fieldId);
+    setGlobalFields(StorageService.getGlobalDocumentFields());
+    setConfirmDeleteGlobalId(null);
   };
 
   const handleDeleteGlobalField = (fieldId: string) => {
-    if (window.confirm(`Excluir permanentemente a tag {{${fieldId}}} da Biblioteca Global?`)) {
-      StorageService.deleteGlobalDocumentField(fieldId);
-      setGlobalFields(StorageService.getGlobalDocumentFields());
-    }
+    setConfirmDeleteGlobalId(fieldId);
   };
 
   const handleSaveField = () => {
     const cleanId = fieldId.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!cleanId) {
-      alert('Identificador da Tag é obrigatório (apenas letras, números e underline)');
+      setFieldFormError('Identificador da Tag é obrigatório (apenas letras, números e underline)');
       return;
     }
     if (!fieldLabel.trim()) {
-      alert('Rótulo / Nome do campo é obrigatório');
+      setFieldFormError('Rótulo / Nome do campo é obrigatório');
       return;
     }
+    setFieldFormError('');
 
     const newField: DocumentField = {
       id: cleanId,
@@ -223,25 +225,56 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
       updated[editingFieldIndex] = newField;
       setFields(updated);
     } else {
-      if (fields.some((f) => f.id === cleanId)) {
-        alert(`Já existe um campo com a tag "{{${cleanId}}}" neste modelo.`);
-        return;
+      let nextId = cleanId;
+      if (fields.some((f) => f.id === nextId)) {
+        let counter = 2;
+        while (fields.some((f) => f.id === `${cleanId}_${counter}`)) {
+          counter++;
+        }
+        nextId = `${cleanId}_${counter}`;
       }
-      setFields([...fields, newField]);
+      setFields([...fields, { ...newField, id: nextId }]);
     }
 
     setIsFieldFormOpen(false);
     setEditingFieldIndex(null);
   };
 
-  const handleDeleteField = (index: number) => {
-    const toDelete = fields[index];
-    if (
-      window.confirm(
-        `Remover o campo "${toDelete.label}" ({{${toDelete.id}}}) deste modelo?\n\nNota: O campo continuará preservado na Biblioteca Global para reutilização em outros modelos.`
-      )
-    ) {
-      setFields(fields.filter((_, i) => i !== index));
+  const executeDeleteField = (targetId: string) => {
+    // 1. Remove from field configurations list
+    setFields((prev) => prev.filter((f) => f.id !== targetId));
+
+    // 2. Remove tag occurrence from template body to prevent orphaned tags or auto-rehydration
+    setTemplateBody((prevBody) => {
+      if (!prevBody) return prevBody;
+      const tagRegex = new RegExp(`\\{\\{${targetId}\\}\\}`, 'g');
+      return prevBody.replace(tagRegex, '');
+    });
+
+    // 3. Also synchronize live visual editor DOM if present
+    const visualEditorEl = document.getElementById('template-visual-editor');
+    if (visualEditorEl) {
+      const tagRegex = new RegExp(`\\{\\{${targetId}\\}\\}`, 'g');
+      visualEditorEl.innerHTML = visualEditorEl.innerHTML.replace(tagRegex, '');
+    }
+
+    // 4. Reset edit subform if deleting the field currently being edited
+    if (editingFieldIndex !== null && fields[editingFieldIndex]?.id === targetId) {
+      setIsFieldFormOpen(false);
+      setEditingFieldIndex(null);
+      setFieldFormError('');
+    }
+    setConfirmDeleteFieldId(null);
+  };
+
+  const handleDeleteField = (indexOrId: number | string) => {
+    if (typeof indexOrId === 'number') {
+      const target = fields[indexOrId];
+      if (target) {
+        setConfirmDeleteFieldId(target.id);
+      }
+    } else {
+      setConfirmDeleteFieldId(indexOrId);
     }
   };
 
@@ -250,45 +283,80 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
     setTemplateBody((prev) => `${prev} ${tagText}`);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    // Synchronize latest content from visual editor if currently open
+    let currentBody = templateBody;
+    const visualEditorEl = document.getElementById('template-visual-editor');
+    if (visualEditorEl && activeTab === 'layout' && editorMode === 'visual') {
+      const editorHtml = visualEditorEl.innerHTML;
+      if (editorHtml && editorHtml.trim()) {
+        currentBody = editorHtml;
+        setTemplateBody(editorHtml);
+      }
+    }
+
     if (!title.trim()) {
       setErrorMsg('O título do modelo é obrigatório.');
       setActiveTab('info');
       return;
     }
-    if (!templateBody.trim()) {
+    if (!currentBody.trim()) {
       setErrorMsg('O layout/corpo do documento é obrigatório.');
       setActiveTab('layout');
       return;
     }
 
-    const priceNum = parseFloat(defaultPrice.replace(',', '.')) || 0;
+    const priceNum = isNaN(parseFloat(defaultPrice.replace(',', '.')))
+      ? 0
+      : parseFloat(defaultPrice.replace(',', '.'));
 
-    if (template) {
-      StorageService.updateDocumentTemplate(template.id, {
-        title: title.trim(),
-        category,
-        description: description.trim(),
-        defaultPrice: priceNum,
-        templateBody,
-        fields,
-        active,
-      });
-    } else {
-      StorageService.addDocumentTemplate({
-        title: title.trim(),
-        category,
-        description: description.trim(),
-        defaultPrice: priceNum,
-        templateBody,
-        fields,
-        active,
-      });
+    setIsSubmitting(true);
+    setErrorMsg('');
+
+    try {
+      let savedTemplate: DocumentTemplate | undefined;
+
+      if (template) {
+        savedTemplate = StorageService.updateDocumentTemplate(template.id, {
+          title: title.trim(),
+          category,
+          description: description.trim(),
+          defaultPrice: priceNum,
+          templateBody: currentBody,
+          fields,
+          active,
+        });
+      } else {
+        savedTemplate = StorageService.addDocumentTemplate({
+          title: title.trim(),
+          category,
+          description: description.trim(),
+          defaultPrice: priceNum,
+          templateBody: currentBody,
+          fields,
+          active,
+        });
+      }
+
+      // Explicitly await server sync so the SQLite backend is 100% saved before reload
+      if (savedTemplate) {
+        try {
+          await api.saveDocumentTemplate(savedTemplate);
+        } catch (apiErr) {
+          console.error('Erro ao sincronizar template com backend:', apiErr);
+        }
+      }
+
+      await onSave();
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Erro ao salvar modelo.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onSave();
-    onClose();
   };
 
   // Preview compiled template with sample dummy values
@@ -432,7 +500,7 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                   type="text"
                   value={defaultPrice}
                   onChange={(e) => setDefaultPrice(e.target.value)}
-                  placeholder="30.00"
+                  placeholder="0.00"
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900 font-bold text-emerald-700 focus:ring-2 focus:ring-violet-500 focus:outline-none"
                 />
               </div>
@@ -558,15 +626,13 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                           gf.id.toLowerCase().includes(globalFieldSearch.toLowerCase())
                       )
                       .map((gf) => {
-                        const isAlreadyUsed = fields.some((f) => f.id === gf.id);
+                        const instancesCount = fields.filter(
+                          (f) => f.id === gf.id || f.id.replace(/_\d+$/, '') === gf.id
+                        ).length;
                         return (
                           <div
                             key={gf.id}
-                            className={`p-2 rounded-lg border text-left flex flex-col justify-between gap-1.5 transition-all ${
-                              isAlreadyUsed
-                                ? 'bg-white/80 border-slate-200 opacity-80'
-                                : 'bg-white border-violet-200 hover:border-violet-400 shadow-2xs'
-                            }`}
+                            className="p-2 rounded-lg border text-left flex flex-col justify-between gap-1.5 transition-all bg-white border-violet-200 hover:border-violet-400 shadow-2xs"
                           >
                             <div>
                               <div className="flex items-center justify-between gap-1">
@@ -584,35 +650,62 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                                     • {gf.customerFieldMapping}
                                   </span>
                                 )}
+                                {instancesCount > 0 && (
+                                  <span className="ml-auto text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    {instancesCount}x no modelo
+                                  </span>
+                                )}
                               </div>
                             </div>
 
                             <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                              {isAlreadyUsed ? (
-                                <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 flex-1">
-                                  <Check className="w-3 h-3" /> Adicionado
-                                </span>
+                              <button
+                                type="button"
+                                onClick={() => handleAddFromGlobal(gf)}
+                                className="flex-1 py-1 bg-violet-50 hover:bg-violet-600 text-violet-700 hover:text-white font-bold text-[10px] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title={instancesCount > 0 ? 'Adicionar outra ocorrência desta tag' : 'Adicionar esta tag'}
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>{instancesCount > 0 ? '+ Nova Ocorrência' : 'Adicionar'}</span>
+                              </button>
+                              {confirmDeleteGlobalId === gf.id ? (
+                                <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">
+                                  <span className="text-[9px] font-bold text-rose-700">Apagar?</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      executeDeleteGlobalField(gf.id);
+                                    }}
+                                    className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[9px] rounded cursor-pointer"
+                                    title="Confirmar exclusão permanente"
+                                  >
+                                    Sim
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmDeleteGlobalId(null);
+                                    }}
+                                    className="px-1 py-0.5 text-slate-500 hover:bg-slate-200 text-[9px] rounded cursor-pointer"
+                                  >
+                                    Não
+                                  </button>
+                                </div>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleAddFromGlobal(gf)}
-                                  className="flex-1 py-1 bg-violet-50 hover:bg-violet-600 text-violet-700 hover:text-white font-bold text-[10px] rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteGlobalField(gf.id);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Excluir tag permanentemente da biblioteca global"
                                 >
-                                  <Plus className="w-3 h-3" />
-                                  <span>Adicionar</span>
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteGlobalField(gf.id);
-                                }}
-                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                                title="Excluir tag permanentemente da biblioteca global"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
                             </div>
                           </div>
                         );
@@ -631,12 +724,22 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setIsFieldFormOpen(false)}
-                    className="text-slate-400 hover:text-slate-600 text-xs"
+                    onClick={() => {
+                      setIsFieldFormOpen(false);
+                      setFieldFormError('');
+                    }}
+                    className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+
+                {fieldFormError && (
+                  <div className="p-2 bg-rose-50 border border-rose-300 rounded-lg text-rose-800 text-[11px] flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                    <span>{fieldFormError}</span>
+                  </div>
+                )}
 
                 {/* Duplicate / Existing Tag indicator */}
                 {(() => {
@@ -648,7 +751,7 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                     return (
                       <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg text-amber-800 text-[11px] flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                        <span>Aviso: A tag &#123;&#123;{clean}&#125;&#125; já está em uso neste modelo. Use outro identificador.</span>
+                        <span>Aviso: A tag &#123;&#123;{clean}&#125;&#125; já existe neste modelo. Uma nova ocorrência independente será gerada automaticamente ao salvar.</span>
                       </div>
                     );
                   }
@@ -803,17 +906,31 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                     </label>
 
                     <div className="flex items-center gap-2">
+                      {editingFieldIndex !== null && fields[editingFieldIndex] && (
+                        <button
+                          type="button"
+                          onClick={() => executeDeleteField(fields[editingFieldIndex].id)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                          title="Excluir este campo do modelo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir Campo</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setIsFieldFormOpen(false)}
-                        className="px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg"
+                        onClick={() => {
+                          setIsFieldFormOpen(false);
+                          setFieldFormError('');
+                        }}
+                        className="px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg cursor-pointer"
                       >
                         Cancelar
                       </button>
                       <button
                         type="button"
                         onClick={handleSaveField}
-                        className="px-4 py-1 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg shadow-xs"
+                        className="px-4 py-1 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer"
                       >
                         Salvar Campo
                       </button>
@@ -871,31 +988,54 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => insertTagIntoBody(f.id)}
-                        className="px-2 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 font-bold text-[11px] rounded-md transition-colors cursor-pointer flex items-center gap-1"
-                        title="Inserir tag no corpo do texto"
-                      >
-                        <Code className="w-3 h-3" />
-                        <span>Inserir Tag</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditField(idx)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                        title="Editar campo"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteField(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                        title="Excluir campo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {confirmDeleteFieldId === f.id ? (
+                        <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg">
+                          <span className="text-[11px] font-bold text-rose-700">Excluir campo?</span>
+                          <button
+                            type="button"
+                            onClick={() => executeDeleteField(f.id)}
+                            className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] rounded transition-colors cursor-pointer shadow-2xs"
+                            title="Confirmar remoção deste campo do modelo"
+                          >
+                            Sim, excluir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteFieldId(null)}
+                            className="px-1.5 py-0.5 text-slate-600 hover:bg-slate-200 text-[10px] font-semibold rounded transition-colors cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => insertTagIntoBody(f.id)}
+                            className="px-2 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 font-bold text-[11px] rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                            title="Inserir tag no corpo do texto"
+                          >
+                            <Code className="w-3 h-3" />
+                            <span>Inserir Tag</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditField(idx)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                            title="Editar campo"
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteField(f.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                            title="Excluir campo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1015,10 +1155,13 @@ export const DocumentTemplateModal: React.FC<DocumentTemplateModalProps> = ({
 
           <button
             type="submit"
-            className="flex items-center gap-1.5 px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            className={`flex items-center gap-1.5 px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer ${
+              isSubmitting ? 'opacity-75 cursor-not-allowed' : ''
+            }`}
           >
             <Check className="w-4 h-4" />
-            <span>Salvar Modelo</span>
+            <span>{isSubmitting ? 'Salvando...' : 'Salvar Modelo'}</span>
           </button>
         </div>
       </form>
