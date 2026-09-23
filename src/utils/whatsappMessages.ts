@@ -21,7 +21,7 @@ export interface ReceiptWhatsAppParams {
 
 export function buildReceiptWhatsAppMessage(params: ReceiptWhatsAppParams): string {
   return (
-    `Olá, ${params.customerName}! Segue o comprovante do seu pedido na *${params.companyName}*:\n\n` +
+    `Olá, ${params.customerName}! Segue o comprovante do seu pedido:\n\n` +
     `*Pedido:* ${params.saleNumber}\n` +
     `*Data:* ${params.formattedDate}\n` +
     `*Total:* ${params.totalFormatted}\n` +
@@ -34,7 +34,7 @@ export function buildReceiptWhatsAppMessage(params: ReceiptWhatsAppParams): stri
 // --- 2. ORÇAMENTOS (Budgets) ---
 
 export function buildBudgetWhatsAppMessage(budget: Budget, companyName: string): string {
-  let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${budget.budgetNumber}* da *${companyName || 'Nossa Empresa'}*:\n`;
+  let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${budget.budgetNumber}*:\n`;
   msg += `*Emitido:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
   msg += `*Validade:* ${new Date(budget.validUntil).toLocaleDateString('pt-BR')}\n\n`;
 
@@ -49,7 +49,7 @@ export function buildBudgetWhatsAppMessage(budget: Budget, companyName: string):
 
 export function buildDetailedBudgetWhatsAppMessage(budget: Budget, companyName: string): string {
   let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\n`;
-  msg += `Segue a proposta detalhada *Orçamento #${budget.budgetNumber}* da *${companyName || 'Nossa Empresa'}*:\n\n`;
+  msg += `Segue a proposta detalhada *Orçamento #${budget.budgetNumber}*:\n\n`;
   msg += `*Data de Emissão:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
   msg += `*Validade da Proposta:* ${new Date(budget.validUntil).toLocaleDateString('pt-BR')}\n\n`;
   msg += `*ITENS DO ORÇAMENTO:*\n`;
@@ -105,7 +105,7 @@ export function buildProductionOrderWhatsAppMessage(params: {
   leadTime?: string;
 }): string {
   let msg = `Olá, *${params.customerName}*!\n\n`;
-  msg += `Atualização sobre a produção gráfica na *${params.companyName}*:\n\n`;
+  msg += `Atualização sobre a produção gráfica:\n\n`;
   msg += `*Referência:* ${params.orderRef}\n`;
   msg += `*Item:* ${params.quantity}x ${params.itemName}\n`;
   if (params.variantName) {
@@ -132,7 +132,7 @@ export function buildSaleProductionTrackingWhatsAppMessage(params: {
   }[];
 }): string {
   let msg = `Olá, *${params.customerName}*!\n\n`;
-  msg += `Atualização sobre a produção do seu pedido *#${params.saleNumber}* na *${params.companyName}*:\n\n`;
+  msg += `Atualização sobre a produção do seu pedido *#${params.saleNumber}*:\n\n`;
 
   params.orders.forEach((po, idx) => {
     msg += `*Item ${idx + 1}:* ${po.quantity}x ${po.itemName}\n`;
