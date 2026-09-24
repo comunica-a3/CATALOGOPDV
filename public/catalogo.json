@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-22T18:02:40.682Z",
+  "exportedAt": "2026-09-24T17:17:05.232Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -302,8 +302,8 @@
       "featuredInCatalog": true,
       "areaPricing": {
         "salePricePerM2": 114,
-        "minAreaM2": 0.5001,
-        "minSalePrice": 10
+        "minAreaM2": 0.1501,
+        "minSalePrice": 56
       },
       "options": [
         {
@@ -323,92 +323,6 @@
               "additionalPrice": 10
             }
           ]
-        }
-      ],
-      "active": true,
-      "showInCatalog": true
-    },
-    {
-      "id": "prod-adesivos-vinil-sra3",
-      "name": "Adesivos Vinil Folha SRA3",
-      "sku": "ADS-VIN-SRA3",
-      "categoryId": "cat-adesivos",
-      "type": "PRODUTO_GRAFICO",
-      "description": "Folha inteira em vinil branco 31x46cm sem meio corte.",
-      "salePrice": 49.99,
-      "unit": "UN",
-      "stock": 0,
-      "imageUrl": "",
-      "imageSource": "upload",
-      "pricingModel": "POR_PACOTE",
-      "productionType": "PRODUCAO_TERCEIRIZADA",
-      "leadTime": "1 a 2 dias úteis",
-      "requiresFile": true,
-      "featuredInCatalog": false,
-      "packages": [
-        {
-          "id": "pkg-vsra3-1",
-          "name": "1 folha",
-          "quantity": 1,
-          "salePrice": 49.99
-        },
-        {
-          "id": "pkg-vsra3-5",
-          "name": "5 folhas",
-          "quantity": 5,
-          "salePrice": 94.99
-        },
-        {
-          "id": "pkg-vsra3-10",
-          "name": "10 folhas",
-          "quantity": 10,
-          "salePrice": 148.99
-        }
-      ],
-      "active": true,
-      "showInCatalog": true
-    },
-    {
-      "id": "prod-bopp-branco",
-      "name": "Adesivos etiqueta redondo BOPP branco",
-      "sku": "ADS-BOPP-BRANCO",
-      "categoryId": "cat-adesivos",
-      "type": "PRODUTO_GRAFICO",
-      "description": "Etiquetas adesivas em BOPP 50x50mm, resistentes à água, com meio corte digital.",
-      "salePrice": 68,
-      "unit": "UN",
-      "stock": 0,
-      "imageUrl": "",
-      "imageSource": "upload",
-      "pricingModel": "POR_PACOTE",
-      "productionType": "PRODUCAO_TERCEIRIZADA",
-      "leadTime": "3 a 4 dias úteis",
-      "requiresFile": true,
-      "featuredInCatalog": true,
-      "packages": [
-        {
-          "id": "pkg-bopp-40",
-          "name": "40 unidades",
-          "quantity": 40,
-          "salePrice": 68
-        },
-        {
-          "id": "pkg-bopp-200",
-          "name": "200 unidades",
-          "quantity": 200,
-          "salePrice": 118
-        },
-        {
-          "id": "pkg-bopp-520",
-          "name": "520 unidades",
-          "quantity": 520,
-          "salePrice": 218
-        },
-        {
-          "id": "pkg-bopp-1000",
-          "name": "1000 unidades",
-          "quantity": 1000,
-          "salePrice": 358
         }
       ],
       "active": true,
@@ -458,7 +372,8 @@
       "featuredInCatalog": true,
       "areaPricing": {
         "salePricePerM2": 135,
-        "minAreaM2": 0.5
+        "minAreaM2": 0.1001,
+        "minSalePrice": 50
       },
       "options": [],
       "active": true,
@@ -770,46 +685,6 @@
       "imageSource": "upload",
       "requiresFile": false,
       "featuredInCatalog": false,
-      "active": true,
-      "showInCatalog": true
-    },
-    {
-      "id": "prod-cartao-feed-insta",
-      "name": "Cartão Feed Instagram",
-      "sku": "CRT-FEED-INSTA",
-      "categoryId": "cat-cartoes",
-      "type": "PRODUTO_GRAFICO",
-      "description": "Cartão no formato Feed do Instagram em papel couchê brilho frente e verso personalizado.",
-      "salePrice": 86,
-      "unit": "UN",
-      "stock": 0,
-      "imageUrl": "",
-      "imageSource": "upload",
-      "pricingModel": "POR_PACOTE",
-      "productionType": "PRODUCAO_TERCEIRIZADA",
-      "leadTime": "3 a 4 dias úteis",
-      "requiresFile": true,
-      "featuredInCatalog": true,
-      "packages": [
-        {
-          "id": "pkg-insta-50",
-          "name": "50 unidades",
-          "quantity": 50,
-          "salePrice": 86
-        },
-        {
-          "id": "pkg-insta-100",
-          "name": "100 unidades",
-          "quantity": 100,
-          "salePrice": 125.99
-        },
-        {
-          "id": "pkg-insta-250",
-          "name": "250 unidades",
-          "quantity": 250,
-          "salePrice": 176
-        }
-      ],
       "active": true,
       "showInCatalog": true
     },
@@ -2829,7 +2704,7 @@
     {
       "id": "prod-placa-sinalizacao",
       "name": "Placa PS - M²",
-      "sku": "VIS-PLACA-PS",
+      "sku": "PLACA-PS-M2",
       "categoryId": "cat-banners",
       "type": "PRODUTO_GRAFICO",
       "description": "Placa em PSAI 2mm com adesivo vinil plotter de alta durabilidade e fita dupla face.",
@@ -2845,7 +2720,8 @@
       "featuredInCatalog": false,
       "areaPricing": {
         "salePricePerM2": 260,
-        "minAreaM2": 0.0001
+        "minAreaM2": 0.0801,
+        "minSalePrice": 114
       },
       "options": [],
       "active": true,
