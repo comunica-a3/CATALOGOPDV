@@ -105,7 +105,7 @@ export function buildProductionOrderWhatsAppMessage(params: {
   leadTime?: string;
 }): string {
   let msg = `Olá, *${params.customerName}*!\n\n`;
-  msg += `Atualização sobre a produção gráfica:\n\n`;
+  msg += `Atualização sobre a produção:\n\n`;
   msg += `*Referência:* ${params.orderRef}\n`;
   msg += `*Item:* ${params.quantity}x ${params.itemName}\n`;
   if (params.variantName) {
@@ -116,7 +116,8 @@ export function buildProductionOrderWhatsAppMessage(params: {
   if (params.leadTime) {
     msg += `*Previsão informada:* ${params.leadTime}\n`;
   }
-  msg += `\nQualquer dúvida, estamos à disposição!`;
+  msg += `\nQualquer dúvida, estamos à disposição! `;
+   msg += `\n wwww.dumorro.com! `;
   return msg;
 }
 
@@ -150,7 +151,7 @@ export function buildSaleProductionTrackingWhatsAppMessage(params: {
 // --- 4. CATÁLOGO DIGITAL E ITENS ---
 
 export function buildCatalogGeneralAttendanceMessage(companyName: string): string {
-  return `Olá! Estava navegando no catálogo da *${companyName}* e gostaria de solicitar um atendimento/orçamento!`;
+  return `Olá! Estava navegando no catálogo e gostaria de solicitar um atendimento!`;
 }
 
 export function buildCatalogItemInterestMessage(itemName: string): string {
