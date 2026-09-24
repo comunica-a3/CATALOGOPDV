@@ -113,9 +113,6 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     onConfirm: () => void;
   } | null>(null);
 
-  // Service price for currently generated document (defaults to template defaultPrice, editable by user)
-  const [servicePrice, setServicePrice] = useState<string>('0.00');
-
   // Reload helpers
   const reloadTemplates = async () => {
     let list: DocumentTemplate[] = [];
@@ -140,7 +137,6 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       const normalized = normalizeTemplateFieldInstances(updated.templateBody, updated.fields);
       const rawPrice = (updated as any).defaultPrice !== undefined ? (updated as any).defaultPrice : (updated as any).default_price;
       const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
-      setServicePrice(numPrice.toFixed(2).replace('.', ','));
       return {
         ...updated,
         defaultPrice: numPrice,
@@ -154,11 +150,22 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     reloadTemplates();
 
     const handleTemplatesUpdated = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setTemplates(e.detail);
-      } else {
-        setTemplates(StorageService.getDocumentTemplates());
-      }
+      const updatedTemplates = e?.detail && Array.isArray(e.detail) ? e.detail : StorageService.getDocumentTemplates();
+      setTemplates(updatedTemplates);
+      setSelectedTemplate((current) => {
+        if (!current) return null;
+        const matching = updatedTemplates.find((t: DocumentTemplate) => t.id === current.id);
+        if (!matching) return current;
+        const normalized = normalizeTemplateFieldInstances(matching.templateBody, matching.fields);
+        const rawPrice = (matching as any).defaultPrice !== undefined ? (matching as any).defaultPrice : (matching as any).default_price;
+        const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+        return {
+          ...matching,
+          defaultPrice: numPrice,
+          templateBody: normalized.templateBody,
+          fields: normalized.fields,
+        };
+      });
     };
 
     window.addEventListener('document-templates-updated', handleTemplatesUpdated);
@@ -190,8 +197,12 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   // Select Template Handler
   const handleSelectTemplate = (tmpl: DocumentTemplate) => {
     const normalized = normalizeTemplateFieldInstances(tmpl.templateBody, tmpl.fields);
+    const rawPrice = (tmpl as any).defaultPrice !== undefined ? (tmpl as any).defaultPrice : (tmpl as any).default_price;
+    const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+
     const effectiveTemplate: DocumentTemplate = {
       ...tmpl,
+      defaultPrice: numPrice,
       templateBody: normalized.templateBody,
       fields: normalized.fields,
     };
@@ -200,10 +211,6 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     setIsEditingContent(false);
     setSavedSuccessMsg('');
     setAddedToCartSuccess(false);
-
-    const rawPrice = (tmpl as any).defaultPrice !== undefined ? (tmpl as any).defaultPrice : (tmpl as any).default_price;
-    const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
-    setServicePrice(numPrice.toFixed(2).replace('.', ','));
 
     // Initial form state with default values or customer values
     const initialValues: Record<string, string> = {};
@@ -304,11 +311,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleSaveToHistory = () => {
     if (!selectedTemplate || !generatedContent) return;
 
-    const cleanPrice = String(servicePrice || '').replace(/[^\d.,]/g, '').replace(',', '.');
-    const parsedPrice = parseFloat(cleanPrice);
-    const finalPrice = !isNaN(parsedPrice) && parsedPrice >= 0
-      ? parsedPrice
-      : (typeof selectedTemplate.defaultPrice === 'number' ? selectedTemplate.defaultPrice : 0);
+    const templatePrice = typeof selectedTemplate.defaultPrice === 'number' && !isNaN(selectedTemplate.defaultPrice)
+      ? selectedTemplate.defaultPrice
+      : 0;
 
     const newDoc = StorageService.addGeneratedDocument({
       templateId: selectedTemplate.id,
@@ -322,7 +327,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       customerPhone: selectedCustomer?.phone || formData['contato_telefone'],
       sellerId: currentUser.id,
       sellerName: currentUser.name,
-      priceCharged: finalPrice,
+      priceCharged: templatePrice,
     });
 
     reloadGeneratedDocs();
@@ -333,16 +338,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleAddToCart = () => {
     if (!selectedTemplate || !onAddToCart) return;
 
-    const cleanPrice = String(servicePrice || '').replace(/[^\d.,]/g, '').replace(',', '.');
-    const parsedPrice = parseFloat(cleanPrice);
-    const finalPrice = !isNaN(parsedPrice) && parsedPrice >= 0
-      ? parsedPrice
-      : (typeof selectedTemplate.defaultPrice === 'number' ? selectedTemplate.defaultPrice : 0);
+    const templatePrice = typeof selectedTemplate.defaultPrice === 'number' && !isNaN(selectedTemplate.defaultPrice)
+      ? selectedTemplate.defaultPrice
+      : 0;
 
     onAddToCart({
       id: selectedTemplate.id,
       name: `Doc: ${selectedTemplate.title}`,
-      price: finalPrice,
+      price: templatePrice,
       category: selectedTemplate.category,
       documentContent: generatedContent,
     });
@@ -586,17 +589,11 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <label className="text-[11px] font-medium text-slate-500 block">Preço Cobrado</label>
-                          <div className="relative inline-flex items-center mt-0.5">
-                            <span className="absolute left-2 text-xs font-bold text-slate-400">R$</span>
-                            <input
-                              type="text"
-                              value={servicePrice}
-                              onChange={(e) => setServicePrice(e.target.value)}
-                              placeholder="0,00"
-                              className="w-24 pl-7 pr-2 py-1 text-xs font-bold text-emerald-700 bg-emerald-50/70 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white text-right"
-                              title="Altere o valor a cobrar para este documento se desejar"
-                            />
+                          <label className="text-[11px] font-medium text-slate-500 block">Preço de Serviço</label>
+                          <div className="inline-flex items-center mt-0.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <span className="text-xs font-bold">
+                              R$ {(selectedTemplate.defaultPrice || 0).toFixed(2).replace('.', ',')}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -746,7 +743,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   <div>
                     <h3 className="font-bold text-sm text-slate-900">{documentTitle}</h3>
                     <span className="text-[11px] text-slate-500">
-                      {selectedTemplate?.title} • Taxa: R$ {(parseFloat(String(servicePrice).replace(/[^\d.,]/g, '').replace(',', '.')) || (selectedTemplate?.defaultPrice || 0)).toFixed(2).replace('.', ',')}
+                      {selectedTemplate?.title} • Taxa: R$ {(selectedTemplate?.defaultPrice || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 </div>
@@ -807,7 +804,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       ) : (
                         <>
                           <ShoppingCart className="w-3.5 h-3.5" />
-                          <span>Adicionar ao PDV (R$ {(parseFloat(String(servicePrice).replace(/[^\d.,]/g, '').replace(',', '.')) || (selectedTemplate?.defaultPrice || 0)).toFixed(2).replace('.', ',')})</span>
+                          <span>Adicionar ao PDV (R$ {(selectedTemplate?.defaultPrice || 0).toFixed(2).replace('.', ',')})</span>
                         </>
                       )}
                     </button>
