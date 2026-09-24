@@ -846,6 +846,38 @@ export async function runMigrations(): Promise<void> {
     );
   }
 
+  // Migration 011: Ensure document_templates default_price and generated_documents price_charged
+  if (!appliedVersions.has('011_document_templates_default_price')) {
+    console.log('Applying migration 011_document_templates_default_price...');
+    try {
+      await db.run(`
+        CREATE TABLE IF NOT EXISTS document_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT NOT NULL,
+          content TEXT NOT NULL,
+          variables_json TEXT,
+          active INTEGER DEFAULT 1,
+          default_price REAL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    } catch {}
+    try {
+      await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;');
+    } catch {}
+    try {
+      await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;');
+    } catch {}
+
+    await db.run(
+      'INSERT INTO schema_migrations VALUES (?, ?, ?)',
+      ['011_document_templates_default_price', 'Ensure document_templates default_price and generated_documents price_charged', new Date().toISOString()]
+    );
+  }
+
   // Always run unconditional column check to heal any existing database schema drift
   await ensureAllTableColumns();
 }
@@ -854,6 +886,30 @@ export async function runMigrations(): Promise<void> {
  * Unconditionally guarantees all required columns exist in tables across all SQLite/Turso instances.
  */
 export async function ensureAllTableColumns(): Promise<void> {
+  // Guarantee document_templates and generated_documents tables and columns exist
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS document_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        content TEXT NOT NULL,
+        variables_json TEXT,
+        active INTEGER DEFAULT 1,
+        default_price REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;');
+  } catch {}
+
   // Directly attempt to add service_url and image columns if missing
   try {
     await db.run('ALTER TABLE items ADD COLUMN service_url TEXT;');
@@ -1016,6 +1072,36 @@ export async function ensureAllTableColumns(): Promise<void> {
         { name: 'lead_time', type: 'TEXT' },
         { name: 'configuration_json', type: 'TEXT' },
         { name: 'completed_at', type: 'TEXT' },
+      ],
+    },
+    {
+      table: 'document_templates',
+      columns: [
+        { name: 'name', type: 'TEXT' },
+        { name: 'description', type: 'TEXT' },
+        { name: 'category', type: 'TEXT' },
+        { name: 'content', type: 'TEXT' },
+        { name: 'variables_json', type: 'TEXT' },
+        { name: 'active', type: 'INTEGER DEFAULT 1' },
+        { name: 'default_price', type: 'REAL DEFAULT 0' },
+        { name: 'created_at', type: 'TEXT' },
+        { name: 'updated_at', type: 'TEXT' },
+      ],
+    },
+    {
+      table: 'generated_documents',
+      columns: [
+        { name: 'template_id', type: 'TEXT' },
+        { name: 'template_name', type: 'TEXT' },
+        { name: 'title', type: 'TEXT' },
+        { name: 'customer_id', type: 'TEXT' },
+        { name: 'customer_name', type: 'TEXT' },
+        { name: 'customer_cpf_cnpj', type: 'TEXT' },
+        { name: 'rendered_content', type: 'TEXT' },
+        { name: 'created_by_user_id', type: 'TEXT' },
+        { name: 'created_by_user_name', type: 'TEXT' },
+        { name: 'price_charged', type: 'REAL DEFAULT 0' },
+        { name: 'created_at', type: 'TEXT' },
       ],
     },
   ];

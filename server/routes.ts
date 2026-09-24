@@ -3667,8 +3667,34 @@ router.delete('/online-services/:id', async (req, res) => {
   }
 });
 
+async function ensureDocumentTablesSchema(): Promise<void> {
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS document_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        content TEXT NOT NULL,
+        variables_json TEXT,
+        active INTEGER DEFAULT 1,
+        default_price REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;');
+  } catch {}
+}
+
 router.get('/document-templates', async (req, res) => {
   try {
+    await ensureDocumentTablesSchema();
     const rows = await db.all<any>('SELECT * FROM document_templates ORDER BY name ASC');
     res.json(rows.map((r) => {
       const parsedPrice = typeof r.default_price === 'number'
@@ -3698,6 +3724,7 @@ router.get('/document-templates', async (req, res) => {
 
 router.post('/document-templates', async (req, res) => {
   try {
+    await ensureDocumentTablesSchema();
     const tmpl = req.body;
     if (!tmpl || !tmpl.id || (!tmpl.title && !tmpl.name)) {
       return res.status(400).json({ error: 'Dados de modelo inválidos.' });
@@ -3742,6 +3769,7 @@ router.post('/document-templates', async (req, res) => {
 
 router.put('/document-templates/:id', async (req, res) => {
   try {
+    await ensureDocumentTablesSchema();
     const { id } = req.params;
     const tmpl = req.body;
     const name = tmpl.title || tmpl.name;
@@ -3792,6 +3820,7 @@ router.delete('/document-templates/:id', async (req, res) => {
 
 router.get('/generated-documents', async (req, res) => {
   try {
+    await ensureDocumentTablesSchema();
     const rows = await db.all<any>('SELECT * FROM generated_documents ORDER BY created_at DESC');
     res.json(rows.map((r) => ({
       id: r.id,
@@ -3814,6 +3843,7 @@ router.get('/generated-documents', async (req, res) => {
 
 router.post('/generated-documents', async (req, res) => {
   try {
+    await ensureDocumentTablesSchema();
     const doc = req.body;
     if (!doc || !doc.id) {
       return res.status(400).json({ error: 'Documento gerado inválido.' });
