@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-24T17:17:05.232Z",
+  "exportedAt": "2026-09-25T12:44:53.109Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -974,9 +974,10 @@
       "unit": "UN",
       "stock": 0,
       "imageUrl": "",
-      "imageSource": "upload",
       "requiresFile": false,
       "featuredInCatalog": false,
+      "estimatedTime": "15 minutos",
+      "serviceFields": [],
       "active": true,
       "showInCatalog": true
     },
@@ -1845,6 +1846,58 @@
           ]
         }
       ],
+      "active": true,
+      "showInCatalog": true
+    },
+    {
+      "id": "item-1790340132640",
+      "name": "Livro de Colorir",
+      "sku": "LV-COLOR",
+      "categoryId": "cat-1789068083093",
+      "type": "sep_personalizados_1789070149013",
+      "description": "Livro de Colorir com capa personalizada.\n\nDetalhes:\n8 Desenhos para colorir (Frente e Verso),\nPapel interno Sulfite 75g,\nCapa Colorida Offset 180g,\nTamanho 21 x 15.",
+      "salePrice": 34.95,
+      "unit": "UN",
+      "stock": 10,
+      "imageUrl": "https://drive.google.com/thumbnail?id=12CSp6tfRhkA1SmpsmGK_5iFjQyNeJUrq&sz=w1200",
+      "imageSource": "google_drive",
+      "imageOriginalUrl": "https://drive.google.com/file/d/12CSp6tfRhkA1SmpsmGK_5iFjQyNeJUrq/view",
+      "googleDriveFileId": "12CSp6tfRhkA1SmpsmGK_5iFjQyNeJUrq",
+      "googleDriveFileName": "drive_image_12CSp6tf",
+      "googleDriveMimeType": "image/jpeg",
+      "googleDriveThumbnailUrl": "https://drive.google.com/thumbnail?id=12CSp6tfRhkA1SmpsmGK_5iFjQyNeJUrq&sz=w400",
+      "pricingModel": "POR_PACOTE",
+      "productionType": "PRODUCAO_PROPRIA",
+      "leadTime": "1 Dia útil",
+      "requiresFile": true,
+      "featuredInCatalog": false,
+      "packages": [
+        {
+          "id": "pkg-1",
+          "name": " 5 Unidades",
+          "quantity": 5,
+          "salePrice": 34.95
+        },
+        {
+          "id": "pkg-2",
+          "name": "10 Unidades",
+          "quantity": 10,
+          "salePrice": 64.9
+        },
+        {
+          "id": "pkg-1790339736888",
+          "name": "20 Unidades",
+          "quantity": 20,
+          "salePrice": 114.9
+        },
+        {
+          "id": "pkg-1790339837319",
+          "name": "30 Unidades",
+          "quantity": 30,
+          "salePrice": 189.9
+        }
+      ],
+      "options": [],
       "active": true,
       "showInCatalog": true
     },
