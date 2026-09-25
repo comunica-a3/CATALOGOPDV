@@ -27,6 +27,20 @@ async function startServer() {
   // Serve static files from public directory (e.g. /catalogo.json)
   app.use(express.static(path.join(process.cwd(), 'public')));
 
+  // Configuração padrão para desativar cache em navegadores secundários
+  const noCacheOptions = {
+    etag: false,
+    maxAge: 0,
+    setHeaders: (res: any) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    },
+  };
+
+  // Serve static files from public directory (e.g. /catalogo.json) sem cache
+  app.use(express.static(path.join(process.cwd(), 'public'), noCacheOptions));
+
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -36,12 +50,17 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Serve os arquivos compilados da dist desativando o cache HTTP
+    app.use(express.static(distPath, noCacheOptions));
     app.get('*', (req, res) => {
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      });
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Sistema Gráfica PDV & ERP Server running on http://0.0.0.0:${PORT}`);
   });
