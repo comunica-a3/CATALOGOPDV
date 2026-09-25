@@ -982,7 +982,12 @@ export function downloadBudgetPDF(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    const info = [companySettings.phone, companySettings.email, companySettings.city ? `${companySettings.city}/${companySettings.state}` : '']
+    const info = [
+      companySettings.phone,
+      companySettings.email,
+      companySettings.city ? `${companySettings.city}/${companySettings.state}` : '',
+      'www.dumorro.com'
+    ]
       .filter(Boolean)
       .join('  •  ');
     doc.text(info, margin, currentY);
