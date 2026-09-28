@@ -27,6 +27,7 @@ export function buildReceiptWhatsAppMessage(params: ReceiptWhatsAppParams): stri
     `*Total:* ${params.totalFormatted}\n` +
     `*Pago:* ${params.paidAmountFormatted}\n` +
     (params.remainingAmountFormatted ? `*Saldo a Pagar:* ${params.remainingAmountFormatted}\n` : '') +
+    `\n Confira nosso catálogo Online: wwww.dumorro.com! ` +
     `\nAgradecemos a preferência!`
   );
 }
@@ -117,7 +118,7 @@ export function buildProductionOrderWhatsAppMessage(params: {
     msg += `*Previsão informada:* ${params.leadTime}\n`;
   }
   msg += `\nQualquer dúvida, estamos à disposição! `;
-   msg += `\n wwww.dumorro.com! `;
+  msg += `\n Confira nosso catálogo Online: wwww.dumorro.com! `;
   return msg;
 }
 
@@ -145,6 +146,7 @@ export function buildSaleProductionTrackingWhatsAppMessage(params: {
   });
 
   msg += `Qualquer dúvida, estamos à disposição!`;
+  msg += `\n Confira nosso catálogo Online: wwww.dumorro.com! `;
   return msg;
 }
 
