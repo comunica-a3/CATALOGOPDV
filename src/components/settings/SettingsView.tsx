@@ -20,6 +20,7 @@ import {
   Megaphone,
   Percent,
   Plus,
+  QrCode,
   RotateCcw,
   Save,
   Settings,
@@ -144,6 +145,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [defaultSupplierFreight, setDefaultSupplierFreight] = useState<number>(
     companySettings.defaultSupplierFreight ?? 20.0
   );
+  const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string>(
+    companySettings.pixQrCodeUrl || ''
+  );
+  const [isUploadingPixQr, setIsUploadingPixQr] = useState(false);
+  const [pixQrError, setPixQrError] = useState('');
   const [isPublishCatalogModalOpen, setIsPublishCatalogModalOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<string[]>(
     companySettings.paymentMethods
@@ -500,6 +506,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const handlePixQrCodeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPixQrError('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setPixQrError('O arquivo de imagem do QR Code deve ter no máximo 5MB.');
+      return;
+    }
+
+    setPixQrError('');
+    setIsUploadingPixQr(true);
+    try {
+      const compressed = await compressImage(file, 800, 800, 0.9);
+      setPixQrCodeUrl(compressed);
+      try {
+        const uploadRes = await api.uploadImage(compressed, 'pix_qr');
+        if (uploadRes && uploadRes.url) {
+          setPixQrCodeUrl(uploadRes.url);
+        }
+      } catch (uploadErr) {
+        console.warn('Upload remoto de QR Code PIX não completou, mantendo dataUrl comprimido:', uploadErr);
+      }
+    } catch (err: any) {
+      setPixQrError(err.message || 'Falha ao processar a imagem do QR Code.');
+    } finally {
+      setIsUploadingPixQr(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleRemovePixQrCode = () => {
+    setPixQrCodeUrl('');
+    setPixQrError('');
+  };
+
   const handleSaveCompany = (e: React.FormEvent) => {
     e.preventDefault();
     const updated: CompanySettings = {
@@ -519,6 +565,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       receiptFooterMessage: receiptFooter.trim(),
       paymentMethods,
       defaultSupplierFreight: Number(defaultSupplierFreight) || 20.0,
+      pixQrCodeUrl: pixQrCodeUrl.trim() || undefined,
     };
 
     StorageService.saveCompanySettings(updated);
@@ -1705,6 +1752,112 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm font-bold border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* QR Code PIX para POSFácil e Balcão */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <QrCode className="w-4 h-4 text-emerald-600" />
+                      <label className="text-xs font-bold text-slate-800">
+                        QR Code PIX (POSFácil e Balcão)
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Cadastre a imagem do seu QR Code PIX. Ela será exibida na tela ao dar <strong>duplo clique</strong> no botão PIX do POSFácil para leitura rápida pelo cliente.
+                    </p>
+                  </div>
+                </div>
+
+                {pixQrCodeUrl ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-20 h-20 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1 overflow-hidden shadow-xs shrink-0">
+                        <img
+                          src={pixQrCodeUrl}
+                          alt="QR Code PIX Configurado"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>QR Code PIX Ativo</span>
+                          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-semibold rounded">
+                            Configurado
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Esta imagem será exibida ao dar duplo clique no botão PIX do POSFácil.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+                        <Upload className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Substituir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePixQrCodeUpload}
+                          disabled={isUploadingPixQr}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleRemovePixQrCode}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Remover imagem do QR Code"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-white border border-dashed border-slate-300 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">
+                          Nenhum QR Code PIX cadastrado
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Envie a imagem do QR Code gerado pelo seu banco (PNG, JPG ou WEBP até 5MB).
+                        </p>
+                      </div>
+                    </div>
+
+                    <label className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer shrink-0">
+                      {isUploadingPixQr ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Carregando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>+ Cadastrar Imagem do QR Code PIX</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePixQrCodeUpload}
+                        disabled={isUploadingPixQr}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {pixQrError && (
+                  <p className="text-xs text-rose-600 font-semibold">{pixQrError}</p>
+                )}
               </div>
 
               {/* Payment Methods Config */}

@@ -130,6 +130,26 @@ export const POSFacil: React.FC<POSFacilProps> = ({
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [isPixQrModalOpen, setIsPixQrModalOpen] = useState(false);
+
+  // Synchronized Company Settings for instant updates
+  const [currentCompanySettings, setCurrentCompanySettings] = useState<CompanySettings>(companySettings);
+
+  useEffect(() => {
+    setCurrentCompanySettings(companySettings);
+  }, [companySettings]);
+
+  useEffect(() => {
+    const handleSettingsUpdated = (e: any) => {
+      if (e?.detail) {
+        setCurrentCompanySettings(e.detail);
+      } else {
+        setCurrentCompanySettings(StorageService.getCompanySettings());
+      }
+    };
+    window.addEventListener('settings-updated', handleSettingsUpdated);
+    return () => window.removeEventListener('settings-updated', handleSettingsUpdated);
+  }, []);
 
   // Feedback State
   const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
@@ -549,6 +569,7 @@ export const POSFacil: React.FC<POSFacilProps> = ({
         isReceiptModalOpen ||
         isDiscountModalOpen ||
         isShortcutsModalOpen ||
+        isPixQrModalOpen ||
         configItem ||
         isOpenCashModalOpen
       ) {
@@ -1154,6 +1175,12 @@ export const POSFacil: React.FC<POSFacilProps> = ({
                 type="button"
                 id="btn-pay-pix"
                 onClick={() => setSelectedPaymentMethod('PIX')}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPaymentMethod('PIX');
+                  setIsPixQrModalOpen(true);
+                }}
+                title="Clique para selecionar PIX • Duplo clique para ver QR Code"
                 className={`p-2.5 rounded-xl border font-bold flex items-center justify-between transition-all cursor-pointer ${
                   selectedPaymentMethod === 'PIX'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-200'
@@ -1261,6 +1288,26 @@ export const POSFacil: React.FC<POSFacilProps> = ({
             </div>
 
             {/* DYNAMIC METHOD CONTROLS */}
+            {/* PIX: Dica de visualização de QR Code */}
+            {selectedPaymentMethod === 'PIX' && (
+              <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between text-xs animate-in fade-in duration-150">
+                <div className="flex items-center gap-2 text-blue-900">
+                  <QrCode className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span className="text-[11px]">
+                    Dê <strong>duplo clique</strong> no botão PIX para ver o QR Code
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  id="btn-open-pix-qr"
+                  onClick={() => setIsPixQrModalOpen(true)}
+                  className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-700 border border-blue-300 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                >
+                  Exibir QR Code
+                </button>
+              </div>
+            )}
+
             {/* Dinheiro: Campo de Troco e Cédulas Rápidas */}
             {selectedPaymentMethod === 'DINHEIRO' && (
               <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-2 animate-in fade-in duration-150">
@@ -1690,6 +1737,97 @@ export const POSFacil: React.FC<POSFacilProps> = ({
           </div>
         </Modal>
       )}
+
+      {/* MODAL: QR CODE PIX */}
+      <Modal
+        isOpen={isPixQrModalOpen}
+        onClose={() => setIsPixQrModalOpen(false)}
+        title="QR Code PIX — Pagamento Rápido"
+        subtitle={currentCompanySettings?.name || 'Pagamento via PIX'}
+        maxWidth="md"
+        id="modal-pix-qr-code"
+      >
+        <div className="p-5 sm:p-6 flex flex-col items-center text-center space-y-4">
+          {currentCompanySettings?.pixQrCodeUrl ? (
+            <>
+              {finalTotal > 0 && (
+                <div className="w-full bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                  <span className="text-[11px] uppercase font-bold text-emerald-700 tracking-wider block">
+                    Valor a Pagar no PIX
+                  </span>
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
+                    {formatCurrency(finalTotal)}
+                  </span>
+                </div>
+              )}
+
+              <div className="p-4 bg-white border-2 border-slate-200 rounded-2xl shadow-sm inline-block mx-auto">
+                <img
+                  src={currentCompanySettings.pixQrCodeUrl}
+                  alt="QR Code PIX"
+                  className="w-60 h-60 sm:w-72 sm:h-72 object-contain rounded-lg mx-auto"
+                />
+              </div>
+
+              <div className="space-y-1 text-center">
+                <p className="text-xs font-bold text-slate-800">
+                  Aponte a câmera do aplicativo do seu banco para escanear
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Após a confirmação da transferência, conclua a venda normalmente.
+                </p>
+              </div>
+
+              <div className="pt-2 w-full">
+                <button
+                  type="button"
+                  id="btn-close-pix-qr-modal"
+                  onClick={() => setIsPixQrModalOpen(false)}
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Fechar [Esc]
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="py-6 flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center">
+                <QrCode className="w-8 h-8" />
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <h4 className="text-sm font-bold text-slate-900">
+                  QR Code PIX não configurado
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  O administrador ainda não cadastrou a imagem do QR Code PIX nas configurações do sistema.
+                </p>
+                {currentUser?.role === 'ADMINISTRADOR' && onNavigate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPixQrModalOpen(false);
+                      onNavigate('settings');
+                    }}
+                    className="text-[11px] text-blue-600 hover:text-blue-800 font-bold underline pt-1 cursor-pointer block mx-auto"
+                  >
+                    Ir para Configurações e cadastrar QR Code PIX
+                  </button>
+                )}
+              </div>
+              <div className="pt-4 w-full flex justify-center">
+                <button
+                  type="button"
+                  id="btn-close-pix-qr-modal-empty"
+                  onClick={() => setIsPixQrModalOpen(false)}
+                  className="py-2 px-6 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Fechar [Esc]
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Cancel Sale / Clear Cart Confirmation */}
       <ConfirmDialog
