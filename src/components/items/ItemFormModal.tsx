@@ -1,12 +1,9 @@
 import {
   AlertCircle,
-  ArrowRight,
   Check,
   CloudOff,
   Coins,
   Copy,
-  ExternalLink,
-  FileCode,
   Globe,
   HardDrive,
   Image as ImageIcon,
@@ -18,7 +15,6 @@ import {
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../services/api';

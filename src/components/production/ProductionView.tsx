@@ -1,31 +1,18 @@
 import {
-  AlertCircle,
   AlertTriangle,
-  Archive,
-  ArrowRight,
-  Boxes,
-  Calendar,
   CheckCircle2,
   Clock,
   Download,
-  Eye,
-  FileSpreadsheet,
   FileText,
   Filter,
   Layers,
-  List,
   MessageCircle,
-  Package,
   Paperclip,
-  Plus,
   RefreshCw,
-  RotateCcw,
   Search,
   Sparkles,
-  Tag,
   Trash2,
   Upload,
-  User,
   X,
   XCircle,
 } from 'lucide-react';
@@ -33,7 +20,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { CompanySettings, ProductionOrder, ProductionOrderFile, ProductionStatus } from '../../types';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatters';
 import { downloadProductionOrderPDF } from '../../utils/pdfReceipt';
 import { buildProductionOrderWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';

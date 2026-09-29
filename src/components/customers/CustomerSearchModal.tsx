@@ -1,7 +1,5 @@
 import {
-  AlertCircle,
   Building2,
-  Check,
   MapPin,
   Phone,
   Search,

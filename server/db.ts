@@ -14,10 +14,8 @@ import {
 import {
   INITIAL_APPROACH_TEMPLATES,
   INITIAL_COMPLEMENTARY_RULES,
-  INITIAL_OPPORTUNITIES,
   INITIAL_PACKAGES,
   INITIAL_PUBLIC_SEGMENT_PAGES,
-  INITIAL_SEGMENT_SUGGESTIONS,
 } from '../src/data/initialProspectingData';
 import { INITIAL_CATALOG_NICHES } from '../src/data/initialCatalogNiches';
 import { ensureDefaultAdminUser } from './auth';

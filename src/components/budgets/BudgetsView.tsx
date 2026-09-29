@@ -1,18 +1,13 @@
 import {
-  Calendar,
   CheckCircle2,
-  Clock,
   CreditCard,
   Download,
   Edit,
   Eye,
-  FileSpreadsheet,
   FileText,
   MessageCircle,
-  Plus,
   Search,
   Trash2,
-  User,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';

@@ -1,28 +1,19 @@
 import confetti from 'canvas-confetti';
 import {
-  AlertCircle,
   AlertTriangle,
-  Building2,
   Calendar,
   Check,
   CreditCard,
-  DollarSign,
-  Lock,
-  Percent,
   Plus,
-  QrCode,
-  Receipt,
   Trash2,
   UserCheck,
   UserPlus,
   Users,
-  Wallet,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import {
-  AccountType,
   CartItem,
   CompanySettings,
   Customer,

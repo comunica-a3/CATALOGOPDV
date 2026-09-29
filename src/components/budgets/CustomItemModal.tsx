@@ -1,15 +1,7 @@
 import {
   AlertCircle,
   Check,
-  DollarSign,
-  FileSpreadsheet,
-  Info,
-  Layers,
-  Package,
   Sparkles,
-  Tag,
-  Wrench,
-  X,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StorageService } from '../../services/storage';

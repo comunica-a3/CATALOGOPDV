@@ -8,15 +8,10 @@ import {
   EyeOff,
   FileSpreadsheet,
   Filter,
-  Layers,
-  Package,
   Plus,
   Search,
-  Sparkles,
   Store,
-  Tag,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';

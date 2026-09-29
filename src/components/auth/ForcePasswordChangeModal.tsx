@@ -1,9 +1,7 @@
 import {
   AlertCircle,
-  CheckCircle2,
   Eye,
   EyeOff,
-  KeyRound,
   Lock,
   LogOut,
   ShieldAlert,

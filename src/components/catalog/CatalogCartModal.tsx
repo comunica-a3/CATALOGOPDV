@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowRight,
-  Check,
   ChevronRight,
   MessageCircle,
   Minus,
@@ -9,7 +8,6 @@ import {
   ShoppingBag,
   ShoppingCart,
   Trash2,
-  X,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { CompanySettings, VitrineCartItem } from '../../types';

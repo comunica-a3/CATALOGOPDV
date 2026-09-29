@@ -1,4 +1,4 @@
-import { Building2, Check, CreditCard, DollarSign } from 'lucide-react';
+import { Check } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { StorageService } from '../../services/storage';
 import { CompanySettings, ReceivingAccount, Sale } from '../../types';

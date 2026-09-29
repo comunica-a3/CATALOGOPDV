@@ -1,26 +1,13 @@
 import {
   AlertCircle,
-  Calendar,
-  Check,
   CheckCircle2,
-  Clock,
-  DollarSign,
-  FileSpreadsheet,
-  FileText,
-  Layers,
   Minus,
   Package,
-  Percent,
   Plus,
   PlusCircle,
   Search,
-  Sparkles,
-  Tag,
   Trash2,
   User,
-  UserCheck,
-  UserPlus,
-  Users,
   X,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -33,7 +20,6 @@ import {
   CompanySettings,
   Customer,
   Item,
-  ItemType,
   ProductPackage,
 } from '../../types';
 import { formatCurrency } from '../../utils/formatters';

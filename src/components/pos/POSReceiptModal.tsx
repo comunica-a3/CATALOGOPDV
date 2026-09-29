@@ -1,14 +1,8 @@
 import {
-  Check,
-  ClipboardList,
   Download,
   FileText,
-  MapPin,
   MessageCircle,
   Receipt,
-  Share2,
-  Sparkles,
-  X,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { StorageService } from '../../services/storage';

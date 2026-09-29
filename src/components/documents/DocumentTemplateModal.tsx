@@ -3,15 +3,12 @@ import {
   BookOpen,
   Check,
   Code,
-  Copy,
   Eye,
   FileText,
-  Layers,
   Library,
   Plus,
   Search,
   Settings,
-  Sparkles,
   Tag,
   Trash2,
   X,
@@ -20,7 +17,6 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
 import {
-  DocumentCategory,
   DocumentField,
   DocumentFieldType,
   DocumentSystemMapping,

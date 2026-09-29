@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Layers,
   Sparkles,
-  HelpCircle,
   FileText,
   AlertCircle,
 } from 'lucide-react';

@@ -27,7 +27,6 @@ import { initRealtimeSync } from './services/realtimeSync';
 import {
   Category,
   CompanySettings,
-  Customer,
   InventoryMovement,
   Item,
   Opportunity,
@@ -58,10 +57,7 @@ type AppView =
   | 'logout';
 
 function MainApp() {
-  const { isAuthenticated, mustChangePassword, logout, isAdmin, isSeller, canViewFinancialReports, canManageStock } = useAuth();
-
-  const isLocal = typeof window !== 'undefined' && 
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const { isAuthenticated, mustChangePassword, logout, isAdmin, canViewFinancialReports, canManageStock } = useAuth();
   
   // URL search params check
   const [selectedSegmentSlug, setSelectedSegmentSlug] = useState<string>('todos');
@@ -138,17 +134,15 @@ function MainApp() {
   useEffect(() => {
     loadAllData();
 
-    // Executa sincronização com o servidor SQLite e Realtime apenas se estiver na loja física (localhost)
-    let cleanupRealtime = () => {};
-    if (isLocal) {
-      StorageService.syncWithServer().then(() => {
-        loadAllData();
-      });
+    // Sincroniza compulsoriamente com o servidor central SQLite e inicializa Realtime Sync em qualquer dispositivo (local ou rede)
+    StorageService.syncWithServer({ forceCleanSync: true }).then(() => {
+      loadAllData();
+    });
 
-      cleanupRealtime = initRealtimeSync(() => {
-        loadAllData();
-      });
-    }
+    const cleanupRealtime = initRealtimeSync(() => {
+      loadAllData();
+    });
+
     const handleDataEvent = () => {
       loadAllData();
     };
@@ -161,16 +155,22 @@ function MainApp() {
     window.addEventListener('production-updated', handleDataEvent);
     window.addEventListener('storage-sync-completed', handleDataEvent);
 
-   // Keep data fresh when window gets focus
+    // Keep data fresh when window gets focus
     const handleFocus = () => {
-      if (isLocal) {
-        StorageService.syncWithServer().then(() => {
-          loadAllData();
-        });
-      }
+      StorageService.syncWithServer().then(() => {
+        loadAllData();
+      });
+    };
+
+    // Re-sync with server when network reconnects
+    const handleOnline = () => {
+      StorageService.syncWithServer({ forceCleanSync: true }).then(() => {
+        loadAllData();
+      });
     };
 
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
 
     return () => {
       cleanupRealtime();
@@ -182,8 +182,16 @@ function MainApp() {
       window.removeEventListener('production-updated', handleDataEvent);
       window.removeEventListener('storage-sync-completed', handleDataEvent);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
     };
   }, [loadAllData]);
+
+  // Recarrega todos os dados quando o status de autenticação mudar
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAllData();
+    }
+  }, [isAuthenticated, loadAllData]);
 
   // Read URL query params on mount
   useEffect(() => {
@@ -293,9 +301,9 @@ function MainApp() {
     return (
       <div className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased selection:bg-blue-500 selection:text-white px-3 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto">
         <PublicCatalogView
-          items={isLocal ? items : []}
-          categories={isLocal ? categories : []}
-          companySettings={isLocal ? companySettings : undefined}
+          items={items}
+          categories={categories}
+          companySettings={companySettings}
           onOpenManagement={() => setCurrentView('login')}
           isStandalone={true}
         />

@@ -1,15 +1,8 @@
 import {
   Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  CreditCard,
   DollarSign,
   Download,
-  FileSpreadsheet,
-  FileText,
   Filter,
-  Layers,
   Percent,
   Printer,
   Receipt,
@@ -17,9 +10,7 @@ import {
   Shield,
   TrendingUp,
   UserCheck,
-  User as UserIcon,
   Users,
-  X,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
