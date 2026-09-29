@@ -2,22 +2,17 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
-  Clock,
-  HelpCircle,
   Mail,
   Package,
   Phone,
   Send,
-  Sparkles,
   User,
   AlertTriangle,
-  FileText,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { StorageService } from '../../services/storage';
 import {
   CaptureFormConfig,
-  CaptureFormField,
   CompanySettings,
   Opportunity,
   ProductPackage,

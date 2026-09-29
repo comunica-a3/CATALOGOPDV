@@ -1,13 +1,8 @@
 import {
-  ArrowRight,
-  Building2,
-  Calendar,
-  Check,
   CheckCircle2,
   Clock,
   Copy,
   Edit,
-  ExternalLink,
   Globe,
   Layers,
   MapPin,
@@ -17,12 +12,8 @@ import {
   Plus,
   Send,
   Sparkles,
-  Tag,
   Trash2,
-  User,
   UserCheck,
-  UserPlus,
-  X,
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -32,11 +23,10 @@ import {
   CompanySettings,
   Opportunity,
   OpportunityActivity,
-  OpportunityNextActionType,
   OpportunityStage,
   ProductPackage,
 } from '../../types';
-import { formatCurrency, formatPhone } from '../../utils/formatters';
+import { formatPhone } from '../../utils/formatters';
 import { openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';

@@ -249,6 +249,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(true);
         setMustChangePassword(!!apiRes.mustChangePassword);
 
+        // Forçar sincronização limpa compulsoriamente com o servidor SQLite central após login
+        try {
+          await StorageService.syncWithServer({ forceCleanSync: true });
+        } catch (syncErr) {
+          console.warn('Sync limpo pós-login notice:', syncErr);
+        }
+
         // Sync users in background
         api.getUsers().then((freshUsers) => {
           if (Array.isArray(freshUsers) && freshUsers.length > 0) {

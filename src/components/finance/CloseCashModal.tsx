@@ -1,18 +1,9 @@
 import {
   AlertCircle,
   AlertTriangle,
-  Building2,
-  Check,
   CheckCircle2,
-  Clock,
-  Coins,
-  CreditCard,
   DollarSign,
   Lock,
-  QrCode,
-  Receipt,
-  User,
-  Wallet,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';

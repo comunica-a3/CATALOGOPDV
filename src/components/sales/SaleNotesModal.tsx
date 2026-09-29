@@ -1,9 +1,7 @@
 import {
   AlertCircle,
   Clock,
-  FileText,
   MessageSquare,
-  Plus,
   Send,
   StickyNote,
   User as UserIcon,

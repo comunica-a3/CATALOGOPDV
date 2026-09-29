@@ -1,38 +1,23 @@
 import {
-  AlertCircle,
-  AlertTriangle,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  Award,
   BarChart3,
-  Boxes,
-  Building2,
   Calendar,
-  CheckCircle2,
   ChevronRight,
   Clock,
   CreditCard,
   DollarSign,
   Download,
-  Eye,
-  FileSpreadsheet,
-  FileText,
   Filter,
   Layers,
   Package,
   Percent,
-  PieChart as PieChartIcon,
-  Printer,
   Receipt,
-  RotateCcw,
   ShoppingBag,
-  TrendingDown,
   TrendingUp,
-  Truck,
   UserCheck,
   Users,
-  Wallet,
   XCircle,
   Zap,
 } from 'lucide-react';
@@ -44,7 +29,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -54,8 +38,8 @@ import {
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
-import { Category, CompanySettings, Customer, Item, ProductionOrder, Sale } from '../../types';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { Category, CompanySettings, Item, ProductionOrder, Sale } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
 
 export type DashboardPeriod =

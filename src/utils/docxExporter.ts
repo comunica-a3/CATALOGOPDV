@@ -3,16 +3,11 @@ import {
   BorderStyle,
   Document,
   HeadingLevel,
-  HeightRule,
   Packer,
   Paragraph,
   ShadingType,
-  Table,
-  TableCell,
-  TableRow,
   TextRun,
   UnderlineType,
-  WidthType,
 } from 'docx';
 
 /**

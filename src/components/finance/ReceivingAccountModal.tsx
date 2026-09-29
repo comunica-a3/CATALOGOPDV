@@ -1,4 +1,4 @@
-import { AlertCircle, Building2, Check, CreditCard, DollarSign, QrCode, X } from 'lucide-react';
+import { AlertCircle, Building2, Check, CreditCard, DollarSign, QrCode } from 'lucide-react';
 import React, { useState } from 'react';
 import { AccountType, ReceivingAccount } from '../../types';
 import { Modal } from '../common/Modal';

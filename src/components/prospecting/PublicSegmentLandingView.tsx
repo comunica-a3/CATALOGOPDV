@@ -3,12 +3,9 @@ import {
   CheckCircle2,
   ChevronRight,
   MessageCircle,
-  Package,
   Phone,
   Send,
   Sparkles,
-  Star,
-  Users,
   AlertTriangle,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';

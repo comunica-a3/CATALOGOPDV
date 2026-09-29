@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
   AlertCircle,
-  CheckCircle2,
   DollarSign,
   History,
   Info,
@@ -11,7 +10,6 @@ import {
   Trash2,
   User as UserIcon,
   X,
-  Calendar,
 } from 'lucide-react';
 import { StorageService } from '../../services/storage';
 import {

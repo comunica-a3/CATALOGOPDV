@@ -4,12 +4,10 @@ import {
   ExternalLink,
   FolderOpen,
   HardDrive,
-  Image as ImageIcon,
   Loader2,
   LogOut,
   RefreshCw,
   Search,
-  UploadCloud,
   X,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';

@@ -9,8 +9,6 @@ import {
   Github,
   ShieldCheck,
   Check,
-  X,
-  HelpCircle,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { Modal } from '../common/Modal';

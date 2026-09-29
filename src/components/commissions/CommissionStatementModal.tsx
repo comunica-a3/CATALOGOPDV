@@ -1,18 +1,8 @@
-import {
-  Calendar,
-  CheckCircle2,
-  DollarSign,
-  Download,
-  FileSpreadsheet,
-  Percent,
-  ShieldCheck,
-  User as UserIcon,
-  X,
-} from 'lucide-react';
+import { Download } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { CompanySettings, Sale, User } from '../../types';
 import { calculateSaleCommission } from '../../utils/commissions';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
 import { downloadCommissionStatementPDF } from '../../utils/pdfReceipt';
 import { Modal } from '../common/Modal';
 

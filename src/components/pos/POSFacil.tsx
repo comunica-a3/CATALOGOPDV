@@ -1,41 +1,22 @@
 import {
   AlertCircle,
-  ArrowRight,
-  Barcode,
-  Boxes,
-  Calendar,
   Check,
   CheckCircle2,
-  ChevronDown,
-  Clock,
   Coins,
   CornerDownLeft,
   CreditCard,
-  DollarSign,
-  Edit2,
   FileText,
-  HelpCircle,
-  Info,
   Keyboard,
-  Layers,
   Minus,
-  Package,
   Percent,
   Plus,
   QrCode,
-  RotateCcw,
   Search,
   ShoppingBag,
   ShoppingCart,
-  Sparkles,
   Tag,
   Trash2,
-  TrendingUp,
   User,
-  UserCheck,
-  UserPlus,
-  Users,
-  Wallet,
   X,
   XCircle,
   Zap,
@@ -49,7 +30,6 @@ import {
   CompanySettings,
   Customer,
   Item,
-  ItemType,
   PaymentRecord,
   PaymentStatus,
   ProductionOrder,
@@ -692,6 +672,7 @@ export const POSFacil: React.FC<POSFacilProps> = ({
     isReceiptModalOpen,
     isDiscountModalOpen,
     isShortcutsModalOpen,
+    isPixQrModalOpen,
     configItem,
     isOpenCashModalOpen,
     handleAddItemToCart,
@@ -1180,6 +1161,12 @@ export const POSFacil: React.FC<POSFacilProps> = ({
                   setSelectedPaymentMethod('PIX');
                   setIsPixQrModalOpen(true);
                 }}
+                title="Clique para selecionar PIX • Duplo clique para ver QR Code"
+                className={`p-2.5 rounded-xl border font-bold flex items-center justify-between transition-all cursor-pointer ${
+                  selectedPaymentMethod === 'PIX'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-200'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <QrCode className="w-4 h-4" />

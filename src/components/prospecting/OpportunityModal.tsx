@@ -1,19 +1,9 @@
 import {
   Building2,
   Calendar,
-  Clock,
-  HelpCircle,
   Layers,
-  MapPin,
-  MessageCircle,
-  Package,
-  Phone,
-  Plus,
   Sparkles,
-  Tag,
   User,
-  UserCheck,
-  X,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -26,7 +16,7 @@ import {
   ProductPackage,
   User as UserType,
 } from '../../types';
-import { extractPhoneDigits, formatPhone, isValidPhone } from '../../utils/formatters';
+import { formatPhone, isValidPhone } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
 import { PhoneInput } from '../common/PhoneInput';
 

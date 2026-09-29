@@ -1,8 +1,8 @@
-import { AlertCircle, Check, Phone, UserCheck, UserPlus } from 'lucide-react';
+import { AlertCircle, Check, Phone, UserCheck } from 'lucide-react';
 import React, { useState } from 'react';
 import { StorageService } from '../../services/storage';
 import { Customer } from '../../types';
-import { extractPhoneDigits, formatPhone, isValidPhone, maskPhone } from '../../utils/formatters';
+import { extractPhoneDigits, formatPhone, isValidPhone } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
 import { PhoneInput } from '../common/PhoneInput';
 

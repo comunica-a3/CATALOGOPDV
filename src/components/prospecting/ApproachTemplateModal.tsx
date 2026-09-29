@@ -1,13 +1,4 @@
-import {
-  Copy,
-  Layers,
-  MessageCircle,
-  Plus,
-  Sparkles,
-  Tag,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { StorageService } from '../../services/storage';
 import { ApproachMessageTemplate, OpportunityStage } from '../../types';
