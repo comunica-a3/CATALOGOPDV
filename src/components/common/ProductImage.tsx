@@ -1,4 +1,4 @@
-import { Boxes, CloudOff, FileCode, HardDrive, Layers, Package } from 'lucide-react';
+import { AlertTriangle, Boxes, CloudOff, FileCode, HardDrive, Layers, Package, Sparkles, Tag } from 'lucide-react';
 import React, { useState } from 'react';
 import { ItemType } from '../../types';
 

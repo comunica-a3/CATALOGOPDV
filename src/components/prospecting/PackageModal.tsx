@@ -1,8 +1,13 @@
 import {
+  Layers,
   Minus,
   Package,
   Plus,
+  PlusCircle,
+  Search,
+  Tag,
   Trash2,
+  X,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { StorageService } from '../../services/storage';

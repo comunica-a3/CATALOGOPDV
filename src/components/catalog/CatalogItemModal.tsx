@@ -2,12 +2,16 @@ import {
   AlertCircle,
   Calculator,
   Check,
+  CheckCircle2,
+  FileCode,
   MessageCircle,
   Package,
+  ShoppingBag,
   ShoppingCart,
+  Store,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import { CompanySettings, Item, ItemPriceRule, VitrineCartItem } from '../../types';
+import { CompanySettings, Item, ItemPackage, ItemPriceRule, VitrineCartItem } from '../../types';
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';

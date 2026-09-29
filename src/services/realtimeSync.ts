@@ -14,14 +14,6 @@ class RealtimeSyncManager {
 
   constructor() {
     this.setupBroadcastChannel();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => {
-        if (this.callbacks.size > 0) {
-          this.ensureConnection();
-          StorageService.syncWithServer({ forceCleanSync: true }).catch(() => {});
-        }
-      });
-    }
   }
 
   private setupBroadcastChannel() {
@@ -58,11 +50,7 @@ class RealtimeSyncManager {
 
     this.isConnecting = true;
     try {
-      const currentOrigin = (typeof window !== 'undefined' && window.location?.origin)
-        ? window.location.origin.replace(/\/+$/, '')
-        : '';
-      const syncUrl = currentOrigin ? `${currentOrigin}/api/sync/events` : '/api/sync/events';
-      this.eventSource = new EventSource(syncUrl);
+      this.eventSource = new EventSource('/api/sync/events');
 
       this.eventSource.onopen = () => {
         this.isConnecting = false;
@@ -149,7 +137,7 @@ class RealtimeSyncManager {
       this.isSyncing = true;
 
       try {
-        await StorageService.syncWithServer({ forceCleanSync: true });
+        await StorageService.syncWithServer();
       } catch (err) {
         console.debug('Background sync update error:', err);
       } finally {

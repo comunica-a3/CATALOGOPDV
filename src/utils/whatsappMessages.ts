@@ -1,5 +1,5 @@
 import { formatCurrency, formatWhatsAppLink } from './formatters';
-import { Budget, Opportunity } from '../types';
+import { Budget, CompanySettings, Item, Opportunity, ProductionOrder, Sale } from '../types';
 
 /**
  * Centralized WhatsApp message templates and builders.
@@ -34,7 +34,7 @@ export function buildReceiptWhatsAppMessage(params: ReceiptWhatsAppParams): stri
 
 // --- 2. ORÇAMENTOS (Budgets) ---
 
-export function buildBudgetWhatsAppMessage(budget: Budget, companyName?: string): string {
+export function buildBudgetWhatsAppMessage(budget: Budget, companyName: string): string {
   let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${budget.budgetNumber}*:\n`;
   msg += `*Emitido:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
   msg += `*Validade:* ${new Date(budget.validUntil).toLocaleDateString('pt-BR')}\n\n`;
@@ -44,11 +44,11 @@ export function buildBudgetWhatsAppMessage(budget: Budget, companyName?: string)
     msg += `${index + 1}. ${itemName} (Qtd: ${item.quantity}) - ${formatCurrency(item.totalPrice)}\n`;
   });
 
-  msg += `\n*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\nPodemos confirmar o seu pedido?${companyName ? `\n_${companyName}_` : ''}`;
+  msg += `\n*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\nPodemos confirmar o seu pedido?`;
   return msg;
 }
 
-export function buildDetailedBudgetWhatsAppMessage(budget: Budget, companyName?: string): string {
+export function buildDetailedBudgetWhatsAppMessage(budget: Budget, companyName: string): string {
   let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\n`;
   msg += `Segue a proposta detalhada *Orçamento #${budget.budgetNumber}*:\n\n`;
   msg += `*Data de Emissão:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
@@ -152,8 +152,8 @@ export function buildSaleProductionTrackingWhatsAppMessage(params: {
 
 // --- 4. CATÁLOGO DIGITAL E ITENS ---
 
-export function buildCatalogGeneralAttendanceMessage(companyName?: string): string {
-  return `Olá${companyName ? ` ${companyName}` : ''}! Estava navegando no catálogo e gostaria de solicitar um atendimento!`;
+export function buildCatalogGeneralAttendanceMessage(companyName: string): string {
+  return `Olá! Estava navegando no catálogo e gostaria de solicitar um atendimento!`;
 }
 
 export function buildCatalogItemInterestMessage(itemName: string): string {

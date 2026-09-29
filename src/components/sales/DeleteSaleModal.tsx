@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, Trash2, Package, XCircle } from 'lucide-react';
 import { Sale } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { Modal } from '../common/Modal';

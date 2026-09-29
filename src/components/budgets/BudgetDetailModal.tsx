@@ -1,8 +1,21 @@
 import {
+  Calendar,
+  Check,
+  CheckCircle2,
+  Clock,
   CreditCard,
   Download,
   Edit,
+  FileSpreadsheet,
+  FileText,
+  Mail,
+  MapPin,
   MessageCircle,
+  Phone,
+  ShoppingBag,
+  Sparkles,
+  User,
+  XCircle,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { Budget, CompanySettings } from '../../types';

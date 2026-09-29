@@ -1,4 +1,4 @@
-import { ItemType, ItemTypeCommissionRates, Sale, User } from '../types';
+import { Item, ItemType, ItemTypeCommissionRates, Sale, SaleItem, User } from '../types';
 
 export const DEFAULT_COMMISSION_RATES: ItemTypeCommissionRates = {
   PRODUTO_GRAFICO: 10,

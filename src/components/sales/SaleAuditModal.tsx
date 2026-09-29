@@ -1,5 +1,5 @@
 import React from 'react';
-import { History, AlertTriangle, ShieldCheck, FileText } from 'lucide-react';
+import { Clock, History, AlertTriangle, ShieldCheck, User as UserIcon, FileText } from 'lucide-react';
 import { Sale } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
