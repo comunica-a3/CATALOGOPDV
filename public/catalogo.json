@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-29T17:36:29.460Z",
+  "exportedAt": "2026-09-30T11:50:44.273Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -303,7 +303,7 @@
       "areaPricing": {
         "salePricePerM2": 114,
         "minAreaM2": 0.1501,
-        "minSalePrice": 56
+        "minSalePrice": 20
       },
       "options": [
         {
