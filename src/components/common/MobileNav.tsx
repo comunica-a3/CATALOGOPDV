@@ -4,6 +4,7 @@ import {
   CreditCard,
   DollarSign,
   FileEdit,
+  FileSpreadsheet,
   FileText,
   Package,
   Percent,

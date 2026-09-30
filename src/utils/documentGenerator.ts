@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { DocumentField } from '../types';
+import { DocumentField, DocumentTemplate } from '../types';
 
 /**
  * Fills template placeholders with form data.

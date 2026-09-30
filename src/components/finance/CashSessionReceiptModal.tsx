@@ -1,4 +1,18 @@
-import { Download } from 'lucide-react';
+import {
+  AlertCircle,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Coins,
+  CreditCard,
+  DollarSign,
+  Download,
+  QrCode,
+  User,
+  Wallet,
+  X,
+} from 'lucide-react';
 import React, { useRef, useState } from 'react';
 import { CashRegisterSession, CompanySettings } from '../../types';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';

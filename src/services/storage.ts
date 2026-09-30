@@ -33,6 +33,7 @@ import {
   Budget,
   BudgetStatus,
   CaptureFormConfig,
+  CaptureFormField,
   CartItem,
   CashRegisterSession,
   Category,
@@ -51,6 +52,7 @@ import {
   Opportunity,
   OpportunityActivity,
   OpportunityActivityType,
+  OpportunityNextAction,
   OpportunityOrigin,
   OpportunityStage,
   PaymentRecord,
@@ -350,7 +352,7 @@ export class StorageService {
     } catch {}
   }
 
-  static async syncWithServer(options?: { forceCleanSync?: boolean }): Promise<void> {
+  static async syncWithServer(): Promise<void> {
     try {
       const [
         settingsRes,
@@ -396,64 +398,119 @@ export class StorageService {
 
       if (settingsRes.status === 'fulfilled' && settingsRes.value) {
         setItemToStorage(STORAGE_KEYS.SETTINGS, settingsRes.value);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('settings-updated', { detail: settingsRes.value }));
-        }
       }
-
       if (usersRes.status === 'fulfilled' && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
         setItemToStorage(STORAGE_KEYS.USERS, usersRes.value);
       }
-
-      // Robust Customers Sync (Server is authoritative source of truth)
       if (customersRes.status === 'fulfilled' && Array.isArray(customersRes.value)) {
-        setItemToStorage(STORAGE_KEYS.CUSTOMERS, customersRes.value);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('customers-updated'));
+        const localCustomers = this.getCustomers();
+        const remoteCustomers = customersRes.value;
+        const custMap = new Map<string, Customer>();
+        for (const lc of localCustomers) custMap.set(lc.id, lc);
+        for (const rc of remoteCustomers) {
+          const lc = custMap.get(rc.id);
+          if (lc) {
+            const lTime = new Date((lc as any).updatedAt || (lc as any).createdAt || 0).getTime();
+            const rTime = new Date((rc as any).updatedAt || (rc as any).createdAt || 0).getTime();
+            if (lTime > rTime) {
+              custMap.set(lc.id, lc);
+            } else {
+              custMap.set(rc.id, rc);
+            }
+          } else {
+            custMap.set(rc.id, rc);
+          }
+        }
+        const mergedCustomers = Array.from(custMap.values());
+        if (mergedCustomers.length > 0 || localCustomers.length === 0) {
+          setItemToStorage(STORAGE_KEYS.CUSTOMERS, mergedCustomers);
         }
       }
 
       // Robust Items Sync with Server Database Authority & Image Protection
       if (itemsRes.status === 'fulfilled' && Array.isArray(itemsRes.value)) {
         const localItems = this.getItems();
+        const deletedIds = this.getDeletedItemIds();
         const remoteItems = itemsRes.value;
         const localMap = new Map<string, Item>(localItems.map((i) => [i.id, i]));
+        const mergedMap = new Map<string, Item>();
+        const itemsToPushToRemote: Item[] = [];
 
-        // Process remote items from the server database (authoritative source)
-        // Removes stale/old local items that were deleted on the server
-        const finalItems: Item[] = remoteItems.map((remoteItem) => {
+        // 1. Process remote items from the server database (authoritative source)
+        for (const remoteItem of remoteItems) {
+          if (deletedIds.has(remoteItem.id)) {
+            // Already deleted locally, ensure deletion propagated to server
+            api.deleteItem(remoteItem.id).catch(() => {});
+            continue;
+          }
+
           const localMatch = localMap.get(remoteItem.id);
           const localHasImage = !!(localMatch?.imageUrl && localMatch.imageUrl.trim() !== '');
           const remoteHasImage = !!(remoteItem.imageUrl && remoteItem.imageUrl.trim() !== '');
 
+          // If local item has custom image not yet uploaded to server, preserve it
           if (localMatch && localHasImage && !remoteHasImage) {
-            return {
+            const mergedWithImage: Item = {
               ...remoteItem,
               imageUrl: localMatch.imageUrl,
+              updatedAt: new Date().toISOString(),
             };
+            mergedMap.set(mergedWithImage.id, mergedWithImage);
+            itemsToPushToRemote.push(mergedWithImage);
+          } else {
+            // Remote item from server is authoritative for showInCatalog, prices, stock, etc.
+            mergedMap.set(remoteItem.id, remoteItem);
           }
-          return remoteItem;
-        });
+        }
 
-        setItemToStorage(STORAGE_KEYS.ITEMS, finalItems);
+        // 2. Check for any locally created items not yet on remote database
+        for (const localItem of localItems) {
+          if (!deletedIds.has(localItem.id) && !remoteItems.some((r: any) => r.id === localItem.id)) {
+            itemsToPushToRemote.push(localItem);
+            mergedMap.set(localItem.id, localItem);
+          }
+        }
 
-        try {
-          localStorage.removeItem('pdv_deleted_item_ids');
-        } catch {}
+        const finalItems = Array.from(mergedMap.values());
+        if (finalItems.length > 0 || localItems.length === 0) {
+          setItemToStorage(STORAGE_KEYS.ITEMS, finalItems);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('items-updated'));
+            window.dispatchEvent(new CustomEvent('catalog-updated'));
+          }
+        }
 
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('items-updated'));
-          window.dispatchEvent(new CustomEvent('catalog-updated'));
+        // Push pending local updates to server and store server-assigned URLs
+        if (itemsToPushToRemote.length > 0) {
+          api.saveItemsBatch(itemsToPushToRemote)
+            .then((res: any) => {
+              if (res && res.items && Array.isArray(res.items)) {
+                const currentItems = this.getItems();
+                const itemMap = new Map(currentItems.map((i) => [i.id, i]));
+                for (const updated of res.items) {
+                  itemMap.set(updated.id, updated);
+                }
+                setItemToStorage(STORAGE_KEYS.ITEMS, Array.from(itemMap.values()));
+              }
+            })
+            .catch((e) => console.debug('Sync push items batch notice:', e));
         }
       }
 
       // Robust Categories Sync (Server Authority)
       if (categoriesRes.status === 'fulfilled' && Array.isArray(categoriesRes.value)) {
         const remoteCategories = categoriesRes.value;
-        setItemToStorage(STORAGE_KEYS.CATEGORIES, remoteCategories);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('categories-updated'));
-          window.dispatchEvent(new CustomEvent('catalog-updated'));
+        if (remoteCategories.length > 0) {
+          setItemToStorage(STORAGE_KEYS.CATEGORIES, remoteCategories);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('categories-updated'));
+            window.dispatchEvent(new CustomEvent('catalog-updated'));
+          }
+        } else {
+          const localCategories = this.getCategories();
+          if (localCategories.length > 0) {
+            api.saveCategoriesBatch(localCategories).catch(() => {});
+          }
         }
       }
 
@@ -462,29 +519,30 @@ export class StorageService {
         const remoteSeps = separationsRes.value.filter(
           (s: any) => s.id !== 'PRODUTO_PERSONALIZADO' && s.description !== 'Brindes, canecas, camisetas e produtos personalizados'
         );
-        setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, remoteSeps);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('product-separations-updated'));
-          window.dispatchEvent(new CustomEvent('catalog-updated'));
+        if (remoteSeps.length > 0) {
+          setItemToStorage(STORAGE_KEYS.PRODUCT_SEPARATIONS, remoteSeps);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('product-separations-updated'));
+            window.dispatchEvent(new CustomEvent('catalog-updated'));
+          }
         }
       }
 
       // Robust Document Templates Sync (Server Authority)
       if (docTemplatesRes.status === 'fulfilled' && Array.isArray(docTemplatesRes.value)) {
         const remoteTemplates = docTemplatesRes.value;
-        this.saveDocumentTemplates(remoteTemplates);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('document-templates-updated', { detail: remoteTemplates }));
+        if (remoteTemplates.length > 0) {
+          this.saveDocumentTemplates(remoteTemplates);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('document-templates-updated', { detail: remoteTemplates }));
+          }
         }
       }
 
-      // Robust Sales Sync (Server is authoritative)
       if (salesRes.status === 'fulfilled' && Array.isArray(salesRes.value)) {
         const localSales = this.getSales();
-        const localMap = new Map<string, Sale>(localSales.map((ls) => [ls.id, ls]));
-
         const mergedSales = salesRes.value.map((remoteSale: any) => {
-          const localMatch = localMap.get(remoteSale.id);
+          const localMatch = localSales.find((ls) => ls.id === remoteSale.id);
           const saleNumber =
             (localMatch?.saleNumber && !String(localMatch.saleNumber).includes('NaN'))
               ? localMatch.saleNumber
@@ -547,6 +605,10 @@ export class StorageService {
           const localPaymentsCount = Array.isArray(localMatch.payments) ? localMatch.payments.length : 0;
           const remotePaymentsCount = Array.isArray(remoteSale.payments) ? remoteSale.payments.length : 0;
 
+          // Local has authoritative payment if:
+          // 1. Local is marked PAGO with 0 remaining, OR
+          // 2. Local has higher paidAmount or more payment records, OR
+          // 3. Local updatedAt is newer than remote
           const localHasNewerPayment =
             (localMatch.paymentStatus === 'PAGO' && localMatch.remainingAmount <= 0) ||
             localPaid > remotePaid ||
@@ -554,6 +616,7 @@ export class StorageService {
             localTime > remoteTime;
 
           if (localHasNewerPayment) {
+            // Local state has the latest payment/update. Proactively sync it to backend.
             api.saveSale(localMatch).catch(() => {});
             return {
               ...remoteSale,
@@ -569,11 +632,8 @@ export class StorageService {
             };
           }
 
-          const remainingAmount = Number(
-            remoteSale.remainingAmount !== undefined
-              ? remoteSale.remainingAmount
-              : Math.max(0, remoteSale.total - remotePaid)
-          );
+          // Remote has newer or equal state
+          const remainingAmount = Number(remoteSale.remainingAmount !== undefined ? remoteSale.remainingAmount : Math.max(0, remoteSale.total - remotePaid));
           let paymentStatus: PaymentStatus = remoteSale.paymentStatus as PaymentStatus;
           if (remainingAmount <= 0) {
             paymentStatus = 'PAGO';
@@ -593,117 +653,245 @@ export class StorageService {
             remainingAmount,
             paymentStatus,
             paymentMethod: remoteSale.paymentMethod || localMatch.paymentMethod,
-            payments:
-              Array.isArray(remoteSale.payments) && remoteSale.payments.length > 0
-                ? remoteSale.payments
-                : localMatch.payments || [],
+            payments: Array.isArray(remoteSale.payments) && remoteSale.payments.length > 0 ? remoteSale.payments : localMatch.payments || [],
             status: (remoteSale.status || 'CONCLUIDA') as SaleStatus,
           };
         });
 
-        setItemToStorage(STORAGE_KEYS.SALES, mergedSales);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('sales-updated'));
+        // Preserve and sync any local sales not yet returned by the server
+        const remoteIds = new Set(salesRes.value.map((rs: any) => rs.id));
+        const unsyncedLocal = localSales.filter((ls) => !remoteIds.has(ls.id));
+        for (const unsynced of unsyncedLocal) {
+          api.saveSale(unsynced).catch(() => {});
         }
-      }
 
-      // Robust Budgets Sync
+        const finalSales = [...mergedSales, ...unsyncedLocal];
+        setItemToStorage(STORAGE_KEYS.SALES, finalSales);
+      }
       if (budgetsRes.status === 'fulfilled' && Array.isArray(budgetsRes.value)) {
         setItemToStorage(STORAGE_KEYS.BUDGETS, budgetsRes.value);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('budgets-updated'));
-        }
       }
-
-      // Robust Opportunities Sync
       if (oppsRes.status === 'fulfilled' && Array.isArray(oppsRes.value)) {
         const demoIds = ['opp-1', 'opp-2', 'opp-3', 'opp-4'];
-        const cleanRemote = oppsRes.value.filter(
-          (o: any) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo')
-        );
-        setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, cleanRemote);
+        const cleanRemote = oppsRes.value.filter((o: any) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'));
+        const localOpps = this.getOpportunities().filter((o) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'));
+        const remoteIds = new Set(cleanRemote.map((o: any) => o.id));
+        const unsyncedLocal = localOpps.filter((lo) => !remoteIds.has(lo.id));
+        for (const unsynced of unsyncedLocal) {
+          api.saveOpportunity(unsynced).catch(() => {});
+        }
+        const finalOpps = [...cleanRemote, ...unsyncedLocal];
+        setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, finalOpps);
       }
 
-      // Robust Approach Templates Sync
+      // Sincronização e persistência de Modelos de Abordagem no Servidor (Compartilhado em rede)
       if (templatesRes.status === 'fulfilled' && Array.isArray(templatesRes.value)) {
         const remoteTemplates = templatesRes.value;
+        const localTemplates = getItemFromStorage<ApproachMessageTemplate[]>(
+          STORAGE_KEYS.APPROACH_TEMPLATES,
+          INITIAL_APPROACH_TEMPLATES
+        );
         if (remoteTemplates.length > 0) {
-          setItemToStorage(STORAGE_KEYS.APPROACH_TEMPLATES, remoteTemplates);
+          const remoteIds = new Set(remoteTemplates.map((t: any) => t.id));
+          const missingOnServer = localTemplates.filter((t) => !remoteIds.has(t.id));
+          for (const tpl of missingOnServer) {
+            api.saveApproachTemplate(tpl).catch(() => {});
+          }
+          const merged = [...remoteTemplates, ...missingOnServer];
+          setItemToStorage(STORAGE_KEYS.APPROACH_TEMPLATES, merged);
+        } else if (localTemplates.length > 0) {
+          for (const tpl of localTemplates) {
+            api.saveApproachTemplate(tpl).catch(() => {});
+          }
         }
       }
 
-      // Robust Opportunity Activities Sync
+      // Sincronização e persistência de Ações Executadas / Atividades no Servidor (Compartilhado em rede)
       if (activitiesRes.status === 'fulfilled' && Array.isArray(activitiesRes.value)) {
         const remoteActivities = activitiesRes.value;
+        const localActivities = getItemFromStorage<OpportunityActivity[]>(
+          STORAGE_KEYS.OPPORTUNITY_ACTIVITIES,
+          []
+        );
         const demoIds = ['opp-1', 'opp-2', 'opp-3', 'opp-4'];
-        const cleanRemote = remoteActivities.filter(
-          (a: any) => !demoIds.includes(a.opportunityId) && !a.opportunityId?.startsWith('opp-demo')
-        );
-        const sorted = [...cleanRemote].sort(
-          (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
-        );
-        setItemToStorage(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, sorted);
+        const cleanRemote = remoteActivities.filter((a: any) => !demoIds.includes(a.opportunityId) && !a.opportunityId?.startsWith('opp-demo'));
+        const cleanLocal = localActivities.filter((a) => !demoIds.includes(a.opportunityId) && !a.opportunityId?.startsWith('opp-demo'));
+
+        if (cleanRemote.length > 0) {
+          const remoteIds = new Set(cleanRemote.map((a: any) => a.id));
+          const missingOnServer = cleanLocal.filter((a) => !remoteIds.has(a.id));
+          for (const act of missingOnServer) {
+            api.saveOpportunityActivity(act).catch(() => {});
+          }
+          const merged = [...cleanRemote, ...missingOnServer].sort(
+            (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, merged);
+        } else if (cleanLocal.length > 0) {
+          for (const act of cleanLocal) {
+            api.saveOpportunityActivity(act).catch(() => {});
+          }
+          setItemToStorage(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, cleanLocal);
+        }
       }
 
-      // Robust Receiving Accounts Sync
+      // 1. Sincronização e persistência de Contas no Servidor (Servidor como Fonte da Verdade)
       if (accountsRes.status === 'fulfilled' && Array.isArray(accountsRes.value)) {
-        setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, accountsRes.value);
+        const remoteAccounts = accountsRes.value;
+        const localAccounts = this.getReceivingAccounts();
+        if (remoteAccounts.length > 0) {
+          // Servidor possui contas: é a fonte da verdade
+          // Se existirem contas criadas localmente que ainda não foram enviadas, enviamos ao servidor
+          const remoteIds = new Set(remoteAccounts.map((a: any) => a.id));
+          const missingOnServer = localAccounts.filter((a) => !remoteIds.has(a.id));
+          for (const acc of missingOnServer) {
+            api.saveReceivingAccount(acc).catch(() => {});
+          }
+          setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, [...remoteAccounts, ...missingOnServer]);
+        } else if (localAccounts.length > 0) {
+          // Se o servidor estiver vazio (primeira migração), envia as contas existentes ao servidor
+          for (const acc of localAccounts) {
+            api.saveReceivingAccount(acc).catch(() => {});
+          }
+        }
       }
 
-      // Robust Financial Transfers Sync
+      // 2. Sincronização e persistência de Transferências Financeiras no Servidor
       if (transfersRes.status === 'fulfilled' && Array.isArray(transfersRes.value)) {
-        const sorted = [...transfersRes.value].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setItemToStorage(STORAGE_KEYS.FINANCIAL_TRANSFERS, sorted);
+        const remoteTransfers = transfersRes.value;
+        const localTransfers = this.getFinancialTransfers();
+        if (remoteTransfers.length > 0) {
+          const remoteIds = new Set(remoteTransfers.map((t: any) => t.id));
+          const missingOnServer = localTransfers.filter((t) => !remoteIds.has(t.id));
+          for (const trf of missingOnServer) {
+            api.saveFinancialTransfer(trf).catch(() => {});
+          }
+          const merged = [...remoteTransfers, ...missingOnServer].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.FINANCIAL_TRANSFERS, merged);
+        } else if (localTransfers.length > 0) {
+          for (const trf of localTransfers) {
+            api.saveFinancialTransfer(trf).catch(() => {});
+          }
+        }
       }
 
-      // Robust Cash Register Sessions Sync
+      // 3. Sincronização e persistência de Sessões de Caixa no Servidor (Caixa vinculado ao Vendedor)
       if (cashSessionsRes.status === 'fulfilled' && Array.isArray(cashSessionsRes.value)) {
-        const sorted = [...cashSessionsRes.value].sort(
-          (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
-        );
-        setItemToStorage(STORAGE_KEYS.CASH_REGISTER_SESSIONS, sorted);
+        const remoteSessions = cashSessionsRes.value;
+        const localSessions = this.getCashRegisterSessions();
+        if (remoteSessions.length > 0) {
+          const remoteIds = new Set(remoteSessions.map((s: any) => s.id));
+          const missingOnServer = localSessions.filter((s) => !remoteIds.has(s.id));
+          for (const sess of missingOnServer) {
+            api.saveCashRegisterSession(sess).catch(() => {});
+          }
+          const merged = [...remoteSessions, ...missingOnServer].sort(
+            (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.CASH_REGISTER_SESSIONS, merged);
+        } else if (localSessions.length > 0) {
+          for (const sess of localSessions) {
+            api.saveCashRegisterSession(sess).catch(() => {});
+          }
+        }
       }
 
-      // Robust Account Adjustments Sync
+      // 4. Sincronização de Ajustes de Saldo de Contas
       if (adjustmentsRes.status === 'fulfilled' && Array.isArray(adjustmentsRes.value)) {
-        const sorted = [...adjustmentsRes.value].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setItemToStorage(STORAGE_KEYS.ACCOUNT_BALANCE_ADJUSTMENTS, sorted);
+        const remoteAdjs = adjustmentsRes.value;
+        const localAdjs = this.getAccountBalanceAdjustments();
+        if (remoteAdjs.length > 0) {
+          const remoteIds = new Set(remoteAdjs.map((a: any) => a.id));
+          const missingOnServer = localAdjs.filter((a) => !remoteIds.has(a.id));
+          for (const adj of missingOnServer) {
+            api.saveAccountAdjustment(adj).catch(() => {});
+          }
+          const merged = [...remoteAdjs, ...missingOnServer].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.ACCOUNT_BALANCE_ADJUSTMENTS, merged);
+        } else if (localAdjs.length > 0) {
+          for (const adj of localAdjs) {
+            api.saveAccountAdjustment(adj).catch(() => {});
+          }
+        }
       }
 
-      // Robust Sale Annotations Sync
+      // 5. Sincronização de Anotações em Vendas
       if (saleAnnotationsRes.status === 'fulfilled' && Array.isArray(saleAnnotationsRes.value)) {
         setItemToStorage(STORAGE_KEYS.SALE_ANNOTATIONS, saleAnnotationsRes.value);
       }
 
-      // Robust Catalog Niches Sync
+      // 6. Sincronização de Nichos do Catálogo (Compartilhado entre todos os dispositivos)
       if (nichesRes.status === 'fulfilled' && Array.isArray(nichesRes.value)) {
         const remoteNiches = nichesRes.value;
-        const finalNiches = [...remoteNiches].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-        setItemToStorage(STORAGE_KEYS.CATALOG_NICHES, finalNiches);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('catalog-niches-updated'));
-          window.dispatchEvent(new CustomEvent('catalog-updated'));
+        if (remoteNiches.length > 0) {
+          const finalNiches = [...remoteNiches].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+          setItemToStorage(STORAGE_KEYS.CATALOG_NICHES, finalNiches);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('catalog-niches-updated'));
+            window.dispatchEvent(new CustomEvent('catalog-updated'));
+          }
+        } else {
+          // If server database is completely empty, populate it with local niches
+          const localNiches = this.getCatalogNiches();
+          if (localNiches.length > 0) {
+            api.saveCatalogNichesBatch(localNiches).catch((e) => console.debug('Sync push niches batch notice:', e));
+          }
         }
       }
 
-      // Robust Production Orders Sync
+      // 7. Sincronização de Ordens de Produção Gráfica (Compartilhado entre todos os dispositivos em tempo real)
       if (productionRes.status === 'fulfilled' && Array.isArray(productionRes.value)) {
+        const localOrders = this.getProductionOrders();
         const remoteOrders = productionRes.value as ProductionOrder[];
-        const finalOrders = [...remoteOrders].sort(
+        const orderMap = new Map<string, ProductionOrder>();
+        const ordersToPush: ProductionOrder[] = [];
+
+        // Inserir ordens locais no mapa
+        for (const lo of localOrders) {
+          orderMap.set(lo.id, lo);
+        }
+
+        // Mesclar ordens remotas do servidor
+        for (const ro of remoteOrders) {
+          const lo = orderMap.get(ro.id);
+          if (lo) {
+            const lTime = new Date(lo.updatedAt || lo.createdAt || 0).getTime();
+            const rTime = new Date(ro.updatedAt || ro.createdAt || 0).getTime();
+            if (lTime > rTime) {
+              orderMap.set(lo.id, lo);
+              ordersToPush.push(lo);
+            } else {
+              orderMap.set(ro.id, ro);
+            }
+          } else {
+            orderMap.set(ro.id, ro);
+          }
+        }
+
+        // Identificar ordens criadas localmente offline que o servidor ainda não tem
+        for (const lo of localOrders) {
+          if (!remoteOrders.some((ro) => ro.id === lo.id)) {
+            ordersToPush.push(lo);
+            orderMap.set(lo.id, lo);
+          }
+        }
+
+        const finalOrders = Array.from(orderMap.values()).sort(
           (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
         );
         setItemToStorage(STORAGE_KEYS.PRODUCTION, finalOrders);
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('production-updated'));
         }
-      }
 
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('storage-sync-completed'));
+        if (ordersToPush.length > 0) {
+          api.saveProductionOrdersBatch(ordersToPush).catch((e) => console.debug('Sync push production orders notice:', e));
+        }
       }
     } catch (err) {
       console.warn('StorageService syncWithServer notice:', err);
@@ -1359,6 +1547,8 @@ export class StorageService {
   static getItems(): Item[] {
     const items = getItemFromStorage(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
     const onlineServices = this.getOnlineServices();
+    const existingIds = new Set(items.map((i) => i.id));
+    const existingNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
     let hasChanges = false;
 
     // Normalize any previous cat-servicos-digitais to cat-servicos

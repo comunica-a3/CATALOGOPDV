@@ -1,4 +1,13 @@
-import { Plus, Search } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  Package,
+  Plus,
+  Search,
+  Sparkles,
+  Tag,
+  X,
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { StorageService } from '../../services/storage';
 import { CartItem, Item, ProductPackage } from '../../types';

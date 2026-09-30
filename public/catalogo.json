@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exportedAt": "2026-09-30T11:50:44.273Z",
+  "exportedAt": "2026-09-25T12:44:53.109Z",
   "company": {
     "name": "DUMORRO",
     "tradingName": "Digital Express Impressões e Serviços",
@@ -142,18 +142,23 @@
       "active": true
     },
     {
-      "id": "p",
-      "title": "Personalizados e Presentes",
-      "description": "Topo de bolo, etiquetas, caixas, etc...",
+      "id": "produtos-eletronicos",
+      "title": "Acessórios e Brinquedos",
+      "description": "Acessórios para celular e brinquedos em geral",
       "ctaText": "Ver produtos",
-      "imageUrl": "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&auto=format&fit=crop&q=80",
-      "badge": "Festas e aniversários",
-      "itemTypeMatch": "sep_personalizados_1789070149013",
+      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80",
+      "badge": "Eletrônicos & Acessórios",
+      "itemTypeMatch": "PRODUTO_FISICO",
       "categoryMatchKeywords": [
-        "topo de bolo",
-        "etiquetas",
-        "caixas",
-        "canecas"
+        "eletronico",
+        "acessorio",
+        "cabo",
+        "fone",
+        "carregador",
+        "celular",
+        "fisico",
+        "teclado",
+        "mouse"
       ],
       "order": 2,
       "active": true
@@ -180,23 +185,18 @@
       "active": true
     },
     {
-      "id": "produtos-eletronicos",
-      "title": "Acessórios e Brinquedos",
-      "description": "Acessórios para celular e brinquedos em geral",
+      "id": "p",
+      "title": "Personalizados e Presentes",
+      "description": "Topo de bolo, etiquetas, caixas, etc...",
       "ctaText": "Ver produtos",
-      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80",
-      "badge": "Eletrônicos & Acessórios",
-      "itemTypeMatch": "PRODUTO_FISICO",
+      "imageUrl": "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&auto=format&fit=crop&q=80",
+      "badge": "Festas e aniversários",
+      "itemTypeMatch": "sep_personalizados_1789070149013",
       "categoryMatchKeywords": [
-        "eletronico",
-        "acessorio",
-        "cabo",
-        "fone",
-        "carregador",
-        "celular",
-        "fisico",
-        "teclado",
-        "mouse"
+        "topo de bolo",
+        "etiquetas",
+        "caixas",
+        "canecas"
       ],
       "order": 4,
       "active": true
@@ -235,7 +235,7 @@
       "description": "Cabos do Tipo-C, Tipo V8 e para Iphone.",
       "salePrice": 20.99,
       "unit": "UN",
-      "stock": 19,
+      "stock": 20,
       "imageUrl": "https://drive.google.com/thumbnail?id=1F5EQ6_f-OTCs4N8Zbsxa77iy6-3CgWER&sz=w1200",
       "imageSource": "upload",
       "requiresFile": false,
@@ -303,7 +303,7 @@
       "areaPricing": {
         "salePricePerM2": 114,
         "minAreaM2": 0.1501,
-        "minSalePrice": 20
+        "minSalePrice": 56
       },
       "options": [
         {

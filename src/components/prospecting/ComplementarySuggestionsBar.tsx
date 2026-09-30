@@ -1,4 +1,4 @@
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles, TrendingUp } from 'lucide-react';
 import React from 'react';
 import { StorageService } from '../../services/storage';
 import { CartItem, Item } from '../../types';

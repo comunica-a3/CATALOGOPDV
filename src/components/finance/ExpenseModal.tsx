@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Tag, CreditCard, Building2, Info, ArrowDownCircle } from 'lucide-react';
+import { X, DollarSign, Calendar, Tag, CreditCard, Building2, Info, ArrowDownCircle } from 'lucide-react';
 import { Expense, ExpenseNature, ReceivingAccount } from '../../types';
 import { StorageService } from '../../services/storage';
 import { formatCurrency } from '../../utils/formatters';

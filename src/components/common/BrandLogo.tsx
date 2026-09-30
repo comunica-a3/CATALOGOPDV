@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HardDrive, Store } from 'lucide-react';
+import { HardDrive, ImageOff, Store } from 'lucide-react';
 import {
   extractGoogleDriveFileId,
   getGoogleDriveDisplayUrl,

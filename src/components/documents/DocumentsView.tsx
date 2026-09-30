@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Check,
+  ChevronRight,
   Copy,
   Download,
   Edit,
@@ -14,14 +15,18 @@ import {
   Layers,
   LayoutTemplate,
   Plus,
+  Printer,
+  RefreshCw,
   Save,
   Search,
+  Settings,
   ShoppingCart,
   Sparkles,
   ToggleLeft,
   ToggleRight,
   Trash2,
   User as UserIcon,
+  X,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -30,12 +35,14 @@ import { StorageService } from '../../services/storage';
 import {
   Customer,
   DocumentCategory,
+  DocumentField,
   DocumentTemplate,
   GeneratedDocument,
 } from '../../types';
 import {
   compileDocumentTemplate,
   downloadDocumentFile,
+  formatDocumentToHtml,
   normalizeTemplateFieldInstances,
 } from '../../utils/documentGenerator';
 import { downloadCustomDocumentPDF } from '../../utils/pdfReceipt';

@@ -11,11 +11,13 @@ import {
   Megaphone,
   Menu,
   PanelLeftClose,
+  PanelLeftOpen,
   Shield,
   ShieldCheck,
   ShoppingBag,
   Store,
   UserCheck,
+  User as UserIcon,
   Zap,
 } from 'lucide-react';
 import React, { useState } from 'react';

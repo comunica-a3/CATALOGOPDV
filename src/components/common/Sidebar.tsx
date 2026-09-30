@@ -1,16 +1,25 @@
 import {
   Boxes,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
+  CreditCard,
   DollarSign,
   FileEdit,
   FileSpreadsheet,
   FileText,
+  Flame,
+  Globe,
   Package,
   Percent,
   Settings,
+  ShoppingBag,
+  Store,
   Target,
   TrendingUp,
+  Truck,
   Users,
+  Zap,
 } from 'lucide-react';
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';

@@ -2,6 +2,7 @@ import {
   ArrowUpRight,
   Check,
   Edit2,
+  ExternalLink,
   Filter,
   Globe,
   Plus,

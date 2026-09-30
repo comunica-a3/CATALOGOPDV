@@ -1,26 +1,38 @@
 import {
   AlertCircle,
+  ArrowUpRight,
+  Calendar,
   CheckCircle2,
   Clock,
+  CreditCard,
   DollarSign,
   Download,
   Edit,
+  FileSpreadsheet,
+  Filter,
   History,
+  Layers,
   MessageCircle,
   MessageSquare,
   Percent,
+  Printer,
   Receipt,
   Search,
+  ShieldCheck,
   Trash2,
   TrendingUp,
+  User,
+  Users,
   Wallet,
   XCircle,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
-import { CompanySettings, Sale } from '../../types';
+import { CompanySettings, PaymentStatus, Sale } from '../../types';
+import { calculateSaleCommission } from '../../utils/commissions';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { downloadOrderReceiptPDF } from '../../utils/pdfReceipt';
 import { buildSaleProductionTrackingWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -48,7 +60,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const { isAdmin, currentUser, canEditCompletedSales, canDeleteCompletedSales } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
-  const [showDeletedSales] = useState(false);
+  const [showDeletedSales, setShowDeletedSales] = useState(false);
 
   // Modals
   const [receiptSale, setReceiptSale] = useState<Sale | null>(null);

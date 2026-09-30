@@ -2,6 +2,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Download,
   FileCheck,
@@ -30,6 +31,7 @@ import {
   generateProductImportTemplateXLSX,
   ImportValidationResult,
   parseImportFile,
+  ValidatedImportItem,
   validateImportedRows,
 } from '../../utils/productImport';
 import { Badge } from '../common/Badge';

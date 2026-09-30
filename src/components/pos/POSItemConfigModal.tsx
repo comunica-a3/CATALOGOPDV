@@ -1,8 +1,13 @@
 import {
   AlertCircle,
   Calculator,
+  Check,
   FileCode,
+  Info,
   Layers,
+  Package,
+  Plus,
+  Ruler,
   ShoppingBag,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
@@ -11,7 +16,10 @@ import {
   CartItem,
   CartItemConfiguration,
   Item,
+  ItemOption,
+  ItemPackage,
   ItemPriceRule,
+  ItemVariant,
 } from '../../types';
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
