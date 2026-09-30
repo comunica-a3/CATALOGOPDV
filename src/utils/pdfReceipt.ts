@@ -100,25 +100,30 @@ function generateA4Receipt(
   };
 
   // 1. CABEÇALHO
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(companySettings.name || 'Gráfica Digital Express', margin, currentY);
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(16);
+doc.setTextColor(15, 23, 42);
+doc.text(companySettings.name || 'Gráfica Digital Express', margin, currentY);
+currentY += 5;
+
+if (companySettings.email || companySettings.phone) {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  const topContact = [companySettings.phone, companySettings.email].filter(Boolean).join('  •  ');
+  doc.text(topContact, margin, currentY);
   currentY += 5;
+}
 
-  if (companySettings.email || companySettings.phone) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139); // slate-500
-    const topContact = [companySettings.phone, companySettings.email].filter(Boolean).join('  •  ');
-    doc.text(topContact, margin, currentY);
-    currentY += 5;
-  }
+doc.setFont('helvetica', 'normal');
+doc.setFontSize(9);
+doc.setTextColor(100, 116, 139);
+doc.text('www.dumorro.com', margin, currentY);
+currentY += 5;
 
-  currentY += 2;
-  drawDivider(currentY, [203, 213, 225]);
-  currentY += 7;
-
+currentY += 2;
+drawDivider(currentY, [203, 213, 225]);
+currentY += 7;
   // Destaque do Pedido
   const totalItemCount = sale.items.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -978,21 +983,26 @@ export function downloadBudgetPDF(
   doc.text(companySettings.name || 'Gráfica Digital', margin, currentY);
   currentY += 5;
 
-  if (companySettings.phone || companySettings.email) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    const info = [
-      companySettings.phone,
-      companySettings.email,
-      companySettings.city ? `${companySettings.city}/${companySettings.state}` : '',
-      'www.dumorro.com'
-    ]
-      .filter(Boolean)
-      .join('  •  ');
-    doc.text(info, margin, currentY);
-    currentY += 5;
-  }
+if (companySettings.phone || companySettings.email) {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+
+  const info = [
+    companySettings.phone,
+    companySettings.email,
+    companySettings.city ? `${companySettings.city}/${companySettings.state}` : ''
+  ]
+    .filter(Boolean)
+    .join('  •  ');
+
+  doc.text(info, margin, currentY);
+  currentY += 5;
+
+  // Adiciona o site na linha seguinte do cabeçalho
+  doc.text('www.dumorro.com', margin, currentY);
+  currentY += 5;
+}
 
   currentY += 2;
   drawDivider(currentY, [203, 213, 225]);
