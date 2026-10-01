@@ -106,15 +106,6 @@ doc.setTextColor(15, 23, 42);
 doc.text(companySettings.name || 'Gráfica Digital Express', margin, currentY);
 currentY += 5;
 
-if (companySettings.email || companySettings.phone) {
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  const topContact = [companySettings.phone, companySettings.email].filter(Boolean).join('  •  ');
-  doc.text(topContact, margin, currentY);
-  currentY += 5;
-}
-
 doc.setFont('helvetica', 'normal');
 doc.setFontSize(9);
 doc.setTextColor(100, 116, 139);
@@ -422,7 +413,7 @@ currentY += 7;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text('CONTATO / ESTABELECIMENTO', margin, currentY);
+  doc.text('CONTATO', margin, currentY);
   currentY += 4;
 
   doc.setFont('helvetica', 'normal');
@@ -431,11 +422,7 @@ currentY += 7;
 
   const contactLines: string[] = [];
   if (companySettings.name) contactLines.push(companySettings.name);
-  if (companySettings.address) {
-    contactLines.push(
-      `${companySettings.address}${companySettings.city ? ` - ${companySettings.city}/${companySettings.state}` : ''}`
-    );
-  }
+
   const phoneEmail = [
     companySettings.phone ? `Tel: ${companySettings.phone}` : '',
     companySettings.email ? `E-mail: ${companySettings.email}` : '',

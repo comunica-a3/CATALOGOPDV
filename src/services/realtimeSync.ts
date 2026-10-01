@@ -80,6 +80,11 @@ class RealtimeSyncManager {
         'product-separations-updated',
         'settings-updated',
         'production-updated',
+        'receiving-accounts-updated',
+        'expenses-updated',
+        'finance-updated',
+        'sales-updated',
+        'receivables-updated',
       ];
 
       for (const evtName of registeredEvents) {
@@ -156,6 +161,18 @@ class RealtimeSyncManager {
         }
         if (event.includes('production')) {
           window.dispatchEvent(new CustomEvent('production-updated', { detail: { event, data } }));
+        }
+        if (event.includes('account') || event.includes('receiving')) {
+          window.dispatchEvent(new CustomEvent('receiving-accounts-updated', { detail: { event, data } }));
+        }
+        if (event.includes('expense')) {
+          window.dispatchEvent(new CustomEvent('expenses-updated', { detail: { event, data } }));
+        }
+        if (event.includes('finance') || event.includes('account') || event.includes('expense')) {
+          window.dispatchEvent(new CustomEvent('finance-updated', { detail: { event, data } }));
+        }
+        if (event.includes('sale')) {
+          window.dispatchEvent(new CustomEvent('sales-updated', { detail: { event, data } }));
         }
       }
 

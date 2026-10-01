@@ -374,6 +374,7 @@ export class StorageService {
         productionRes,
         separationsRes,
         docTemplatesRes,
+        expensesRes,
       ] = await Promise.allSettled([
         api.getSettings(),
         api.getUsers(),
@@ -394,6 +395,7 @@ export class StorageService {
         api.getProductionOrders(),
         api.getProductSeparations(),
         api.getDocumentTemplates(),
+        api.getExpenses(),
       ]);
 
       if (settingsRes.status === 'fulfilled' && settingsRes.value) {
@@ -542,7 +544,9 @@ export class StorageService {
       if (salesRes.status === 'fulfilled' && Array.isArray(salesRes.value)) {
         const localSales = this.getSales();
         const mergedSales = salesRes.value.map((remoteSale: any) => {
-          const localMatch = localSales.find((ls) => ls.id === remoteSale.id);
+          const localMatch = localSales.find(
+            (ls) => ls.id === remoteSale.id || (ls.saleNumber && remoteSale.saleNumber && ls.saleNumber === remoteSale.saleNumber)
+          );
           const saleNumber =
             (localMatch?.saleNumber && !String(localMatch.saleNumber).includes('NaN'))
               ? localMatch.saleNumber
@@ -660,7 +664,10 @@ export class StorageService {
 
         // Preserve and sync any local sales not yet returned by the server
         const remoteIds = new Set(salesRes.value.map((rs: any) => rs.id));
-        const unsyncedLocal = localSales.filter((ls) => !remoteIds.has(ls.id));
+        const remoteNumbers = new Set(salesRes.value.map((rs: any) => rs.saleNumber).filter(Boolean));
+        const unsyncedLocal = localSales.filter(
+          (ls) => !remoteIds.has(ls.id) && (!ls.saleNumber || !remoteNumbers.has(ls.saleNumber))
+        );
         for (const unsynced of unsyncedLocal) {
           api.saveSale(unsynced).catch(() => {});
         }
@@ -748,11 +755,38 @@ export class StorageService {
             api.saveReceivingAccount(acc).catch(() => {});
           }
           setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, [...remoteAccounts, ...missingOnServer]);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
         } else if (localAccounts.length > 0) {
           // Se o servidor estiver vazio (primeira migração), envia as contas existentes ao servidor
           for (const acc of localAccounts) {
             api.saveReceivingAccount(acc).catch(() => {});
           }
+        }
+      }
+
+      // Sincronização e persistência de Saídas Financeiras (Despesas) no Servidor
+      if (expensesRes.status === 'fulfilled' && Array.isArray(expensesRes.value)) {
+        const remoteExpenses = expensesRes.value;
+        const localExpenses = this.getExpenses();
+        if (remoteExpenses.length > 0) {
+          const remoteIds = new Set(remoteExpenses.map((e: any) => e.id));
+          const missingOnServer = localExpenses.filter((e) => !remoteIds.has(e.id));
+          for (const exp of missingOnServer) {
+            api.saveExpense(exp).catch(() => {});
+          }
+          const merged = [...remoteExpenses, ...missingOnServer].sort(
+            (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.EXPENSES, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('expenses-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
+        } else if (localExpenses.length > 0) {
+          api.saveExpensesBatch(localExpenses).catch(() => {});
         }
       }
 
@@ -3008,28 +3042,49 @@ export class StorageService {
       setItemToStorage(STORAGE_KEYS.RECEIVABLES, receivables);
     }
 
-    // 5. Atualizar ordens de produção para itens gráficos
+    // 5. Atualizar ordens de produção para itens gráficos mantendo os IDs originais
     const prodOrders = this.getProductionOrders();
     const existingOrdersForSale = prodOrders.filter((po) => po.saleId === sale.id);
-    if (existingOrdersForSale.length > 0) {
-      prodOrders.forEach((po) => {
-        if (po.saleId === sale.id && po.status !== 'ENTREGUE' && po.status !== 'CANCELADO') {
-          po.status = 'CANCELADO' as ProductionStatus;
-          po.updatedAt = now;
-          po.notes = `${po.notes ? po.notes + ' | ' : ''}Cancelada por edição da venda ${sale.saleNumber}.`;
-        }
-      });
-    }
 
-    params.items.forEach((si) => {
+    const graphicItems = params.items.filter((si) => {
       const itemObj = this.getItemById(si.itemId);
-      const isGraphicOrPers =
+      return (
         si.itemType === 'PRODUTO_GRAFICO' ||
         si.itemType === 'PRODUTO_PERSONALIZADO' ||
-        isGraphicOrPersonalizedItem(itemObj);
+        isGraphicOrPersonalizedItem(itemObj)
+      );
+    });
 
-      if (isGraphicOrPers) {
-        prodOrders.unshift({
+    const usedOrderIds = new Set<string>();
+
+    graphicItems.forEach((si) => {
+      const itemObj = this.getItemById(si.itemId);
+      // Procurar ordem existente para esse item na venda (por saleItemId ou itemId)
+      const existingOrder = existingOrdersForSale.find(
+        (po) => !usedOrderIds.has(po.id) && (po.saleItemId === si.id || po.itemId === si.itemId)
+      ) || existingOrdersForSale.find((po) => !usedOrderIds.has(po.id));
+
+      if (existingOrder) {
+        usedOrderIds.add(existingOrder.id);
+        existingOrder.saleItemId = si.id;
+        existingOrder.itemId = si.itemId;
+        existingOrder.itemName = si.itemName;
+        existingOrder.quantity = si.quantity;
+        existingOrder.configuration = si.configuration;
+        existingOrder.customerId = params.customerId || sale.customerId;
+        existingOrder.customerName = params.customerName || sale.customerName;
+        existingOrder.customerPhone = params.customerPhone || sale.customerPhone;
+        existingOrder.sellerId = params.sellerId || sale.sellerId;
+        existingOrder.sellerName = params.sellerName || sale.sellerName;
+        existingOrder.productionType = itemObj?.productionType || existingOrder.productionType || 'PRODUCAO_PROPRIA';
+        existingOrder.leadTime = itemObj?.leadTime || existingOrder.leadTime || '2 a 3 dias úteis';
+        existingOrder.notes = si.configuration?.notes || existingOrder.notes;
+        existingOrder.updatedAt = now;
+        if (existingOrder.status === 'CANCELADO') {
+          existingOrder.status = 'AGUARDANDO_PRODUCAO';
+        }
+      } else {
+        const newOrder: ProductionOrder = {
           id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
           orderNumber: `PRD-${new Date().getFullYear()}-${String(prodOrders.length + 1).padStart(4, '0')}`,
           saleId: sale.id,
@@ -3048,12 +3103,24 @@ export class StorageService {
           leadTime: itemObj?.leadTime || '2 a 3 dias úteis',
           status: 'AGUARDANDO_PRODUCAO',
           files: [],
-          notes: si.configuration?.notes || `Produção gerada pela edição da venda ${sale.saleNumber}`,
+          notes: si.configuration?.notes || `Produção gerada pela venda ${sale.saleNumber}`,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        prodOrders.unshift(newOrder);
+        usedOrderIds.add(newOrder.id);
       }
     });
+
+    // Se itens gráficos foram removidos da venda, cancela apenas as ordens órfãs não aproveitadas
+    existingOrdersForSale.forEach((po) => {
+      if (!usedOrderIds.has(po.id) && po.status !== 'ENTREGUE' && po.status !== 'CANCELADO') {
+        po.status = 'CANCELADO' as ProductionStatus;
+        po.updatedAt = now;
+        po.notes = `${po.notes ? po.notes + ' | ' : ''}Item removido na edição da venda ${sale.saleNumber}.`;
+      }
+    });
+
     setItemToStorage(STORAGE_KEYS.PRODUCTION, prodOrders);
     const affectedOrders = prodOrders.filter((po) => po.saleId === sale.id);
     if (affectedOrders.length > 0) {
@@ -3114,6 +3181,9 @@ export class StorageService {
       userId: currentUser.id,
       userName,
     }).catch((e) => console.debug('Background updateCompletedSale sync notice:', e));
+
+    notifyRealtime('sales-updated', { id: sale.id, action: 'edit' });
+    notifyRealtime('finance-updated', { type: 'sale', id: sale.id });
 
     return sale;
   }
@@ -3685,6 +3755,8 @@ export class StorageService {
     sales[saleIndex] = sale;
     setItemToStorage(STORAGE_KEYS.SALES, sales);
     api.saveSale(sale).catch((e) => console.debug('Background saveSale payment sync notice:', e));
+    notifyRealtime('sales-updated', { id: sale.id, action: 'payment' });
+    notifyRealtime('finance-updated', { type: 'sale-payment', id: sale.id });
 
     // Sync into receivables
     const receivables = this.getReceivables();
@@ -3771,6 +3843,8 @@ export class StorageService {
     }
     setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, accounts);
     api.saveReceivingAccount(updatedAccount).catch((e) => console.debug('Background saveReceivingAccount sync notice:', e));
+    notifyRealtime('receiving-accounts-updated', { id: updatedAccount.id });
+    notifyRealtime('finance-updated', { type: 'account', id: updatedAccount.id });
     return updatedAccount;
   }
 
@@ -3778,6 +3852,8 @@ export class StorageService {
     const accounts = this.getReceivingAccounts().filter((a) => a.id !== id);
     setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, accounts);
     api.deleteReceivingAccount(id).catch((e) => console.debug('Background deleteReceivingAccount sync notice:', e));
+    notifyRealtime('receiving-accounts-updated', { id, deleted: true });
+    notifyRealtime('finance-updated', { type: 'account-deleted', id });
   }
 
   // --- ACCOUNT BALANCES & TRANSFERS ENTRE CONTAS ---
@@ -4081,12 +4157,18 @@ export class StorageService {
     }
 
     setItemToStorage(STORAGE_KEYS.EXPENSES, expenses);
+    api.saveExpense(expense).catch((e) => console.debug('Background saveExpense sync notice:', e));
+    notifyRealtime('expenses-updated', { id: expense.id });
+    notifyRealtime('finance-updated', { type: 'expense', id: expense.id });
     return expense;
   }
 
   static deleteExpense(id: string): void {
     const expenses = this.getExpenses().filter((e) => e.id !== id);
     setItemToStorage(STORAGE_KEYS.EXPENSES, expenses);
+    api.deleteExpense(id).catch((e) => console.debug('Background deleteExpense sync notice:', e));
+    notifyRealtime('expenses-updated', { id, deleted: true });
+    notifyRealtime('finance-updated', { type: 'expense-deleted', id });
   }
 
   // --- CASH REGISTER SESSIONS (ABERTURA & FECHAMENTO) ---

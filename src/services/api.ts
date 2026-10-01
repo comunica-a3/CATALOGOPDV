@@ -365,6 +365,29 @@ export const api = {
     return request<{ success: boolean }>(`/finance/receiving-accounts/${id}`, { method: 'DELETE' });
   },
 
+  // Expenses (Saídas Financeiras)
+  async getExpenses() {
+    return request<any[]>('/finance/expenses');
+  },
+
+  async saveExpense(expense: any) {
+    return request<any>('/finance/expenses', {
+      method: 'POST',
+      body: JSON.stringify(expense),
+    });
+  },
+
+  async saveExpensesBatch(expenses: any[]) {
+    return request<{ success: boolean; count: number }>('/finance/expenses/batch', {
+      method: 'POST',
+      body: JSON.stringify({ expenses }),
+    });
+  },
+
+  async deleteExpense(id: string) {
+    return request<{ success: boolean; id: string }>(`/finance/expenses/${id}`, { method: 'DELETE' });
+  },
+
   async getFinancialTransfers() {
     return request<any[]>('/finance/transfers');
   },

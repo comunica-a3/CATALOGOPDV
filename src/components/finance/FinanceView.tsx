@@ -173,6 +173,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onDataChange();
   };
 
+  // Listen for real-time synchronization events (receiving accounts, expenses, finance, sales)
+  useEffect(() => {
+    const handleSyncUpdate = () => {
+      reloadFinanceData();
+    };
+
+    window.addEventListener('receiving-accounts-updated', handleSyncUpdate);
+    window.addEventListener('expenses-updated', handleSyncUpdate);
+    window.addEventListener('finance-updated', handleSyncUpdate);
+    window.addEventListener('sales-updated', handleSyncUpdate);
+    window.addEventListener('storage-sync-completed', handleSyncUpdate);
+
+    return () => {
+      window.removeEventListener('receiving-accounts-updated', handleSyncUpdate);
+      window.removeEventListener('expenses-updated', handleSyncUpdate);
+      window.removeEventListener('finance-updated', handleSyncUpdate);
+      window.removeEventListener('sales-updated', handleSyncUpdate);
+      window.removeEventListener('storage-sync-completed', handleSyncUpdate);
+    };
+  }, []);
+
   // Balance Adjustment Handlers (Exclusivo Administrador)
   const handleOpenAdjustBalance = (account: ReceivingAccount, currentBal: number) => {
     if (!isAdmin) return;
@@ -548,7 +569,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         const matchesNumber = String(sale.saleNumber || '').toLowerCase().includes(q);
         const matchesCustomer = String(sale.customerName || '').toLowerCase().includes(q);
         const matchesSeller = String(sale.sellerName || '').toLowerCase().includes(q);
-        if (!matchesNumber && !matchesCustomer && !matchesSeller) {
+        const matchesProduct = (sale.items || []).some((item) =>
+          String(item.itemName || '').toLowerCase().includes(q)
+        );
+        if (!matchesNumber && !matchesCustomer && !matchesSeller && !matchesProduct) {
           return false;
         }
       }
@@ -575,6 +599,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       saleId: string;
       saleNumber: string;
       categoryLabel: string;
+      items: typeof sales[0]['items'];
       saleCreatedAt: string;
       customerName: string;
       sellerName: string;
@@ -621,6 +646,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             saleId: sale.id,
             saleNumber: sale.saleNumber,
             categoryLabel,
+            items: sale.items || [],
             saleCreatedAt: pay.date || sale.createdAt,
             customerName: sale.customerName,
             sellerName: sale.sellerName,
@@ -837,6 +863,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       'Data/Hora',
       'Venda',
       'Categoria',
+      'Produto(s)',
       'Cliente',
       'Vendedor',
       'Forma de Pagamento',
@@ -851,6 +878,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       formatDateTime(t.saleCreatedAt),
       t.saleNumber,
       `"${t.categoryLabel || 'Sem Categoria'}"`,
+      `"${(t.items || []).map((i) => `${i.quantity}x ${i.itemName}`).join(', ') || '—'}"`,
       `"${t.customerName}"`,
       `"${t.sellerName}"`,
       `"${t.method}"`,
@@ -2393,6 +2421,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <th className="py-2.5 px-3">Data/Hora</th>
                     <th className="py-2.5 px-3">Venda</th>
                     <th className="py-2.5 px-3">Categoria</th>
+                    <th className="py-2.5 px-3">Produto(s)</th>
                     <th className="py-2.5 px-3">Cliente</th>
                     <th className="py-2.5 px-3">Vendedor</th>
                     <th className="py-2.5 px-3">Forma</th>
@@ -2405,13 +2434,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {isDateRangeInvalid ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-rose-500 font-medium">
+                      <td colSpan={11} className="py-8 text-center text-rose-500 font-medium">
                         A Data Inicial não pode ser maior que a Data Final. Ajuste as datas para exibir o relatório.
                       </td>
                     </tr>
                   ) : allPaymentTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-400">
+                      <td colSpan={11} className="py-8 text-center text-slate-400">
                         Nenhum lançamento encontrado para os filtros selecionados.
                       </td>
                     </tr>
@@ -2428,6 +2457,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/80 rounded font-semibold text-[11px] whitespace-nowrap">
                             {tx.categoryLabel}
                           </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          {tx.items && tx.items.length > 0 ? (
+                            <div className="space-y-0.5 max-w-[240px]">
+                              {tx.items.map((item, idx) => (
+                                <div key={idx} className="text-[11px] font-medium text-slate-800 truncate" title={`${item.quantity}x ${item.itemName}`}>
+                                  <span className="font-bold text-slate-500">{item.quantity}x</span> {item.itemName}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">—</span>
+                          )}
                         </td>
                         <td className="py-2 px-3 font-medium text-slate-800">
                           {tx.customerName}

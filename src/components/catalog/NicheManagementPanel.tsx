@@ -205,7 +205,7 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
       .filter(Boolean);
 
     const nicheData: Partial<ProductNicheCard> & { title: string } = {
-      id: formId.trim() || undefined,
+      id: editingNiche ? editingNiche.id : (formId.trim() || undefined),
       title: formTitle.trim(),
       description: formDescription.trim(),
       ctaText: formCtaText.trim() || 'Ver produtos',
@@ -408,8 +408,9 @@ export const NicheManagementPanel: React.FC<NicheManagementPanelProps> = ({
                       type="text"
                       value={formId}
                       onChange={(e) => setFormId(e.target.value)}
+                      disabled={!isCreatingNew && !!editingNiche}
                       placeholder="ex: sublimacao-brindes"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                     />
                   </div>
 

@@ -568,6 +568,27 @@ export async function runMigrations(): Promise<void> {
     // Migrate generated_documents table columns if missing
     try { await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;'); } catch {}
 
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        category TEXT,
+        observation TEXT,
+        payment_method TEXT,
+        account_id TEXT,
+        account_name TEXT,
+        nature TEXT DEFAULT 'OPERACIONAL',
+        type TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    try { await db.run('CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);'); } catch {}
+
     await db.run(
       'INSERT INTO schema_migrations VALUES (?, ?, ?)',
       ['001_initial_core_schema', 'Initial Core ERP & PDV Tables', new Date().toISOString()]
@@ -1197,6 +1218,26 @@ export async function ensureAllTableColumns(): Promise<void> {
         updated_at TEXT NOT NULL
       );
     `);
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        category TEXT,
+        observation TEXT,
+        payment_method TEXT,
+        account_id TEXT,
+        account_name TEXT,
+        nature TEXT DEFAULT 'OPERACIONAL',
+        type TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    try { await db.run('CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);'); } catch {}
   } catch {}
 }
 
@@ -1554,6 +1595,7 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
     'complementary_rules',
     'public_segment_pages',
     'catalog_niches',
+    'expenses',
   ];
 
   try {

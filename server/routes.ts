@@ -1844,12 +1844,23 @@ router.post('/sales', async (req: AuthRequest, res) => {
   try {
     const s = req.body;
     const now = new Date().toISOString();
-    const id = s.id || `sale-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     
     // Check if test user operation: do not persist to real database
     if (req.user?.isTestUser || s.isTestSale) {
+      const id = s.id || `sale-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
       res.json({ ...s, id, createdAt: s.createdAt || now, updatedAt: now, isTest: true });
       return;
+    }
+
+    let id = s.id;
+    if (s.saleNumber) {
+      const existingByNum = await db.get<any>('SELECT id FROM sales WHERE sale_code = ?', [s.saleNumber]);
+      if (existingByNum) {
+        id = existingByNum.id;
+      }
+    }
+    if (!id) {
+      id = `sale-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     }
 
     // Auto-increment sale number if not provided
@@ -1970,6 +1981,9 @@ router.post('/sales', async (req: AuthRequest, res) => {
 
     persistDatabase();
 
+    broadcastSync('sales-updated', { id, action: 'save' });
+    broadcastSync('finance-updated', { type: 'sale', id });
+
     await logAudit({
       userId: req.user?.id,
       userName: req.user?.name,
@@ -2006,13 +2020,13 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
       return;
     }
 
-    const existingSale = await db.get<any>('SELECT * FROM sales WHERE id = ?', [id]);
-    if (!existingSale) {
-      res.status(404).json({ error: 'Venda não encontrada.' });
-      return;
+    let existingSale = await db.get<any>('SELECT * FROM sales WHERE id = ?', [id]);
+    if (!existingSale && body.saleNumber) {
+      existingSale = await db.get<any>('SELECT * FROM sales WHERE sale_code = ? OR sale_number = ?', [body.saleNumber, body.saleNumber]);
     }
 
-    const previousTotal = Number(existingSale.total) || 0;
+    const targetId = existingSale ? existingSale.id : id;
+    const previousTotal = existingSale ? (Number(existingSale.total) || 0) : 0;
     const subtotal = Number(body.subtotal) || 0;
     const discount = Number(body.discount) || 0;
     const addition = Number(body.addition) || 0;
@@ -2023,47 +2037,85 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
       ? 'A_PRAZO'
       : (body.paymentStatus || (remainingAmount <= 0 ? 'PAGO' : (paidAmount > 0 ? 'PARCIALMENTE_PAGO' : 'PENDENTE')));
     const paymentMethod = body.paymentMethod || (paymentStatus === 'A_PRAZO' ? 'A Prazo' : 'DINHEIRO');
-    const paymentsJson = body.payments ? JSON.stringify(body.payments) : existingSale.payments_json;
-    const itemsJson = body.items ? JSON.stringify(body.items) : existingSale.items_json;
-    const editHistoryJson = body.editHistory ? JSON.stringify(body.editHistory) : existingSale.edit_history_json;
+    const paymentsJson = body.payments ? JSON.stringify(body.payments) : (existingSale?.payments_json || '[]');
+    const itemsJson = body.items ? JSON.stringify(body.items) : (existingSale?.items_json || '[]');
+    const editHistoryJson = body.editHistory ? JSON.stringify(body.editHistory) : (existingSale?.edit_history_json || null);
     const reason = body.reason || 'Edição de venda finalizada';
 
-    await db.run(
-      `UPDATE sales SET
-        customer_id = ?, customer_name = ?, customer_phone = ?, customer_email = ?,
-        seller_id = ?, seller_name = ?, subtotal = ?, discount = ?, addition = ?, total = ?,
-        paid_amount = ?, remaining_amount = ?, status = 'EDITADA', edit_history_json = ?,
-        payment_status = ?, payment_method = ?, payments_json = ?, items_json = ?,
-        notes = ?, updated_at = ?
-      WHERE id = ?`,
-      [
-        body.customerId || existingSale.customer_id,
-        body.customerName || existingSale.customer_name,
-        body.customerPhone || existingSale.customer_phone,
-        body.customerEmail || existingSale.customer_email,
-        body.sellerId || existingSale.seller_id,
-        body.sellerName || existingSale.seller_name,
-        subtotal,
-        discount,
-        addition,
-        total,
-        paidAmount,
-        remainingAmount,
-        editHistoryJson,
-        paymentStatus,
-        paymentMethod,
-        paymentsJson,
-        itemsJson,
-        body.notes || existingSale.notes,
-        now,
-        id,
-      ]
-    );
+    if (existingSale) {
+      await db.run(
+        `UPDATE sales SET
+          customer_id = ?, customer_name = ?, customer_phone = ?, customer_email = ?,
+          seller_id = ?, seller_name = ?, subtotal = ?, discount = ?, addition = ?, total = ?,
+          paid_amount = ?, remaining_amount = ?, status = 'EDITADA', edit_history_json = ?,
+          payment_status = ?, payment_method = ?, payments_json = ?, items_json = ?,
+          notes = ?, updated_at = ?
+        WHERE id = ?`,
+        [
+          body.customerId || existingSale.customer_id,
+          body.customerName || existingSale.customer_name,
+          body.customerPhone || existingSale.customer_phone,
+          body.customerEmail || existingSale.customer_email,
+          body.sellerId || existingSale.seller_id,
+          body.sellerName || existingSale.seller_name,
+          subtotal,
+          discount,
+          addition,
+          total,
+          paidAmount,
+          remainingAmount,
+          editHistoryJson,
+          paymentStatus,
+          paymentMethod,
+          paymentsJson,
+          itemsJson,
+          body.notes || existingSale.notes,
+          now,
+          targetId,
+        ]
+      );
+    } else {
+      const saleNumberStr = String(body.saleNumber || id);
+      const saleNumberNumeric = parseInt(saleNumberStr.replace(/\D/g, ''), 10) || 1;
+      await db.run(
+        `INSERT OR REPLACE INTO sales (
+          id, sale_number, sale_code, customer_id, customer_name, customer_phone, customer_email,
+          seller_id, seller_name, subtotal, discount, addition, total, paid_amount,
+          remaining_amount, status, is_deleted, edit_history_json, payment_status,
+          payment_method, payments_json, items_json, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EDITADA', 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          targetId,
+          saleNumberNumeric,
+          saleNumberStr,
+          body.customerId || null,
+          body.customerName || 'Consumidor Final',
+          body.customerPhone || null,
+          body.customerEmail || null,
+          body.sellerId || req.user?.id || null,
+          body.sellerName || req.user?.name || 'Atendente',
+          subtotal,
+          discount,
+          addition,
+          total,
+          paidAmount,
+          remainingAmount,
+          editHistoryJson,
+          paymentStatus,
+          paymentMethod,
+          paymentsJson,
+          itemsJson,
+          body.notes || null,
+          body.createdAt || now,
+          now,
+        ]
+      );
+    }
 
     // Sync receivable
     if (remainingAmount > 0 || paymentStatus === 'PENDENTE' || paymentStatus === 'PARCIALMENTE_PAGO' || paymentStatus === 'A_PRAZO') {
       const receivableStatus = remainingAmount <= 0 ? 'PAGO' : paymentStatus === 'A_PRAZO' ? 'A_PRAZO' : paidAmount > 0 ? 'PARCIALMENTE_PAGO' : 'PENDENTE';
-      const existingRec = await db.get<any>('SELECT id FROM receivables WHERE sale_id = ?', [id]);
+      const existingRec = await db.get<any>('SELECT id FROM receivables WHERE sale_id = ?', [targetId]);
       const recId = existingRec ? existingRec.id : `rec-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
       await db.run(
@@ -2074,19 +2126,19 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           recId,
-          id,
-          existingSale.sale_code || existingSale.id,
-          body.customerId || existingSale.customer_id,
-          body.customerName || existingSale.customer_name,
-          body.customerPhone || existingSale.customer_phone,
+          targetId,
+          existingSale ? (existingSale.sale_code || existingSale.id) : (body.saleNumber || targetId),
+          body.customerId || existingSale?.customer_id,
+          body.customerName || existingSale?.customer_name,
+          body.customerPhone || existingSale?.customer_phone,
           total,
           paidAmount,
           remainingAmount,
           body.dueDate || new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
           receivableStatus,
           paymentsJson,
-          body.notes || existingSale.notes,
-          existingSale.created_at,
+          body.notes || existingSale?.notes,
+          existingSale?.created_at || now,
           now,
         ]
       );
@@ -2099,29 +2151,32 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
           payment_records_json = ?, 
           updated_at = ? 
         WHERE sale_id = ?`,
-        [total, paymentsJson, now, id]
+        [total, paymentsJson, now, targetId]
       );
     }
 
     persistDatabase();
+
+    broadcastSync('sales-updated', { id: targetId, action: 'edit' });
+    broadcastSync('finance-updated', { type: 'sale', id: targetId });
 
     await logAudit({
       userId: req.user?.id || body.userId,
       userName: req.user?.name || body.userName,
       action: 'EDIT_SALE',
       entityType: 'SALE',
-      entityId: id,
+      entityId: targetId,
       details: {
-        saleNumber: existingSale.sale_code,
+        saleNumber: existingSale?.sale_code || body.saleNumber,
         previousTotal,
         newTotal: total,
         reason,
-        customer: body.customerName || existingSale.customer_name,
+        customer: body.customerName || existingSale?.customer_name,
       },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, id, total, updatedAt: now });
+    res.json({ success: true, id: targetId, total, updatedAt: now });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao editar venda.' });
   }
@@ -3052,6 +3107,138 @@ router.get('/catalog/data', async (req, res) => {
 // FINANCE & CASH SESSIONS
 // -----------------------------------------------------------------------------
 
+// --- EXPENSES (SAÍDAS FINANCEIRAS) ---
+router.get('/finance/expenses', async (req, res) => {
+  try {
+    const rows = await db.all<any>('SELECT * FROM expenses ORDER BY date DESC, created_at DESC');
+    res.json(rows.map((r) => ({
+      id: r.id,
+      description: r.description,
+      amount: Number(r.amount || 0),
+      date: r.date,
+      category: r.category || 'Outros',
+      observation: r.observation || undefined,
+      paymentMethod: r.payment_method || 'Dinheiro',
+      accountId: r.account_id || undefined,
+      accountName: r.account_name || undefined,
+      nature: r.nature || 'OPERACIONAL',
+      type: r.type || (r.nature === 'RETIRADA_PESSOAL' ? 'RETIRADA_PESSOAL' : 'DESPESA_OPERACIONAL'),
+      userId: r.user_id || undefined,
+      userName: r.user_name || undefined,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao buscar saídas financeiras.' });
+  }
+});
+
+router.post('/finance/expenses', async (req: AuthRequest, res) => {
+  try {
+    const e = req.body;
+    if (!e || !e.description) {
+      return res.status(400).json({ error: 'Descrição da despesa é obrigatória.' });
+    }
+    const id = e.id || `exp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    await db.run(
+      `INSERT OR REPLACE INTO expenses (
+        id, description, amount, date, category, observation, payment_method,
+        account_id, account_name, nature, type, user_id, user_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        e.description.trim(),
+        Number(Number(e.amount).toFixed(2)) || 0,
+        e.date || now.split('T')[0],
+        e.category || 'Outros',
+        e.observation?.trim() || null,
+        e.paymentMethod || 'Dinheiro',
+        e.accountId || null,
+        e.accountName || null,
+        e.nature || 'OPERACIONAL',
+        e.type || (e.nature === 'RETIRADA_PESSOAL' ? 'RETIRADA_PESSOAL' : 'DESPESA_OPERACIONAL'),
+        e.userId || req.user?.id || null,
+        e.userName || req.user?.name || null,
+        e.createdAt || now,
+        now,
+      ]
+    );
+
+    persistDatabase();
+
+    broadcastSync('expenses-updated', { id, action: 'save' });
+    broadcastSync('finance-updated', { type: 'expense', id });
+
+    res.json({ ...e, id, updatedAt: now });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao registrar saída financeira.' });
+  }
+});
+
+router.post('/finance/expenses/batch', async (req: AuthRequest, res) => {
+  try {
+    const { expenses } = req.body;
+    if (!Array.isArray(expenses)) {
+      return res.status(400).json({ error: 'Array de despesas inválido.' });
+    }
+    const now = new Date().toISOString();
+    for (const e of expenses) {
+      if (!e || !e.description) continue;
+      const id = e.id || `exp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      await db.run(
+        `INSERT OR REPLACE INTO expenses (
+          id, description, amount, date, category, observation, payment_method,
+          account_id, account_name, nature, type, user_id, user_name, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          e.description.trim(),
+          Number(Number(e.amount).toFixed(2)) || 0,
+          e.date || now.split('T')[0],
+          e.category || 'Outros',
+          e.observation?.trim() || null,
+          e.paymentMethod || 'Dinheiro',
+          e.accountId || null,
+          e.accountName || null,
+          e.nature || 'OPERACIONAL',
+          e.type || (e.nature === 'RETIRADA_PESSOAL' ? 'RETIRADA_PESSOAL' : 'DESPESA_OPERACIONAL'),
+          e.userId || req.user?.id || null,
+          e.userName || req.user?.name || null,
+          e.createdAt || now,
+          now,
+        ]
+      );
+    }
+
+    persistDatabase();
+
+    broadcastSync('expenses-updated', { count: expenses.length });
+    broadcastSync('finance-updated', { type: 'expenses-batch', count: expenses.length });
+
+    res.json({ success: true, count: expenses.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao salvar despesas em lote.' });
+  }
+});
+
+router.delete('/finance/expenses/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM expenses WHERE id = ?', [id]);
+    persistDatabase();
+
+    broadcastSync('expenses-updated', { id, deleted: true });
+    broadcastSync('finance-updated', { type: 'expense-deleted', id });
+
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir saída financeira.' });
+  }
+});
+
+// --- RECEIVING ACCOUNTS (CONTAS DE RECEBIMENTO) ---
 router.get('/finance/receiving-accounts', async (req, res) => {
   try {
     const rows = await db.all<any>('SELECT * FROM receiving_accounts ORDER BY name ASC');
@@ -3097,9 +3284,30 @@ router.post('/finance/receiving-accounts', async (req: AuthRequest, res) => {
         a.isDefault ? 1 : 0, a.createdAt || now, now
       ]
     );
+
+    persistDatabase();
+
+    broadcastSync('receiving-accounts-updated', { id });
+    broadcastSync('finance-updated', { type: 'account', id });
+
     res.json({ ...a, id, updatedAt: now });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao salvar conta.' });
+  }
+});
+
+router.delete('/finance/receiving-accounts/:id', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM receiving_accounts WHERE id = ?', [id]);
+    persistDatabase();
+
+    broadcastSync('receiving-accounts-updated', { id, deleted: true });
+    broadcastSync('finance-updated', { type: 'account-deleted', id });
+
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao excluir conta de recebimento.' });
   }
 });
 
@@ -3167,6 +3375,11 @@ router.post('/finance/transfers', async (req: AuthRequest, res) => {
       ]
     );
 
+    persistDatabase();
+
+    broadcastSync('receiving-accounts-updated', { id });
+    broadcastSync('finance-updated', { type: 'transfer', id });
+
     await logAudit({
       userId: t.userId || req.user?.id,
       userName: t.userName || req.user?.name,
@@ -3191,6 +3404,11 @@ router.post('/finance/transfers', async (req: AuthRequest, res) => {
 router.delete('/finance/transfers/:id', async (req: AuthRequest, res) => {
   try {
     await db.run('DELETE FROM financial_transfers WHERE id = ?', [req.params.id]);
+    persistDatabase();
+
+    broadcastSync('receiving-accounts-updated', { id: req.params.id, deleted: true });
+    broadcastSync('finance-updated', { type: 'transfer-deleted', id: req.params.id });
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao excluir transferência.' });
@@ -3243,6 +3461,12 @@ router.post('/finance/adjustments', async (req: AuthRequest, res) => {
         a.createdAt || now,
       ]
     );
+
+    persistDatabase();
+
+    broadcastSync('receiving-accounts-updated', { id });
+    broadcastSync('finance-updated', { type: 'adjustment', id });
+
     res.json({ ...a, id, createdAt: a.createdAt || now });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao salvar ajuste de saldo.' });

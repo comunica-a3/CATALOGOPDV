@@ -88,9 +88,17 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
     return aggregateCommissionsBySeller(periodFilteredSales, users);
   }, [periodFilteredSales, users]);
 
-  // 3. Filter sales based on Seller selection and Search
+  const activeDrillDownSummary = useMemo(() => {
+    if (!drillDownSellerId) return null;
+    return aggregation.summaries.find((s) => s.sellerId === drillDownSellerId) || null;
+  }, [aggregation.summaries, drillDownSellerId]);
+
+  // 3. Filter sales based on Seller selection, Drill-down, and Search
   const displaySales = useMemo(() => {
-    const effectiveSellerId = !isAdmin ? currentUser.id : selectedSellerId;
+    const targetSellerId = drillDownSellerId || (selectedSellerId !== 'TODOS' ? selectedSellerId : 'TODOS');
+    const effectiveSellerId = !isAdmin ? currentUser.id : targetSellerId;
+    const selectedUser = users.find((u) => u.id === effectiveSellerId);
+    const selectedUserName = selectedUser?.name?.trim().toLowerCase();
 
     return periodFilteredSales.filter((sale) => {
       // Exclude canceled sales from commission view by default
@@ -98,8 +106,12 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
         return false;
       }
 
+      const saleSellerName = (sale.sellerName || '').trim().toLowerCase();
       const matchSeller =
-        effectiveSellerId === 'TODOS' || sale.sellerId === effectiveSellerId;
+        effectiveSellerId === 'TODOS' ||
+        sale.sellerId === effectiveSellerId ||
+        (activeDrillDownSummary && saleSellerName === activeDrillDownSummary.sellerName.trim().toLowerCase()) ||
+        (selectedUserName && saleSellerName === selectedUserName);
 
       const q = (searchTerm || '').toLowerCase();
       const matchSearch =
@@ -110,7 +122,7 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
 
       return matchSeller && matchSearch;
     });
-  }, [periodFilteredSales, isAdmin, currentUser.id, selectedSellerId, searchTerm]);
+  }, [periodFilteredSales, isAdmin, currentUser.id, selectedSellerId, drillDownSellerId, activeDrillDownSummary, searchTerm, users]);
 
   // Filtered seller summaries for Admin table
   const filteredSummaries = useMemo(() => {
@@ -141,11 +153,6 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
       }
     );
   }, [aggregation.summaries, isAdmin, currentUser, selectedSellerId]);
-
-  const activeDrillDownSummary = useMemo(() => {
-    if (!drillDownSellerId) return null;
-    return aggregation.summaries.find((s) => s.sellerId === drillDownSellerId) || null;
-  }, [aggregation.summaries, drillDownSellerId]);
 
   const handleOpenStatement = (sellerId: string) => {
     const user = users.find((u) => u.id === sellerId) || {
@@ -533,9 +540,16 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                setDrillDownSellerId(
-                                  drillDownSellerId === sum.sellerId ? null : sum.sellerId
-                                );
+                                if (drillDownSellerId === sum.sellerId) {
+                                  setDrillDownSellerId(null);
+                                  setSelectedSellerId('TODOS');
+                                } else {
+                                  setDrillDownSellerId(sum.sellerId);
+                                  setSelectedSellerId(sum.sellerId);
+                                  setTimeout(() => {
+                                    document.getElementById('detailed-sales-section')?.scrollIntoView({ behavior: 'smooth' });
+                                  }, 50);
+                                }
                               }}
                               className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
                                 isSelected
@@ -604,7 +618,7 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
       )}
 
       {/* SECTION 2: DETAILED SALES DRILL-DOWN TABLE (57.7) */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden space-y-0">
+      <div id="detailed-sales-section" className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden space-y-0">
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Receipt className="w-4 h-4 text-emerald-600" />
@@ -633,7 +647,10 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
             {drillDownSellerId && isAdmin && (
               <button
                 type="button"
-                onClick={() => setDrillDownSellerId(null)}
+                onClick={() => {
+                  setDrillDownSellerId(null);
+                  setSelectedSellerId('TODOS');
+                }}
                 className="px-2 py-1 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors cursor-pointer"
               >
                 Limpar seleção
