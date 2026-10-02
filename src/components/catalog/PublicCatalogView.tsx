@@ -698,7 +698,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
 
-            {onOpenManagement && !isStandalone && (
+            {onOpenManagement && (
               <button
                 type="button"
                 onClick={onOpenManagement}
