@@ -1180,6 +1180,11 @@ export const POSFacil: React.FC<POSFacilProps> = ({
                   setSelectedPaymentMethod('PIX');
                   setIsPixQrModalOpen(true);
                 }}
+                className={`p-2.5 rounded-xl border font-bold flex items-center justify-between transition-all cursor-pointer ${
+                  selectedPaymentMethod === 'PIX'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-200'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <QrCode className="w-4 h-4" />

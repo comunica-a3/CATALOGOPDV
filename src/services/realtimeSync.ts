@@ -83,6 +83,7 @@ class RealtimeSyncManager {
         'receiving-accounts-updated',
         'expenses-updated',
         'finance-updated',
+        'cash-sessions-updated',
         'sales-updated',
         'receivables-updated',
       ];
@@ -168,8 +169,11 @@ class RealtimeSyncManager {
         if (event.includes('expense')) {
           window.dispatchEvent(new CustomEvent('expenses-updated', { detail: { event, data } }));
         }
-        if (event.includes('finance') || event.includes('account') || event.includes('expense')) {
+        if (event.includes('finance') || event.includes('account') || event.includes('expense') || event.includes('cash')) {
           window.dispatchEvent(new CustomEvent('finance-updated', { detail: { event, data } }));
+        }
+        if (event.includes('cash')) {
+          window.dispatchEvent(new CustomEvent('cash-sessions-updated', { detail: { event, data } }));
         }
         if (event.includes('sale')) {
           window.dispatchEvent(new CustomEvent('sales-updated', { detail: { event, data } }));

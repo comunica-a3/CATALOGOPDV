@@ -25,7 +25,7 @@ import {
   restoreDatabaseSnapshot,
 } from './backup';
 import { generateAIContent } from './ai';
-import { buildPublicCatalogPayload, publishCatalogToGitHub } from './catalogPublisher';
+import { buildPublicCatalogPayload, publishCatalogToGitHub, saveCatalogLocally } from './catalogPublisher';
 
 const router = express.Router();
 
@@ -3593,7 +3593,12 @@ router.post('/finance/cash-register-sessions', async (req: AuthRequest, res) => 
       ]
     );
 
+    persistDatabase();
+
     res.json({ ...s, id, updatedAt: now });
+
+    broadcastSync('cash-sessions-updated', { id, status: s.status });
+    broadcastSync('finance-updated', { type: 'cash-session', id, status: s.status });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao salvar sessão de caixa.' });
   }
@@ -4142,6 +4147,13 @@ router.put('/settings', async (req: AuthRequest, res) => {
       'INSERT OR REPLACE INTO company_settings (id, settings_json, updated_at) VALUES (?, ?, ?)',
       ['default', JSON.stringify(newSettings), now]
     );
+
+    persistDatabase();
+
+    // Sincroniza imediatamente o catálogo público com as novas configurações da empresa
+    buildPublicCatalogPayload()
+      .then((p) => saveCatalogLocally(p))
+      .catch(() => {});
 
     await logAudit({
       userId: req.user?.id,

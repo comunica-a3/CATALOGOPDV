@@ -185,32 +185,25 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
   } | null>(null);
   const [isLoadingStatic, setIsLoadingStatic] = useState(false);
 
-  // Se estiver rodando como vitrine estática ou se nenhuma prop com itens for passada,
-  // busca o arquivo estático /catalogo.json garantindo independência 100% do backend local
+  // Carrega sempre os dados atuais da fonte central do sistema (/catalog/data)
   useEffect(() => {
-    const shouldFetch = isStandalone || !propItems || propItems.length === 0;
-    if (shouldFetch) {
-      setIsLoadingStatic(true);
-      fetch(`https://raw.githubusercontent.com/comunica-a3/CATALOGOPDV/main/public/catalogo.json?t=${Date.now()}`)
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json();
-        })
-       .then((data) => {
-          if (data && (data.items || data.company)) {
-            // Corrige links de upload caso tenham sido salvos com prefixo local /api/uploads/
-            const sanitizedItems = (data.items || []).map((item: any) => {
-              let img = item.imageUrl || '';
-              if (img.startsWith('/api/uploads/')) {
-                img = img.replace('/api/uploads/', 'uploads/');
-              } else if (img.startsWith('api/uploads/')) {
-                img = img.replace('api/uploads/', 'uploads/');
-              }
-              return { ...item, imageUrl: img };
-            });
-
+    let isMounted = true;
+    const fetchCatalogData = async () => {
+      // Prioridade 1: Buscar do endpoint de dados do catálogo do servidor central
+      try {
+        setIsLoadingStatic(true);
+        let res = await fetch(`/api/catalog/data?t=${Date.now()}`);
+        if (!res.ok) {
+          res = await fetch(`/catalog/data?t=${Date.now()}`);
+        }
+        if (!res.ok) {
+          res = await fetch(`/catalogo.json?t=${Date.now()}`);
+        }
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data && (data.items || data.company)) {
             setStaticData({
-              items: sanitizedItems,
+              items: data.items || [],
               categories: data.categories || [],
               companySettings: data.company || {},
               niches: data.niches || [],
@@ -218,35 +211,94 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
             if (data.niches && data.niches.length > 0) {
               setNiches(data.niches);
             }
+            if (data.company && data.company.name) {
+              try {
+                StorageService.saveCompanySettings(data.company);
+              } catch {}
+            }
+            return;
           }
-        })
-        .catch((err) => {
-          console.warn('Aviso: Não foi possível carregar dados de /catalogo.json:', err);
-        })
-        .finally(() => {
-          setIsLoadingStatic(false);
-        });
-    }
-  }, [propItems, isStandalone]);
+        }
+      } catch (err) {
+        console.debug('Aviso ao consultar dados do catálogo:', err);
+      } finally {
+        if (isMounted) setIsLoadingStatic(false);
+      }
 
-  const items = (propItems && propItems.length > 0) ? propItems : (staticData?.items || []);
-  const categories = (propCategories && propCategories.length > 0) ? propCategories : (staticData?.categories || []);
-  const companySettings: CompanySettings = propCompanySettings || staticData?.companySettings || {
-    name: 'Gráfica & Estúdio',
-    tradingName: '',
-    document: '',
-    phone: '',
-    whatsapp: '',
-    email: '',
-    address: '',
-    city: '',
-    state: '',
-    logoUrl: '',
-    receiptFooterMessage: '',
-    paymentMethods: [],
-    catalogSubtitle: 'Sua rotina, mais simples.',
-    catalogHeaderType: 'NAME',
-  };
+      // Prioridade 2: Se o backend não responder (modo offline), usa os dados locais do StorageService
+      if (isMounted) {
+        try {
+          const localItems = StorageService.getItems();
+          const localCats = StorageService.getCategories();
+          const localSettings = StorageService.getCompanySettings();
+          const localNiches = StorageService.getCatalogNiches();
+          if (localItems.length > 0 || localSettings.name) {
+            setStaticData({
+              items: localItems,
+              categories: localCats,
+              companySettings: localSettings,
+              niches: localNiches,
+            });
+            if (localNiches.length > 0) setNiches(localNiches);
+          }
+        } catch {}
+      }
+    };
+
+    fetchCatalogData();
+
+    // Sincronização em tempo real quando o catálogo, itens ou configurações mudarem
+    const handleUpdate = () => {
+      fetchCatalogData();
+    };
+
+    window.addEventListener('catalog-updated', handleUpdate);
+    window.addEventListener('items-updated', handleUpdate);
+    window.addEventListener('settings-updated', handleUpdate);
+    window.addEventListener('storage-sync-completed', handleUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('catalog-updated', handleUpdate);
+      window.removeEventListener('items-updated', handleUpdate);
+      window.removeEventListener('settings-updated', handleUpdate);
+      window.removeEventListener('storage-sync-completed', handleUpdate);
+    };
+  }, []);
+
+  const companySettings: CompanySettings =
+    staticData?.companySettings?.name
+      ? staticData.companySettings
+      : propCompanySettings || {
+          name: 'Gráfica & Estúdio',
+          tradingName: '',
+          document: '',
+          phone: '',
+          whatsapp: '',
+          email: '',
+          address: '',
+          city: '',
+          state: '',
+          logoUrl: '',
+          receiptFooterMessage: '',
+          paymentMethods: [],
+          catalogSubtitle: 'Sua rotina, mais simples.',
+          catalogHeaderType: 'NAME',
+        };
+
+  const items =
+    staticData?.items && staticData.items.length > 0
+      ? staticData.items
+      : propItems && propItems.length > 0
+      ? propItems
+      : [];
+
+  const categories =
+    staticData?.categories && staticData.categories.length > 0
+      ? staticData.categories
+      : propCategories && propCategories.length > 0
+      ? propCategories
+      : [];
 
   const [niches, setNiches] = useState<ProductNicheCard[]>(() =>
     StorageService.getCatalogNiches()
@@ -646,7 +698,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
 
-            {onOpenManagement && (
+            {onOpenManagement && !isStandalone && (
               <button
                 type="button"
                 onClick={onOpenManagement}

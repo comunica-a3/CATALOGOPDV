@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { initializeDatabase } from './server/db';
 import { authMiddleware } from './server/auth';
 import apiRoutes from './server/routes';
+import { buildPublicCatalogPayload } from './server/catalogPublisher';
 
 async function startServer() {
   // Inicializa diretamente o banco de dados SQLite local
@@ -21,7 +22,20 @@ async function startServer() {
   // Global Auth Token Extraction Middleware
   app.use(authMiddleware);
 
-  // Mount API Endpoints FIRST
+  // Dynamic Catalog Data Endpoints (Always live and fresh from DB without browser cache)
+  app.get(['/catalog/data', '/api/catalog/data', '/catalogo.json'], async (req, res) => {
+    try {
+      const payload = await buildPublicCatalogPayload();
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.json(payload);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erro ao carregar dados do catálogo.' });
+    }
+  });
+
+  // Mount API Endpoints
   app.use('/api', apiRoutes);
 
   // Serve static files from public directory (e.g. /catalogo.json)

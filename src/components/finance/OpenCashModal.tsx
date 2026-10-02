@@ -20,7 +20,19 @@ export const OpenCashModal: React.FC<OpenCashModalProps> = ({
   onSuccess,
 }) => {
   const { currentUser } = useAuth();
-  const [initialAmount, setInitialAmount] = useState<string>('0.00');
+  const [initialAmount, setInitialAmount] = useState<string>(() => {
+    try {
+      const lastClosed = StorageService.getCashRegisterSessions().find((s) => s.status === 'FECHADO');
+      if (lastClosed && lastClosed.countedCashAmount !== undefined) {
+        return Number(lastClosed.countedCashAmount).toFixed(2);
+      }
+      const cashAccount = StorageService.getReceivingAccounts().find((a) => a.type === 'CAIXA');
+      if (cashAccount) {
+        return Number(cashAccount.initialBalance || 0).toFixed(2);
+      }
+    } catch {}
+    return '0.00';
+  });
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

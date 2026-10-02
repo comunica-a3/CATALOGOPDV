@@ -21,7 +21,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { CompanySettings, Sale, User } from '../../types';
 import {
@@ -36,6 +36,7 @@ import { POSReceiptModal } from '../pos/POSReceiptModal';
 import { CommissionStatementModal } from './CommissionStatementModal';
 import { downloadOrderReceiptPDF } from '../../utils/pdfReceipt';
 import { StorageService } from '../../services/storage';
+import { api } from '../../services/api';
 
 interface CommissionsViewProps {
   sales: Sale[];
@@ -63,13 +64,9 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
     return new Date().toISOString().split('T')[0];
   });
 
-  // Selected Seller Filter: If Vendedor, locked to current user id. If Admin, 'TODOS' or specific seller
-  const [selectedSellerId, setSelectedSellerId] = useState<string>(
-    isAdmin ? 'TODOS' : currentUser.id
-  );
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Selected Seller for Drill-down / Detailed Statement modal
+  // Selected Seller for Drill-down / Detailed table
   const [drillDownSellerId, setDrillDownSellerId] = useState<string | null>(
     !isAdmin ? currentUser.id : null
   );
@@ -78,10 +75,64 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
   // Receipt Modal
   const [selectedReceiptSale, setSelectedReceiptSale] = useState<Sale | null>(null);
 
-  // 1. Filter sales by Period
+  // Complete Sales Store: garante consulta completa ao banco de dados no período selecionado
+  const [dbSales, setDbSales] = useState<Sale[]>(() => {
+    const local = StorageService.getSales();
+    return sales && sales.length > 0 ? sales : local;
+  });
+
+  // Atualiza as vendas consultando o banco/servidor central ao montar e sempre que o período mudar
+  useEffect(() => {
+    let isMounted = true;
+    api.getSales()
+      .then((serverSales) => {
+        if (isMounted && Array.isArray(serverSales) && serverSales.length > 0) {
+          setDbSales(serverSales);
+        }
+      })
+      .catch((err) => {
+        console.debug('Aviso ao carregar vendas para comissões:', err);
+        if (isMounted) {
+          setDbSales(StorageService.getSales());
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [period, customStartDate, customEndDate]);
+
+  // Sincroniza com vendas passadas via props
+  useEffect(() => {
+    if (sales && sales.length > 0) {
+      setDbSales(sales);
+    }
+  }, [sales]);
+
+  // Ouvir eventos de vendas atualizadas para recalcular os relatórios em tempo real
+  useEffect(() => {
+    const handleSalesUpdated = () => {
+      api.getSales()
+        .then((serverSales) => {
+          if (Array.isArray(serverSales)) setDbSales(serverSales);
+        })
+        .catch(() => {
+          setDbSales(StorageService.getSales());
+        });
+    };
+
+    window.addEventListener('sales-updated', handleSalesUpdated);
+    window.addEventListener('storage-sync-completed', handleSalesUpdated);
+    return () => {
+      window.removeEventListener('sales-updated', handleSalesUpdated);
+      window.removeEventListener('storage-sync-completed', handleSalesUpdated);
+    };
+  }, []);
+
+  // 1. Filter sales by Period (considera todos os dados do período selecionado)
   const periodFilteredSales = useMemo(() => {
-    return filterSalesByPeriod(sales, period, customStartDate, customEndDate);
-  }, [sales, period, customStartDate, customEndDate]);
+    return filterSalesByPeriod(dbSales, period, customStartDate, customEndDate);
+  }, [dbSales, period, customStartDate, customEndDate]);
 
   // 2. Aggregate stats by Seller (Using all period filtered sales)
   const aggregation = useMemo(() => {
@@ -93,12 +144,12 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
     return aggregation.summaries.find((s) => s.sellerId === drillDownSellerId) || null;
   }, [aggregation.summaries, drillDownSellerId]);
 
-  // 3. Filter sales based on Seller selection, Drill-down, and Search
+  // 3. Filter sales for Detailed Sales Table based on Seller Drill-down and Search
   const displaySales = useMemo(() => {
-    const targetSellerId = drillDownSellerId || (selectedSellerId !== 'TODOS' ? selectedSellerId : 'TODOS');
-    const effectiveSellerId = !isAdmin ? currentUser.id : targetSellerId;
-    const selectedUser = users.find((u) => u.id === effectiveSellerId);
-    const selectedUserName = selectedUser?.name?.trim().toLowerCase();
+    const effectiveSellerId = !isAdmin ? currentUser.id : drillDownSellerId;
+    const targetSummary = drillDownSellerId ? aggregation.summaries.find((s) => s.sellerId === drillDownSellerId) : null;
+    const selectedUser = effectiveSellerId ? users.find((u) => u.id === effectiveSellerId) : null;
+    const targetSellerName = targetSummary?.sellerName?.trim().toLowerCase() || selectedUser?.name?.trim().toLowerCase();
 
     return periodFilteredSales.filter((sale) => {
       // Exclude canceled sales from commission view by default
@@ -107,14 +158,26 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
       }
 
       const saleSellerName = (sale.sellerName || '').trim().toLowerCase();
-      const matchSeller =
-        effectiveSellerId === 'TODOS' ||
-        sale.sellerId === effectiveSellerId ||
-        (activeDrillDownSummary && saleSellerName === activeDrillDownSummary.sellerName.trim().toLowerCase()) ||
-        (selectedUserName && saleSellerName === selectedUserName);
+      let matchSeller = true;
+
+      if (effectiveSellerId) {
+        let matchedSaleUser = users.find((u) => u.id === sale.sellerId);
+        if (!matchedSaleUser && sale.sellerName) {
+          const sName = sale.sellerName.trim().toLowerCase();
+          matchedSaleUser = users.find((u) => u.name.trim().toLowerCase() === sName);
+        }
+        const saleEffectiveSellerId = matchedSaleUser?.id || sale.sellerId || 'sem-vendedor';
+
+        matchSeller =
+          saleEffectiveSellerId === effectiveSellerId ||
+          sale.sellerId === effectiveSellerId ||
+          (Boolean(targetSellerName) && saleSellerName === targetSellerName) ||
+          (effectiveSellerId === 'sem-vendedor' && !sale.sellerId && (!sale.sellerName || sale.sellerName === 'Vendedor Não Identificado'));
+      }
 
       const q = (searchTerm || '').toLowerCase();
       const matchSearch =
+        !q ||
         String(sale.saleNumber || '').toLowerCase().includes(q) ||
         String(sale.customerName || '').toLowerCase().includes(q) ||
         String(sale.sellerName || '').toLowerCase().includes(q) ||
@@ -122,23 +185,20 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
 
       return matchSeller && matchSearch;
     });
-  }, [periodFilteredSales, isAdmin, currentUser.id, selectedSellerId, drillDownSellerId, activeDrillDownSummary, searchTerm, users]);
+  }, [periodFilteredSales, isAdmin, currentUser.id, drillDownSellerId, aggregation.summaries, searchTerm, users]);
 
-  // Filtered seller summaries for Admin table
+  // Resumo Consolidado por Vendedor: SEMPRE exibe todos os vendedores no período (para Admin)
   const filteredSummaries = useMemo(() => {
     if (!isAdmin) {
       return aggregation.summaries.filter((s) => s.sellerId === currentUser.id);
     }
-    if (selectedSellerId === 'TODOS') {
-      return aggregation.summaries;
-    }
-    return aggregation.summaries.filter((s) => s.sellerId === selectedSellerId);
-  }, [aggregation.summaries, isAdmin, currentUser.id, selectedSellerId]);
+    return aggregation.summaries;
+  }, [aggregation.summaries, isAdmin, currentUser.id]);
 
   // Vendedor specific metrics
   const sellerSpecificMetrics = useMemo(() => {
     const summary = aggregation.summaries.find(
-      (s) => s.sellerId === (!isAdmin ? currentUser.id : selectedSellerId)
+      (s) => s.sellerId === (!isAdmin ? currentUser.id : (drillDownSellerId || currentUser.id))
     );
     return (
       summary || {
@@ -152,7 +212,7 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
         sales: [],
       }
     );
-  }, [aggregation.summaries, isAdmin, currentUser, selectedSellerId]);
+  }, [aggregation.summaries, isAdmin, currentUser, drillDownSellerId]);
 
   const handleOpenStatement = (sellerId: string) => {
     const user = users.find((u) => u.id === sellerId) || {
@@ -224,7 +284,7 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
               type="button"
               id="btn-open-all-statement"
               onClick={() => {
-                const targetId = selectedSellerId !== 'TODOS' ? selectedSellerId : users[0]?.id;
+                const targetId = drillDownSellerId || users[0]?.id;
                 if (targetId) handleOpenStatement(targetId);
               }}
               className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
@@ -263,7 +323,7 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
       )}
 
       {/* Admin Executive Dashboard Summary Cards */}
-      {isAdmin && selectedSellerId === 'TODOS' ? (
+      {isAdmin ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Total Sold in Period */}
           <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-1">
@@ -371,11 +431,11 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
         </div>
       )}
 
-      {/* Filter Toolbar: Period Buttons, Custom Date, and Seller Selector */}
+      {/* Filter Toolbar: Period Buttons and Custom Date */}
       <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           {/* Period Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
             <span className="text-xs font-bold text-slate-400 mr-1 flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5" /> Período:
             </span>
@@ -403,31 +463,6 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
               </button>
             ))}
           </div>
-
-          {/* Seller Filter (Admin Only) */}
-          {isAdmin && (
-            <div className="flex items-center gap-2 w-full lg:w-auto">
-              <span className="text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-1">
-                <Users className="w-3.5 h-3.5" /> Vendedor:
-              </span>
-              <select
-                id="select-filter-seller"
-                value={selectedSellerId}
-                onChange={(e) => {
-                  setSelectedSellerId(e.target.value);
-                  setDrillDownSellerId(e.target.value === 'TODOS' ? null : e.target.value);
-                }}
-                className="px-3 py-1.5 text-xs bg-white text-slate-900 border border-slate-300 rounded-lg font-bold focus:border-blue-500 focus:outline-none"
-              >
-                <option value="TODOS">Todos os Vendedores ({users.length})</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         {/* Custom Date Pickers if 'personalizado' */}
@@ -542,10 +577,8 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                               onClick={() => {
                                 if (drillDownSellerId === sum.sellerId) {
                                   setDrillDownSellerId(null);
-                                  setSelectedSellerId('TODOS');
                                 } else {
                                   setDrillDownSellerId(sum.sellerId);
-                                  setSelectedSellerId(sum.sellerId);
                                   setTimeout(() => {
                                     document.getElementById('detailed-sales-section')?.scrollIntoView({ behavior: 'smooth' });
                                   }, 50);
@@ -647,13 +680,10 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
             {drillDownSellerId && isAdmin && (
               <button
                 type="button"
-                onClick={() => {
-                  setDrillDownSellerId(null);
-                  setSelectedSellerId('TODOS');
-                }}
-                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                onClick={() => setDrillDownSellerId(null)}
+                className="px-2.5 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-bold border border-blue-200 transition-colors cursor-pointer"
               >
-                Limpar seleção
+                Mostrar Todas as Vendas
               </button>
             )}
           </div>

@@ -804,6 +804,10 @@ export class StorageService {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.FINANCIAL_TRANSFERS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+          }
         } else if (localTransfers.length > 0) {
           for (const trf of localTransfers) {
             api.saveFinancialTransfer(trf).catch(() => {});
@@ -825,6 +829,10 @@ export class StorageService {
             (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.CASH_REGISTER_SESSIONS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cash-sessions-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
         } else if (localSessions.length > 0) {
           for (const sess of localSessions) {
             api.saveCashRegisterSession(sess).catch(() => {});
@@ -846,6 +854,10 @@ export class StorageService {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.ACCOUNT_BALANCE_ADJUSTMENTS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+          }
         } else if (localAdjs.length > 0) {
           for (const adj of localAdjs) {
             api.saveAccountAdjustment(adj).catch(() => {});
@@ -3866,6 +3878,63 @@ export class StorageService {
     const account = accounts.find((a) => a.id === accountId);
     if (!account) return 0;
 
+    // Se a conta for do tipo CAIXA (Caixa Físico), unifica o valor com o Caixa Físico
+    if (account.type === 'CAIXA') {
+      const sessions = this.getCashRegisterSessions();
+      const activeSession = sessions.find((s) => s.status === 'ABERTO');
+      if (activeSession) {
+        return this.calculateSessionSummary(activeSession).expectedCashAmount;
+      }
+      const lastClosed = sessions.find((s) => s.status === 'FECHADO');
+      if (lastClosed) {
+        let bal = Number(lastClosed.countedCashAmount || 0);
+        const closedTime = new Date(lastClosed.closedAt || lastClosed.updatedAt || 0).getTime();
+
+        // 1. Vendas em dinheiro concluídas após o fechamento
+        const sales = this.getSales();
+        sales.forEach((sale) => {
+          if (sale.status === 'CANCELADA' || sale.status === 'EXCLUIDA' || sale.isDeleted || sale.paymentStatus === 'CANCELADO') return;
+          const sTime = new Date(sale.createdAt).getTime();
+          if (sTime > closedTime) {
+            sale.payments?.forEach((p) => {
+              const pMethod = String(p.method || '').toLowerCase();
+              if (p.accountId === accountId || (!p.accountId && pMethod.includes('dinheiro'))) {
+                bal += Number(p.amount || 0);
+              }
+            });
+          }
+        });
+
+        // 2. Transferências internas após o fechamento
+        const transfers = this.getFinancialTransfers();
+        transfers.forEach((t) => {
+          const tTime = new Date(t.createdAt).getTime();
+          if (tTime > closedTime) {
+            if (t.fromAccountId === accountId) bal -= Number(t.amount || 0);
+            if (t.toAccountId === accountId) bal += Number(t.amount || 0);
+          }
+        });
+
+        // 3. Despesas pagas em dinheiro após o fechamento
+        const expenses = this.getExpenses();
+        expenses.forEach((exp) => {
+          const eTime = new Date(`${exp.date}T00:00:00`).getTime();
+          if (eTime > closedTime && (exp.accountId === accountId || (!exp.accountId && String(exp.paymentMethod || '').toLowerCase().includes('dinheiro')))) {
+            bal -= Number(exp.amount || 0);
+          }
+        });
+
+        // 4. Ajustes manuais de saldo após o fechamento
+        const adjustments = this.getAccountBalanceAdjustments(accountId);
+        adjustments.forEach((adj) => {
+          const aTime = new Date(adj.createdAt).getTime();
+          if (aTime > closedTime) bal += Number(adj.adjustedAmount || 0);
+        });
+
+        return Number(bal.toFixed(2));
+      }
+    }
+
     let balance = Number(account.initialBalance || 0);
 
     // 1. Somar recebimentos líquidos de vendas concluídas direcionados a esta conta
@@ -4184,8 +4253,8 @@ export class StorageService {
       if (userSession) return userSession;
       const unassignedSession = sessions.find((s) => s.status === 'ABERTO' && !s.openedByUserId);
       if (unassignedSession) return unassignedSession;
-      return null;
     }
+    // Caixa físico aberto no estabelecimento (para controle compartilhado do PDV e Financeiro)
     return sessions.find((s) => s.status === 'ABERTO') || null;
   }
 
@@ -4238,6 +4307,9 @@ export class StorageService {
     api.saveCashRegisterSession(newSession).catch((err) => {
       console.warn('Sessão de caixa salva localmente; aviso de sincronização:', err);
     });
+
+    notifyRealtime('cash-sessions-updated', { id: newSession.id, action: 'open' });
+    notifyRealtime('finance-updated', { type: 'cash-session', id: newSession.id });
 
     return newSession;
   }
@@ -4348,10 +4420,40 @@ export class StorageService {
       });
     });
 
+    // Considerar movimentações financeiras (sangrias / suprimentos) ocorridas durante a sessão
+    const transfers = this.getFinancialTransfers();
+    let cashTransfersIn = 0;
+    let cashTransfersOut = 0;
+    transfers.forEach((t) => {
+      const tTime = new Date(t.createdAt).getTime();
+      if (tTime >= openedTime && tTime <= closedTime) {
+        if (cashAccountIds.has(t.fromAccountId)) {
+          cashTransfersOut += Number(t.amount || 0);
+        }
+        if (cashAccountIds.has(t.toAccountId)) {
+          cashTransfersIn += Number(t.amount || 0);
+        }
+      }
+    });
+
+    // Considerar ajustes de saldo ocorridos durante a sessão
+    const adjustments = this.getAccountBalanceAdjustments();
+    let cashAdjustments = 0;
+    adjustments.forEach((adj) => {
+      const adjTime = new Date(adj.createdAt).getTime();
+      if (adjTime >= openedTime && adjTime <= closedTime && cashAccountIds.has(adj.accountId)) {
+        cashAdjustments += Number(adj.adjustedAmount || 0);
+      }
+    });
+
+    const expectedCash = Number(
+      (session.initialAmount + cashSales - cashExpenses + cashTransfersIn - cashTransfersOut + cashAdjustments).toFixed(2)
+    );
+
     return {
       cashSalesAmount: Number(cashSales.toFixed(2)),
       cashExpensesAmount: Number(cashExpenses.toFixed(2)),
-      expectedCashAmount: Number((session.initialAmount + cashSales - cashExpenses).toFixed(2)),
+      expectedCashAmount: expectedCash,
       totalSalesCount: sessionSales.length,
       totalGrossSales: Number(totalGross.toFixed(2)),
       totalCardFees: Number(totalFees.toFixed(2)),
@@ -4425,6 +4527,9 @@ export class StorageService {
     api.saveCashRegisterSession(updatedSession).catch((err) => {
       console.warn('Fechamento de caixa salvo localmente; aviso de sincronização:', err);
     });
+
+    notifyRealtime('cash-sessions-updated', { id: updatedSession.id, action: 'close' });
+    notifyRealtime('finance-updated', { type: 'cash-session', id: updatedSession.id });
 
     return updatedSession;
   }

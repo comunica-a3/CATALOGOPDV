@@ -155,10 +155,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [categories, setCategories] = useState<Category[]>(() => StorageService.getCategories());
   const [items, setItems] = useState<Item[]>(() => StorageService.getItems());
 
-  // Keep balances in sync when sales, accounts, transfers, or expenses change
+  // Keep balances in sync when sales, accounts, transfers, expenses, or cash sessions change
   useEffect(() => {
     setAccountBalances(StorageService.getAllAccountBalances());
-  }, [sales, receivingAccounts, financialTransfers, expenses, balanceAdjustments]);
+  }, [sales, receivingAccounts, financialTransfers, expenses, balanceAdjustments, cashSessions]);
 
   // Reload data helper
   const reloadFinanceData = () => {
@@ -173,7 +173,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     onDataChange();
   };
 
-  // Listen for real-time synchronization events (receiving accounts, expenses, finance, sales)
+  // Listen for real-time synchronization events (receiving accounts, expenses, finance, sales, cash sessions)
   useEffect(() => {
     const handleSyncUpdate = () => {
       reloadFinanceData();
@@ -182,6 +182,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     window.addEventListener('receiving-accounts-updated', handleSyncUpdate);
     window.addEventListener('expenses-updated', handleSyncUpdate);
     window.addEventListener('finance-updated', handleSyncUpdate);
+    window.addEventListener('cash-sessions-updated', handleSyncUpdate);
     window.addEventListener('sales-updated', handleSyncUpdate);
     window.addEventListener('storage-sync-completed', handleSyncUpdate);
 
@@ -189,6 +190,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       window.removeEventListener('receiving-accounts-updated', handleSyncUpdate);
       window.removeEventListener('expenses-updated', handleSyncUpdate);
       window.removeEventListener('finance-updated', handleSyncUpdate);
+      window.removeEventListener('cash-sessions-updated', handleSyncUpdate);
       window.removeEventListener('sales-updated', handleSyncUpdate);
       window.removeEventListener('storage-sync-completed', handleSyncUpdate);
     };
