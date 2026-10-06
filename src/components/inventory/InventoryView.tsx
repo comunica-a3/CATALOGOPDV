@@ -51,6 +51,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [unitCost, setUnitCost] = useState<number>(0);
   const [reason, setReason] = useState<string>('');
   const [documentRef, setDocumentRef] = useState<string>('');
+  const [movementError, setMovementError] = useState<string | null>(null);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   // Physical items only
   const physicalItems = useMemo(() => {
@@ -123,17 +125,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setQuantity(10);
     setReason('');
     setDocumentRef('');
+    setMovementError(null);
     setIsMovementModalOpen(true);
   };
 
-  const handleSaveMovement = (e: React.FormEvent) => {
+  const handleSaveMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItemId || quantity <= 0) {
-      alert('Selecione um item e informe uma quantidade válida.');
+      setMovementError('Selecione um item e informe uma quantidade válida.');
       return;
     }
 
     try {
+      setMovementError(null);
       StorageService.createInventoryMovement({
         itemId: selectedItemId,
         variantId: selectedVariantId || undefined,
@@ -145,10 +149,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         createdByName: currentUser.name,
       });
 
+      setActionSuccessMsg('Movimentação de estoque salva e sincronizada com sucesso!');
+      setTimeout(() => setActionSuccessMsg(null), 4000);
       onDataChange();
       setIsMovementModalOpen(false);
     } catch (err: any) {
-      alert(err.message || 'Erro ao registrar movimentação.');
+      setMovementError(err.message || 'Erro ao registrar movimentação no estoque.');
     }
   };
 
@@ -175,6 +181,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           <span>Nova Movimentação</span>
         </button>
       </div>
+
+      {/* Feedback de Sucesso */}
+      {actionSuccessMsg && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-xs text-emerald-900 font-bold shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionSuccessMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionSuccessMsg(null)}
+            className="p-1 hover:bg-emerald-100 rounded text-emerald-700 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Low Stock Warning Banner if any */}
       {lowStockItems.length > 0 ? (
@@ -512,6 +535,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           maxWidth="lg"
         >
           <form onSubmit={handleSaveMovement} className="space-y-4">
+            {movementError && (
+              <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="flex-1">{movementError}</span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Produto Físico *

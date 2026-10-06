@@ -78,22 +78,38 @@ export const PublishCatalogModal: React.FC<PublishCatalogModalProps> = ({
   }, [isOpen]);
 
   const handlePublish = async () => {
+    // Validação preventiva no frontend para orientar o usuário com precisão
+    const effectiveToken = (githubToken || '').trim();
+    const effectiveOwner = (githubOwner || '').trim();
+    const effectiveRepo = (githubRepo || '').trim();
+    const effectiveBranch = (githubBranch || 'main').trim();
+
+    if (!status?.configured && (!effectiveToken || !effectiveOwner || !effectiveRepo)) {
+      setShowConfigFields(true);
+      const missing = [];
+      if (!effectiveToken) missing.push('Token do GitHub (PAT)');
+      if (!effectiveOwner) missing.push('Dono do Repositório (Owner)');
+      if (!effectiveRepo) missing.push('Nome do Repositório');
+      setErrorMessage(`Preencha os campos obrigatórios para publicar no GitHub: ${missing.join(', ')}.`);
+      return;
+    }
+
     setIsPublishing(true);
     setErrorMessage(null);
     setSuccessResult(null);
 
     try {
       // Salva preferências no localStorage
-      if (githubToken) localStorage.setItem('pdv_github_token', githubToken.trim());
-      if (githubOwner) localStorage.setItem('pdv_github_owner', githubOwner.trim());
-      if (githubRepo) localStorage.setItem('pdv_github_repo', githubRepo.trim());
-      if (githubBranch) localStorage.setItem('pdv_github_branch', githubBranch.trim());
+      if (effectiveToken) localStorage.setItem('pdv_github_token', effectiveToken);
+      if (effectiveOwner) localStorage.setItem('pdv_github_owner', effectiveOwner);
+      if (effectiveRepo) localStorage.setItem('pdv_github_repo', effectiveRepo);
+      if (effectiveBranch) localStorage.setItem('pdv_github_branch', effectiveBranch);
 
       const res = await api.publishCatalog({
-        githubToken: githubToken.trim() || undefined,
-        githubRepoOwner: githubOwner.trim() || undefined,
-        githubRepoName: githubRepo.trim() || undefined,
-        githubBranch: githubBranch.trim() || undefined,
+        githubToken: effectiveToken || undefined,
+        githubRepoOwner: effectiveOwner || undefined,
+        githubRepoName: effectiveRepo || undefined,
+        githubBranch: effectiveBranch || undefined,
       });
 
       setSuccessResult({
@@ -107,7 +123,14 @@ export const PublishCatalogModal: React.FC<PublishCatalogModalProps> = ({
         onSuccess();
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erro ao publicar catálogo no GitHub.');
+      const msg = err.message || '';
+      if (msg.includes('Failed to fetch') || msg.includes('Failed to Fetch')) {
+        setErrorMessage(
+          'Falha de conexão com a API do servidor ao tentar publicar no GitHub. Verifique se o servidor está ativo e com acesso à internet.'
+        );
+      } else {
+        setErrorMessage(msg || 'Erro ao publicar catálogo no GitHub.');
+      }
     } finally {
       setIsPublishing(false);
     }

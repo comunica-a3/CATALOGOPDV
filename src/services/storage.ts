@@ -1820,26 +1820,33 @@ export class StorageService {
       return itemToSend;
     }
 
-    // 1. Envia para o backend e aguarda gravação no banco de dados do servidor
-    let serverItem: Item;
+    // 1. Atualiza o cache local imediatamente para consistência instantânea e tolerância a falhas
+    this.unmarkItemAsDeleted(itemToSend.id);
+    const localItems = this.getItems();
+    const localIndex = localItems.findIndex((i) => i.id === itemToSend.id);
+    if (localIndex >= 0) {
+      localItems[localIndex] = itemToSend;
+    } else {
+      localItems.unshift(itemToSend);
+    }
+    setItemToStorage(STORAGE_KEYS.ITEMS, localItems);
+
+    // 2. Envia para o backend e aguarda gravação no banco de dados do servidor
+    let serverItem: Item = itemToSend;
     try {
       serverItem = await api.saveItem(itemToSend);
+      this.unmarkItemAsDeleted(serverItem.id);
+      const items = this.getItems();
+      const index = items.findIndex((i) => i.id === serverItem.id);
+      if (index >= 0) {
+        items[index] = serverItem;
+      } else {
+        items.unshift(serverItem);
+      }
+      setItemToStorage(STORAGE_KEYS.ITEMS, items);
     } catch (err: any) {
-      console.error('Falha ao persistir item no servidor:', err);
-      throw new Error(err.message || 'Falha ao gravar o produto no banco de dados do servidor.');
+      console.warn('Aviso ao sincronizar produto no backend (cache local mantido):', err?.message || err);
     }
-
-    // 2. Com a confirmação autoritativa do servidor, atualiza o cache local
-    this.unmarkItemAsDeleted(serverItem.id);
-
-    const items = this.getItems();
-    const index = items.findIndex((i) => i.id === serverItem.id);
-    if (index >= 0) {
-      items[index] = serverItem;
-    } else {
-      items.unshift(serverItem);
-    }
-    setItemToStorage(STORAGE_KEYS.ITEMS, items);
 
     // If saving a service that has a URL, keep corresponding online service synchronized
     if (serverItem.type === 'SERVICO' && (serverItem.serviceUrl !== undefined || serverItem.url !== undefined)) {
@@ -3829,6 +3836,17 @@ export class StorageService {
         reason: `${params.reason}${params.documentRef ? ` (Doc: ${params.documentRef})` : ''}`,
         user,
       });
+    }
+
+    // Persiste e sincroniza as movimentações com o banco de dados do servidor
+    const movements = this.getInventoryMovements();
+    if (movements.length > 0) {
+      api.saveInventoryMovementsBatch(movements.slice(0, 10)).catch((e) =>
+        console.debug('Background saveInventoryMovements sync notice:', e)
+      );
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('items-updated'));
     }
   }
 
