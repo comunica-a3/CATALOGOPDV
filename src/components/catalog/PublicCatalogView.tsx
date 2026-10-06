@@ -25,7 +25,6 @@ import {
   Settings,
   Plus,
   ShoppingCart,
-  Loader2,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -177,99 +176,123 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
   isStandalone = false,
 }) => {
   const { isAdmin } = useAuth();
-  const [staticData, setStaticData] = useState<{
-    items: Item[];
-    categories: Category[];
-    companySettings: CompanySettings;
-    niches: ProductNicheCard[];
-  } | null>(null);
-  const [isLoadingStatic, setIsLoadingStatic] = useState(false);
 
-  // Carrega sempre os dados atuais da fonte central do sistema (/catalog/data)
+  // Fonte Oficial e Única do Catálogo Online:
+  // Alimentado pelas props do App ou pelo StorageService central do sistema.
+  // Não utiliza fontes estáticas concorrentes (ex: catalogo.json ou fetch paralelo) que sobrescreviam os dados.
+  const [localItems, setLocalItems] = useState<Item[]>(() =>
+    propItems && propItems.length > 0 ? propItems : StorageService.getItems()
+  );
+  const [localCategories, setLocalCategories] = useState<Category[]>(() =>
+    propCategories && propCategories.length > 0 ? propCategories : StorageService.getCategories()
+  );
+  const [localCompanySettings, setLocalCompanySettings] = useState<CompanySettings>(() =>
+    propCompanySettings?.name ? propCompanySettings : StorageService.getCompanySettings()
+  );
+  const [niches, setNiches] = useState<ProductNicheCard[]>(() =>
+    StorageService.getCatalogNiches()
+  );
+
+  // Mantém os dados sincronizados quando as props da aplicação forem atualizadas
   useEffect(() => {
-    let isMounted = true;
-    const fetchCatalogData = async () => {
-      // Prioridade 1: Buscar do endpoint de dados do catálogo do servidor central
-      try {
-        setIsLoadingStatic(true);
-        let res = await fetch(`/api/catalog/data?t=${Date.now()}`);
-        if (!res.ok) {
-          res = await fetch(`/catalog/data?t=${Date.now()}`);
-        }
-        if (!res.ok) {
-          res = await fetch(`/catalogo.json?t=${Date.now()}`);
-        }
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data && (data.items || data.company)) {
-            setStaticData({
-              items: data.items || [],
-              categories: data.categories || [],
-              companySettings: data.company || {},
-              niches: data.niches || [],
-            });
-            if (data.niches && data.niches.length > 0) {
-              setNiches(data.niches);
-            }
-            if (data.company && data.company.name) {
-              try {
-                StorageService.saveCompanySettings(data.company);
-              } catch {}
-            }
-            return;
-          }
-        }
-      } catch (err) {
-        console.debug('Aviso ao consultar dados do catálogo:', err);
-      } finally {
-        if (isMounted) setIsLoadingStatic(false);
-      }
+    if (propItems && propItems.length > 0) {
+      setLocalItems(propItems);
+    }
+  }, [propItems]);
 
-      // Prioridade 2: Se o backend não responder (modo offline), usa os dados locais do StorageService
-      if (isMounted) {
-        try {
-          const localItems = StorageService.getItems();
-          const localCats = StorageService.getCategories();
-          const localSettings = StorageService.getCompanySettings();
-          const localNiches = StorageService.getCatalogNiches();
-          if (localItems.length > 0 || localSettings.name) {
-            setStaticData({
-              items: localItems,
-              categories: localCats,
-              companySettings: localSettings,
-              niches: localNiches,
-            });
-            if (localNiches.length > 0) setNiches(localNiches);
-          }
-        } catch {}
-      }
-    };
+  useEffect(() => {
+    if (propCategories && propCategories.length > 0) {
+      setLocalCategories(propCategories);
+    }
+  }, [propCategories]);
 
-    fetchCatalogData();
+  useEffect(() => {
+    if (propCompanySettings?.name) {
+      setLocalCompanySettings(propCompanySettings);
+    }
+  }, [propCompanySettings]);
 
-    // Sincronização em tempo real quando o catálogo, itens ou configurações mudarem
+  // Sincronização em tempo real quando o catálogo, itens, nichos ou configurações forem alterados no sistema
+  useEffect(() => {
     const handleUpdate = () => {
-      fetchCatalogData();
+      if (!propItems || propItems.length === 0) {
+        setLocalItems(StorageService.getItems());
+      }
+      if (!propCategories || propCategories.length === 0) {
+        setLocalCategories(StorageService.getCategories());
+      }
+      if (!propCompanySettings?.name) {
+        setLocalCompanySettings(StorageService.getCompanySettings());
+      }
+      setNiches(StorageService.getCatalogNiches());
     };
 
     window.addEventListener('catalog-updated', handleUpdate);
     window.addEventListener('items-updated', handleUpdate);
+    window.addEventListener('categories-updated', handleUpdate);
     window.addEventListener('settings-updated', handleUpdate);
+    window.addEventListener('catalog-niches-updated', handleUpdate);
     window.addEventListener('storage-sync-completed', handleUpdate);
 
     return () => {
-      isMounted = false;
       window.removeEventListener('catalog-updated', handleUpdate);
       window.removeEventListener('items-updated', handleUpdate);
+      window.removeEventListener('categories-updated', handleUpdate);
       window.removeEventListener('settings-updated', handleUpdate);
+      window.removeEventListener('catalog-niches-updated', handleUpdate);
       window.removeEventListener('storage-sync-completed', handleUpdate);
     };
-  }, []);
+  }, [propItems, propCategories, propCompanySettings]);
+
+  // Suporte à visualização estática no GitHub Pages (ou ambiente isolado sem backend):
+  // Se a página for aberta em um ambiente puramente estático onde não há dados locais no navegador
+  // (ex: visitante acessando o link do GitHub Pages onde o backend Express/SQLite não existe),
+  // carrega o catalogo.json publicado apenas para exibição, sem sobrescrever o sistema principal.
+  useEffect(() => {
+    // Se a aplicação já possui itens oficiais (sistema em operação normal), NÃO executa fetch estático
+    if ((propItems && propItems.length > 0) || StorageService.getItems().length > 0) {
+      return;
+    }
+
+    let isMounted = true;
+    const loadStaticForGitHubPages = async () => {
+      try {
+        const basePath = (import.meta as any).env?.BASE_URL || '/';
+        const catalogUrl = `${basePath.replace(/\/$/, '')}/catalogo.json?t=${Date.now()}`;
+        const res = await fetch(catalogUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data && Array.isArray(data.items) && data.items.length > 0) {
+            setLocalItems(data.items);
+            if (data.categories && Array.isArray(data.categories)) {
+              setLocalCategories(data.categories);
+            }
+            if (data.company && data.company.name) {
+              setLocalCompanySettings(data.company);
+            }
+            if (data.niches && Array.isArray(data.niches)) {
+              setNiches(data.niches);
+            }
+          }
+        }
+      } catch (err) {
+        // Silencioso se não houver catalogo.json acessível
+      }
+    };
+
+    loadStaticForGitHubPages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [propItems]);
 
   const companySettings: CompanySettings =
-    staticData?.companySettings?.name
-      ? staticData.companySettings
-      : propCompanySettings || {
+    propCompanySettings?.name
+      ? propCompanySettings
+      : localCompanySettings.name
+      ? localCompanySettings
+      : {
           name: 'Gráfica & Estúdio',
           tradingName: '',
           document: '',
@@ -286,23 +309,15 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
           catalogHeaderType: 'NAME',
         };
 
-  const items =
-    staticData?.items && staticData.items.length > 0
-      ? staticData.items
-      : propItems && propItems.length > 0
+  const items: Item[] =
+    propItems && propItems.length > 0
       ? propItems
-      : [];
+      : localItems;
 
-  const categories =
-    staticData?.categories && staticData.categories.length > 0
-      ? staticData.categories
-      : propCategories && propCategories.length > 0
+  const categories: Category[] =
+    propCategories && propCategories.length > 0
       ? propCategories
-      : [];
-
-  const [niches, setNiches] = useState<ProductNicheCard[]>(() =>
-    StorageService.getCatalogNiches()
-  );
+      : localCategories;
 
   const [isNicheManagerOpen, setIsNicheManagerOpen] = useState(false);
   const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
@@ -649,16 +664,6 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     selectedType !== 'TODOS' ||
     sortBy !== 'featured' ||
     (selectedNiche !== null && selectedNiche !== 'TODOS');
-
-  if (isLoadingStatic && items.length === 0) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center p-12 text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-        <p className="text-sm font-bold text-slate-700">Carregando catálogo...</p>
-        <p className="text-xs text-slate-500 mt-1">Obtendo produtos e categorias da vitrine pública</p>
-      </div>
-    );
-  }
 
   return (
     <div id="public-catalog-view" className="space-y-6 animate-in fade-in duration-200">
