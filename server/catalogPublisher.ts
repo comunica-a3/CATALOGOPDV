@@ -288,20 +288,28 @@ export async function publishCatalogToGitHub(options?: {
   let existingSha: string | undefined;
   try {
     const branchParam = branch ? `?ref=${encodeURIComponent(branch)}` : '';
-    const checkRes = await fetch(`${fileApiUrl}${branchParam}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
-      },
-    });
+    let checkRes: Response;
+    try {
+      checkRes = await fetch(`${fileApiUrl}${branchParam}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
+        },
+      });
+    } catch (networkErr: any) {
+      console.error('[Catálogo Online] Falha de conexão de rede ao contatar a API do GitHub:', networkErr);
+      throw new Error(
+        `Falha de conexão com a API do GitHub (${networkErr?.message || networkErr}). Verifique a conexão de internet do servidor ou firewall.`
+      );
+    }
 
     if (checkRes.ok) {
       const existingData: any = await checkRes.json();
       existingSha = existingData.sha;
     } else if (checkRes.status === 401 || checkRes.status === 403) {
       throw new Error(
-        `Token do GitHub inválido ou sem permissão de escrita em repositório (${checkRes.status}). Verifique o escopo "contents:write" ou "repo".`
+        `Token do GitHub inválido ou sem permissão de escrita em repositório (${checkRes.status}). Verifique se o PAT possui o escopo "contents:write" ou "repo".`
       );
     } else if (checkRes.status !== 404) {
       const errData: any = await checkRes.json().catch(() => ({}));
@@ -310,7 +318,12 @@ export async function publishCatalogToGitHub(options?: {
       );
     }
   } catch (checkErr: any) {
-    if (checkErr.message && checkErr.message.includes('Token do GitHub')) {
+    if (
+      checkErr.message &&
+      (checkErr.message.includes('Token do GitHub') ||
+        checkErr.message.includes('Falha de conexão com a API do GitHub') ||
+        checkErr.message.includes('Erro ao consultar repositório'))
+    ) {
       throw checkErr;
     }
     console.warn('Aviso ao checar SHA do arquivo no GitHub:', checkErr.message);
@@ -333,16 +346,24 @@ export async function publishCatalogToGitHub(options?: {
   }
 
   // 6. Envia requisição PUT para o GitHub
-  const putRes = await fetch(fileApiUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let putRes: Response;
+  try {
+    putRes = await fetch(fileApiUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (networkPutErr: any) {
+    console.error('[Catálogo Online] Falha de conexão ao enviar dados ao GitHub:', networkPutErr);
+    throw new Error(
+      `Falha de conexão ao enviar o catálogo para o GitHub (${networkPutErr?.message || networkPutErr}). Verifique a conexão de internet do servidor.`
+    );
+  }
 
   if (!putRes.ok) {
     const errData: any = await putRes.json().catch(() => ({}));

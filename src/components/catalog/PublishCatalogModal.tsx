@@ -124,13 +124,8 @@ export const PublishCatalogModal: React.FC<PublishCatalogModalProps> = ({
       }
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('Failed to fetch') || msg.includes('Failed to Fetch')) {
-        setErrorMessage(
-          'Falha de conexão com a API do servidor ao tentar publicar no GitHub. Verifique se o servidor está ativo e com acesso à internet.'
-        );
-      } else {
-        setErrorMessage(msg || 'Erro ao publicar catálogo no GitHub.');
-      }
+      console.error('[PublicCatalogModal] Erro ao publicar catálogo:', err);
+      setErrorMessage(msg || 'Erro ao publicar catálogo no GitHub.');
     } finally {
       setIsPublishing(false);
     }

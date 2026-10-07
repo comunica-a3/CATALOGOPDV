@@ -3087,6 +3087,7 @@ router.post('/catalog/publish', async (req: AuthRequest, res) => {
 
     res.json(result);
   } catch (err: any) {
+    console.error('[Publicação Catálogo] Erro capturado no servidor:', err?.message || err);
     res.status(400).json({
       success: false,
       error: err.message || 'Falha ao sincronizar catálogo com o GitHub.',
