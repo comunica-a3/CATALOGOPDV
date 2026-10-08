@@ -3800,21 +3800,6 @@
       "showInCatalog": true
     },
     {
-      "id": "item-1791305810356-ooenln",
-      "name": "Produto Teste",
-      "categoryId": "",
-      "type": "PRODUTO_FISICO",
-      "description": "",
-      "salePrice": 0,
-      "unit": "UN",
-      "stock": 10,
-      "imageUrl": "",
-      "requiresFile": false,
-      "featuredInCatalog": false,
-      "active": true,
-      "showInCatalog": true
-    },
-    {
       "id": "prod-srv-gov",
       "name": "Recuperação de Senha GOV",
       "sku": "SRV-SENHA-GOV",
