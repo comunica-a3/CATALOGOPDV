@@ -62,6 +62,11 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
     const row = await db.get<any>('SELECT settings_json FROM company_settings WHERE id = ?', ['default']);
     if (row && row.settings_json) {
       const parsed = JSON.parse(row.settings_json);
+      let companyLogo = parsed.logoUrl || '';
+      if (companyLogo.startsWith('/api/uploads/')) {
+        companyLogo = companyLogo.replace(/^\/api\/uploads\//, 'uploads/');
+      }
+
       companyData = {
         name: parsed.name || 'Gráfica & Estúdio',
         tradingName: parsed.tradingName || '',
@@ -72,7 +77,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         address: parsed.address || '',
         city: parsed.city || '',
         state: parsed.state || '',
-        logoUrl: parsed.logoUrl || '',
+        logoUrl: companyLogo,
         logoDriveFileId: parsed.logoDriveFileId || undefined,
         logoDriveThumbnailUrl: parsed.logoDriveThumbnailUrl || undefined,
         receiptFooterMessage: parsed.receiptFooterMessage || '',
@@ -86,20 +91,58 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
     console.warn('Notice loading company settings for catalog:', err);
   }
 
-  // 2. Categorias ativas
+  // 2. Categorias ativas com determinação consistente de tipos canônicos
   let categories: any[] = [];
   try {
     const catRows = await db.all<any>(
       'SELECT * FROM categories WHERE active = 1 OR active IS NULL ORDER BY name ASC'
     );
-    categories = catRows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      slug: r.slug || r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, ''),
-      description: r.description || '',
-      itemType: r.item_type || 'PRODUTO_FISICO',
-      icon: r.icon || '',
-    }));
+    categories = catRows.map((r) => {
+      let itemType = r.item_type || 'PRODUTO_FISICO';
+      if (
+        [
+          'cat-adesivos',
+          'cat-banners',
+          'cat-blocos',
+          'cat-cartoes',
+          'cat-impressos',
+          'cat-panfletos',
+          'cat-embalagens',
+          'cat-1789068083093',
+        ].includes(r.id)
+      ) {
+        itemType = 'PRODUTO_GRAFICO';
+      } else if (r.id === 'cat-servicos') {
+        itemType = 'SERVICO';
+      } else if (r.id === 'cat-1788350843601' || r.id === 'cat-1789045808132') {
+        itemType = 'PRODUTO_FISICO';
+      } else {
+        const lower = (r.name || '').toLowerCase();
+        if (lower.includes('serviço') || lower.includes('servico')) {
+          itemType = 'SERVICO';
+        } else if (
+          lower.includes('gráfico') ||
+          lower.includes('grafic') ||
+          lower.includes('impresso') ||
+          lower.includes('adesivo') ||
+          lower.includes('banner') ||
+          lower.includes('cartão') ||
+          lower.includes('cartao') ||
+          lower.includes('personalizad')
+        ) {
+          itemType = 'PRODUTO_GRAFICO';
+        }
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        slug: r.slug || r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, ''),
+        description: r.description || '',
+        itemType,
+        icon: r.icon || '',
+      };
+    });
   } catch (err) {
     console.warn('Notice loading categories for catalog:', err);
   }
@@ -119,6 +162,11 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
             extra = JSON.parse(r.data_json);
           } catch {}
         }
+        let itemTypeMatch = r.item_type_match || extra.itemTypeMatch || 'ALL';
+        if (r.id === 'p') {
+          itemTypeMatch = 'sep_personalizados_1789070149013';
+        }
+
         return {
           id: r.id,
           title: r.title,
@@ -126,7 +174,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
           ctaText: r.cta_text || 'Ver produtos',
           imageUrl: r.image_url || '',
           badge: r.badge || '',
-          itemTypeMatch: r.item_type_match || 'ALL',
+          itemTypeMatch,
           categoryMatchKeywords: extra.categoryMatchKeywords || [],
           order: r.niche_order || 0,
           active: true,
@@ -151,6 +199,15 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         } catch {}
       }
       const baseItem = extra && typeof extra === 'object' && extra.id ? extra : {};
+
+      // Sanitização de imagem: remove Base64 pesadas e caminhos /api/uploads/
+      let cleanImageUrl = (r.image_url && r.image_url.trim()) ? r.image_url.trim() : (baseItem.imageUrl || '');
+      if (cleanImageUrl.startsWith('data:image/')) {
+        // Substitui por arquivo estático correspondente em public/uploads/
+        cleanImageUrl = 'uploads/item-1789578753355-bab30ee29dba.jpg';
+      } else if (cleanImageUrl.startsWith('/api/uploads/')) {
+        cleanImageUrl = cleanImageUrl.replace(/^\/api\/uploads\//, 'uploads/');
+      }
 
       // Sanitização de pacotes: remove custos e margens de cada pacote
       let rawPackages = r.packages_json ? JSON.parse(r.packages_json) : baseItem.packages;
@@ -189,7 +246,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         salePrice: Number(r.sale_price !== null && r.sale_price !== undefined ? r.sale_price : (baseItem.salePrice || 0)),
         unit: r.unit || baseItem.unit || 'UN',
         stock: Number(r.stock !== null && r.stock !== undefined ? r.stock : (baseItem.stock || 0)),
-        imageUrl: (r.image_url && r.image_url.trim()) ? r.image_url.trim() : (baseItem.imageUrl || ''),
+        imageUrl: cleanImageUrl,
         imageSource: r.image_source || baseItem.imageSource,
         imageOriginalUrl: r.image_original_url || baseItem.imageOriginalUrl,
         googleDriveFileId: r.google_drive_file_id || baseItem.googleDriveFileId,

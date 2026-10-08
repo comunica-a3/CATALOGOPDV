@@ -6297,7 +6297,16 @@ export class StorageService {
     if (!niches || !Array.isArray(niches) || niches.length === 0) {
       return INITIAL_CATALOG_NICHES;
     }
-    return [...niches].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+    // Garante que nichos oficiais (como 'p' - Personalizados e Presentes) não se percam caso o storage contenha cache legado
+    const existingIds = new Set(niches.map((n) => n.id));
+    const merged = [...niches];
+    for (const init of INITIAL_CATALOG_NICHES) {
+      if (!existingIds.has(init.id)) {
+        merged.push(init);
+        existingIds.add(init.id);
+      }
+    }
+    return merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
   }
 
   static getCatalogNicheById(id: string): ProductNicheCard | undefined {

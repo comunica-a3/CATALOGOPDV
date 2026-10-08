@@ -26,7 +26,7 @@ import {
   Plus,
   ShoppingCart,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Category, CompanySettings, Item, ProductNicheCard, VitrineCartItem } from '../../types';
@@ -54,6 +54,7 @@ export const PRODUCT_NICHES: ProductNicheCard[] = StorageService.getCatalogNiche
  */
 export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): string | null {
   const niches = nichesList || StorageService.getCatalogNiches();
+  if (!item) return null;
 
   // 1. Nicho explicitamente cadastrado no item
   if (item.niche) {
@@ -72,18 +73,27 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
     if (partial) return partial.id;
   }
 
+  const itemType = (item.type || (item as any).itemType || '').trim();
+
   // Obter separações conhecidas para suporte a correspondência por id ou nome
   const knownSeparations = StorageService.getProductSeparations();
   const currentItemSep = knownSeparations.find(
-    (s) => s.id === item.type || s.name.toLowerCase() === item.type?.toLowerCase()
+    (s) => s.id === itemType || s.name.toLowerCase() === itemType.toLowerCase()
   );
 
   // 2. Classificação pelo Tipo/Separação de Item configurado no Nicho
   const matchedByType = niches.find((n) => {
     if (!n.itemTypeMatch || n.itemTypeMatch === 'ALL') return false;
-    // Correspondência direta por ID ou valor
-    if (n.itemTypeMatch === item.type) return true;
-    if (item.type && n.itemTypeMatch.toLowerCase() === item.type.toLowerCase()) return true;
+    // Correspondência direta por ID ou valor exato (case-insensitive)
+    if (n.itemTypeMatch === itemType) return true;
+    if (itemType && n.itemTypeMatch.toLowerCase() === itemType.toLowerCase()) return true;
+    // Suporte prioritário ao nicho 'p' e ao tipo personalizado 'sep_personalizados_1789070149013'
+    if (
+      (n.itemTypeMatch === 'sep_personalizados_1789070149013' && itemType === 'sep_personalizados_1789070149013') ||
+      (n.id === 'p' && (itemType === 'sep_personalizados_1789070149013' || itemType.toLowerCase().includes('personalizad')))
+    ) {
+      return true;
+    }
     // Correspondência cruzada por separação (ID x Nome)
     if (currentItemSep) {
       if (
@@ -98,7 +108,7 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
     );
     if (
       nicheSep &&
-      (nicheSep.id === item.type || nicheSep.name.toLowerCase() === item.type?.toLowerCase())
+      (nicheSep.id === itemType || nicheSep.name.toLowerCase() === itemType.toLowerCase())
     ) {
       return true;
     }
@@ -109,36 +119,49 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
     return matchedByType.id;
   }
 
-  // 3. Fallback inteligente pelos tipos padrões do sistema
-  if (item.type === 'PRODUTO_GRAFICO') {
+  // 3. Fallback inteligente pelos tipos canônicos do sistema
+  if (itemType === 'PRODUTO_GRAFICO') {
     const graf = niches.find(
       (n) =>
         n.id === 'grafica-e-personalizados' ||
-        n.title.toLowerCase().includes('grafic') ||
-        n.title.toLowerCase().includes('personalizad')
+        n.itemTypeMatch === 'PRODUTO_GRAFICO' ||
+        n.title.toLowerCase().includes('grafic')
     );
     if (graf) return graf.id;
   }
-  if (item.type === 'PRODUTO_FISICO') {
+  if (itemType === 'PRODUTO_FISICO') {
     const elet = niches.find(
       (n) =>
         n.id === 'produtos-eletronicos' ||
+        n.itemTypeMatch === 'PRODUTO_FISICO' ||
         n.title.toLowerCase().includes('eletron') ||
         n.title.toLowerCase().includes('acessorio')
     );
     if (elet) return elet.id;
   }
-  if (item.type === 'SERVICO') {
+  if (itemType === 'SERVICO') {
     const serv = niches.find(
       (n) =>
         n.id === 'servicos-digitais' ||
+        n.itemTypeMatch === 'SERVICO' ||
         n.title.toLowerCase().includes('digital') ||
         n.title.toLowerCase().includes('servico')
     );
     if (serv) return serv.id;
   }
 
-  // 4. Fallback por nome da separação customizada no título do nicho
+  // 4. Se for produto com separação personalizada (ex: presentes, personalizados), associa ao nicho correspondente
+  if (itemType.toLowerCase().includes('personalizad') || itemType.startsWith('sep_')) {
+    const customNiche = niches.find(
+      (n) =>
+        n.id === 'p' ||
+        n.itemTypeMatch === 'sep_personalizados_1789070149013' ||
+        n.title.toLowerCase().includes('personalizad')
+    );
+    if (customNiche) return customNiche.id;
+  }
+
+  // 5. Fallback por nome da separação customizada no título do nicho
   if (currentItemSep) {
     const matchedBySepTitle = niches.find((n) =>
       n.title.toLowerCase().includes(currentItemSep.name.toLowerCase())
@@ -146,7 +169,7 @@ export function getItemNiche(item: Item, nichesList?: ProductNicheCard[]): strin
     if (matchedBySepTitle) return matchedBySepTitle.id;
   }
 
-  // 4. Verificação por categoria e palavras-chave
+  // 6. Verificação por categoria e palavras-chave
   const searchCorpus = `${item.name} ${item.description || ''} ${item.categoryId || ''}`.toLowerCase();
   for (const niche of niches) {
     if (niche.categoryMatchKeywords && niche.categoryMatchKeywords.length > 0) {
@@ -244,48 +267,61 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     };
   }, [propItems, propCategories, propCompanySettings]);
 
-  // Suporte à visualização estática no GitHub Pages (ou ambiente isolado sem backend):
-  // Se a página for aberta em um ambiente puramente estático onde não há dados locais no navegador
-  // (ex: visitante acessando o link do GitHub Pages onde o backend Express/SQLite não existe),
-  // carrega o catalogo.json publicado apenas para exibição, sem sobrescrever o sistema principal.
-  useEffect(() => {
-    // Se a aplicação já possui itens oficiais (sistema em operação normal), NÃO executa fetch estático
-    if ((propItems && propItems.length > 0) || StorageService.getItems().length > 0) {
-      return;
-    }
+  // Adiciona estado indicando se o catalogo.json oficial publicado foi carregado com sucesso
+  const [hasLoadedStatic, setHasLoadedStatic] = useState(false);
 
-    let isMounted = true;
-    const loadStaticForGitHubPages = async () => {
-      try {
-        const basePath = (import.meta as any).env?.BASE_URL || '/';
-        const catalogUrl = `${basePath.replace(/\/$/, '')}/catalogo.json?t=${Date.now()}`;
-        const res = await fetch(catalogUrl);
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data && Array.isArray(data.items) && data.items.length > 0) {
-            setLocalItems(data.items);
-            if (data.categories && Array.isArray(data.categories)) {
-              setLocalCategories(data.categories);
-            }
-            if (data.company && data.company.name) {
-              setLocalCompanySettings(data.company);
-            }
-            if (data.niches && Array.isArray(data.niches)) {
-              setNiches(data.niches);
-            }
+  // Suporte à visualização da vitrine (GitHub Pages, standalone ou sincronização pós-publicação):
+  // Carrega o catalogo.json publicado com cache-busting (?v=timestamp) e no-cache
+  const loadStaticCatalog = useCallback(async () => {
+    try {
+      const basePath = (import.meta as any).env?.BASE_URL || '/';
+      const cleanBase = basePath.endsWith('/') ? basePath : `${basePath}/`;
+      const catalogUrl = `${cleanBase}catalogo.json?v=${Date.now()}`;
+      const res = await fetch(catalogUrl, {
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.items) && data.items.length > 0) {
+          setLocalItems(data.items);
+          if (data.categories && Array.isArray(data.categories)) {
+            setLocalCategories(data.categories);
           }
+          if (data.company && data.company.name) {
+            setLocalCompanySettings(data.company);
+          }
+          if (data.niches && Array.isArray(data.niches)) {
+            setNiches(data.niches);
+          }
+          setHasLoadedStatic(true);
         }
-      } catch (err) {
-        // Silencioso se não houver catalogo.json acessível
       }
+    } catch (err) {
+      // Silencioso se não houver catalogo.json acessível
+    }
+  }, []);
+
+  useEffect(() => {
+    // Se for visualização standalone (visitante ou GitHub Pages) ou se não tiver itens locais, carrega o catalogo.json oficial
+    if (isStandalone || !propItems || propItems.length === 0) {
+      loadStaticCatalog();
+    }
+  }, [isStandalone, propItems, loadStaticCatalog]);
+
+  // Ao publicar catálogo ou receber evento de atualização, recarrega catalogo.json imediatamente
+  useEffect(() => {
+    const handleCatalogReload = () => {
+      loadStaticCatalog();
     };
-
-    loadStaticForGitHubPages();
-
+    window.addEventListener('catalog-updated', handleCatalogReload);
     return () => {
-      isMounted = false;
+      window.removeEventListener('catalog-updated', handleCatalogReload);
     };
-  }, [propItems]);
+  }, [loadStaticCatalog]);
 
   const companySettings: CompanySettings =
     propCompanySettings?.name
@@ -310,17 +346,21 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
         };
 
   const items: Item[] =
-    propItems && propItems.length > 0
+    isStandalone && hasLoadedStatic && localItems.length > 0
+      ? localItems
+      : propItems && propItems.length > 0
       ? propItems
       : localItems;
 
   const categories: Category[] =
-    propCategories && propCategories.length > 0
+    isStandalone && hasLoadedStatic && localCategories.length > 0
+      ? localCategories
+      : propCategories && propCategories.length > 0
       ? propCategories
       : localCategories;
 
   const [isNicheManagerOpen, setIsNicheManagerOpen] = useState(false);
-  const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
+  const [selectedNiche, setSelectedNiche] = useState<string | null>('TODOS');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('TODOS');
   const [selectedType, setSelectedType] = useState<string>('TODOS');
@@ -370,24 +410,24 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       e.stopPropagation();
     }
 
-    const isM2 = item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2';
-    const isPackage = item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE';
+    const isM2 = item.pricingModel === 'POR_M2';
+    const isPackage = item.pricingModel === 'POR_PACOTE';
 
-    let unitPrice = item.salePrice;
+    let unitPrice = item.salePrice || 0;
     let labelDisplay = item.name;
     let dimensions: VitrineCartItem['dimensions'] = undefined;
     let packageName: string | undefined = undefined;
 
     if (isM2) {
-      const areaPrice = item.areaPricing?.salePricePerM2 || item.salePrice;
+      const areaPrice = item.areaPricing?.salePricePerM2 || item.salePrice || 0;
       unitPrice = Number(areaPrice.toFixed(2));
       labelDisplay = `${item.name} (1,00 m²)`;
       dimensions = { width: 100, height: 100, unit: 'cm', areaM2: 1.0 };
-    } else if (isPackage && item.packages && item.packages.length > 0) {
+    } else if (isPackage && Array.isArray(item.packages) && item.packages.length > 0) {
       const pkg = item.packages[0];
-      unitPrice = pkg.salePrice || item.salePrice;
-      labelDisplay = `${item.name} (${pkg.name})`;
-      packageName = pkg.name;
+      unitPrice = pkg?.salePrice || item.salePrice || 0;
+      labelDisplay = `${item.name} (${pkg?.name || ''})`;
+      packageName = pkg?.name;
     }
 
     setCartItems((prev) => {
@@ -521,7 +561,12 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
 
     const counts: Record<string, number> = {
       TODOS: baseItems.length,
-      GRAFICA: baseItems.filter((i) => i.type === 'PRODUTO_GRAFICO').length,
+      GRAFICA: baseItems.filter(
+        (i) =>
+          i.type === 'PRODUTO_GRAFICO' ||
+          i.type === 'sep_personalizados_1789070149013' ||
+          i.type?.toLowerCase().includes('personalizad')
+      ).length,
       FISICOS: baseItems.filter((i) => i.type === 'PRODUTO_FISICO').length,
       SERVICOS: baseItems.filter((i) => i.type === 'SERVICO').length,
     };
@@ -531,12 +576,17 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     return counts;
   }, [catalogItems, categories, selectedNiche, niches]);
 
-  const filteredItems = useMemo(() => {
-    // Se nenhum nicho foi escolhido e não há termo digitado, a lista fica oculta inicialmente
-    if (selectedNiche === null && !searchTerm.trim()) {
-      return [];
+  // Ordena categorias priorizando as que possuem itens no nicho ativo
+  const displayedCategories = useMemo(() => {
+    if (!selectedNiche || selectedNiche === 'TODOS') {
+      return categories;
     }
+    const withCount = categories.filter((c) => (categoryCounts[c.id] || 0) > 0);
+    const withoutCount = categories.filter((c) => (categoryCounts[c.id] || 0) === 0);
+    return [...withCount, ...withoutCount];
+  }, [categories, selectedNiche, categoryCounts]);
 
+  const filteredItems = useMemo(() => {
     const result = catalogItems.filter((item) => {
       // 1. Filtro primário de Nicho
       if (selectedNiche && selectedNiche !== 'TODOS') {
@@ -557,7 +607,10 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       // 3. Filtro secundário de Categoria
       const matchCategory =
         selectedCategory === 'TODOS' ||
-        (selectedCategory === 'GRAFICA' && item.type === 'PRODUTO_GRAFICO') ||
+        (selectedCategory === 'GRAFICA' &&
+          (item.type === 'PRODUTO_GRAFICO' ||
+            item.type === 'sep_personalizados_1789070149013' ||
+            item.type?.toLowerCase().includes('personalizad'))) ||
         (selectedCategory === 'FISICOS' && item.type === 'PRODUTO_FISICO') ||
         (selectedCategory === 'SERVICOS' && item.type === 'SERVICO') ||
         item.categoryId === selectedCategory;
@@ -566,7 +619,10 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       const matchType =
         selectedType === 'TODOS' ||
         selectedType === item.type ||
-        (selectedType === 'PRODUTO_GRAFICO' && item.type === 'PRODUTO_GRAFICO') ||
+        (selectedType === 'PRODUTO_GRAFICO' &&
+          (item.type === 'PRODUTO_GRAFICO' ||
+            item.type === 'sep_personalizados_1789070149013' ||
+            item.type?.toLowerCase().includes('personalizad'))) ||
         (selectedType === 'PRODUTO_FISICO' && item.type === 'PRODUTO_FISICO') ||
         (selectedType === 'SERVICO' && item.type === 'SERVICO');
 
@@ -576,13 +632,17 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     // Sorting com desempate determinístico e estável entre ciclos de sincronização
     return result.sort((a, b) => {
       const getBasePrice = (item: Item) => {
+        if (!item) return 0;
         if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_M2') {
-          return item.areaPricing?.salePricePerM2 || item.salePrice;
+          return item.areaPricing?.salePricePerM2 || item.salePrice || 0;
         }
-        if (item.type === 'PRODUTO_GRAFICO' && item.pricingModel === 'POR_PACOTE') {
-          return item.packages?.[0]?.salePrice || item.salePrice;
+        if (item.pricingModel === 'POR_PACOTE') {
+          return (item.packages ?? [])[0]?.salePrice || item.salePrice || 0;
         }
-        return item.salePrice;
+        if (item.pricingModel === 'POR_UNIDADE' && item.priceRules && item.priceRules.length > 0) {
+          return (item.priceRules ?? [])[0]?.unitSalePrice || item.salePrice || 0;
+        }
+        return item.salePrice || 0;
       };
 
       if (sortBy === 'price_asc') {
@@ -1243,7 +1303,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
               </button>
 
               {/* Custom categories */}
-              {categories.map((cat) => (
+              {displayedCategories.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
@@ -1392,11 +1452,15 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
                       <div className="absolute top-2 left-2">
                         <Badge
                           variant={
-                            item.type === 'PRODUTO_GRAFICO'
+                            item.type === 'sep_personalizados_1789070149013' || item.type?.toLowerCase().includes('personalizad')
+                              ? 'pink'
+                              : item.type === 'PRODUTO_GRAFICO'
                               ? 'primary'
                               : item.type === 'PRODUTO_FISICO'
                               ? 'purple'
-                              : 'success'
+                              : item.type === 'SERVICO'
+                              ? 'success'
+                              : 'indigo'
                           }
                           size="sm"
                         >
@@ -1432,10 +1496,12 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
                             </span>
                             <span className="text-base font-black text-blue-700">
                               {item.pricingModel === 'POR_M2'
-                                ? `${formatCurrency(item.areaPricing?.salePricePerM2 || item.salePrice)}/m²`
+                                ? `${formatCurrency(item.areaPricing?.salePricePerM2 || item.salePrice || 0)}/m²`
                                 : item.pricingModel === 'POR_PACOTE'
-                                ? formatCurrency(item.packages?.[0]?.salePrice || item.salePrice)
-                                : formatCurrency(item.salePrice)}
+                                ? formatCurrency((item.packages ?? [])[0]?.salePrice || item.salePrice || 0)
+                                : item.pricingModel === 'POR_UNIDADE' && item.priceRules && item.priceRules.length > 0
+                                ? formatCurrency((item.priceRules ?? [])[0]?.unitSalePrice || item.salePrice || 0)
+                                : formatCurrency(item.salePrice || 0)}
                             </span>
                           </div>
 

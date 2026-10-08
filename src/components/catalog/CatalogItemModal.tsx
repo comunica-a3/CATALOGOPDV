@@ -45,19 +45,19 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   const [quantity, setQuantity] = useState<number>(() => {
     if (isGraphicOrPersonalized && item.pricingModel === 'POR_UNIDADE') {
-      return item.priceRules?.[0]?.minQuantity || 1;
+      return (item.priceRules && Array.isArray(item.priceRules) ? item.priceRules[0]?.minQuantity : 1) || 1;
     }
     return 1;
   });
 
   const [selectedVariantId, setSelectedVariantId] = useState<string>(
-    item.variants?.[0]?.id || ''
+    (Array.isArray(item.variants) && item.variants[0]?.id) || ''
   );
 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    item.options?.forEach((opt) => {
-      if (opt.values.length > 0) {
+    (item.options ?? []).forEach((opt) => {
+      if (opt && Array.isArray(opt.values) && opt.values.length > 0) {
         initial[opt.name] = opt.values[0].label;
       }
     });
@@ -93,15 +93,15 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   // Package
   const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    item.packages?.[0]?.id || ''
+    (Array.isArray(item.packages) && item.packages[0]?.id) || ''
   );
 
   const selectedVariant = useMemo(() => {
-    return item.variants?.find((v) => v.id === selectedVariantId);
+    return Array.isArray(item.variants) ? item.variants.find((v) => v.id === selectedVariantId) : undefined;
   }, [item.variants, selectedVariantId]);
 
   const selectedPackage = useMemo(() => {
-    return item.packages?.find((p) => p.id === selectedPackageId);
+    return Array.isArray(item.packages) ? item.packages.find((p) => p.id === selectedPackageId) : undefined;
   }, [item.packages, selectedPackageId]);
 
   // Live Price Calculation for Customer
@@ -175,8 +175,8 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
       } else {
         // POR_UNIDADE
         let applicableTier: ItemPriceRule | undefined;
-        if (item.priceRules && item.priceRules.length > 0) {
-          const sortedRules = [...item.priceRules].sort((a, b) => b.minQuantity - a.minQuantity);
+        if (Array.isArray(item.priceRules) && item.priceRules.length > 0) {
+          const sortedRules = [...(item.priceRules ?? [])].sort((a, b) => b.minQuantity - a.minQuantity);
           applicableTier = sortedRules.find((r) => quantity >= r.minQuantity);
           if (!applicableTier) {
             applicableTier = sortedRules[sortedRules.length - 1];
@@ -480,13 +480,13 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 2. PACKAGES */}
-        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && item.packages && (
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && Array.isArray(item.packages) && item.packages.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione o Pacote de Quantidade:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {item.packages.map((pkg) => {
+              {(item.packages ?? []).map((pkg) => {
                 const isSelected = pkg.id === selectedPackageId;
                 return (
                   <div
@@ -511,13 +511,13 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 3. PHYSICAL VARIANTS */}
-        {!isGraphicOrPersonalized && item.variants && item.variants.length > 0 && (
+        {!isGraphicOrPersonalized && Array.isArray(item.variants) && item.variants.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione a Opção / Modelo:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {item.variants.map((v) => {
+              {(item.variants ?? []).map((v) => {
                 const isSelected = v.id === selectedVariantId;
                 return (
                   <div
