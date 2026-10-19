@@ -30,6 +30,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const currentUserId = localStorage.getItem('pdv_current_user_id');
+  if (currentUserId) {
+    headers['x-user-id'] = currentUserId;
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -606,6 +611,58 @@ export const api = {
     return request<{ success: boolean; restoredTables: string[] }>('/backup/import', {
       method: 'POST',
       body: JSON.stringify(snapshot),
+    });
+  },
+
+  async getBackupStatus() {
+    return request<{
+      lastBackup: string | null;
+      lastBackupDate: string | null;
+      totalBackups: number;
+      isAutoSchedulerRunning: boolean;
+      nextScheduledEstimate?: string;
+    }>('/backup/status');
+  },
+
+  async downloadBackupFile(filename: string): Promise<void> {
+    const token = getAuthToken();
+    const currentUserId = localStorage.getItem('pdv_current_user_id');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (currentUserId) headers['x-user-id'] = currentUserId;
+
+    const res = await fetch(`/api/backup/download/${encodeURIComponent(filename)}`, { headers });
+    if (!res.ok) throw new Error('Falha ao baixar arquivo de backup');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Batch Save Operations for CSV Imports
+  async saveCustomersBatch(customers: any[]) {
+    return request<{ success: boolean; count: number }>('/customers/batch', {
+      method: 'POST',
+      body: JSON.stringify({ customers }),
+    });
+  },
+
+  async saveBudgetsBatch(budgets: any[]) {
+    return request<{ success: boolean; count: number }>('/budgets/batch', {
+      method: 'POST',
+      body: JSON.stringify({ budgets }),
+    });
+  },
+
+  async saveSalesBatch(sales: any[]) {
+    return request<{ success: boolean; count: number }>('/sales/batch', {
+      method: 'POST',
+      body: JSON.stringify({ sales }),
     });
   },
 

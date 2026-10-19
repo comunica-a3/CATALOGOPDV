@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Trash2,
   TrendingUp,
+  Upload,
   User,
   Users,
   Wallet,
@@ -43,6 +44,7 @@ import { SaleNotesModal } from './SaleNotesModal';
 import { EditSaleModal } from './EditSaleModal';
 import { DeleteSaleModal } from './DeleteSaleModal';
 import { SaleAuditModal } from './SaleAuditModal';
+import { CsvImportModal } from '../common/CsvImportModal';
 
 interface SalesViewProps {
   sales: Sale[];
@@ -71,6 +73,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
   const [auditSale, setAuditSale] = useState<Sale | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -277,6 +280,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="btn-import-sales-csv"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Importar vendas e contas a receber via CSV"
+          >
+            <Upload className="w-4 h-4 text-slate-500" />
+            <span>Importar CSV</span>
+          </button>
+
           <button
             type="button"
             id="btn-export-sales-csv"
@@ -732,6 +746,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        entityType="SALES"
+        onSuccess={() => {
+          onSalesChange();
+          setActionSuccessMessage('Importação de vendas processada com sucesso!');
+          setTimeout(() => setActionSuccessMessage(null), 4000);
+        }}
+      />
 
       {/* Cancel Sale Confirmation */}
       <ConfirmDialog

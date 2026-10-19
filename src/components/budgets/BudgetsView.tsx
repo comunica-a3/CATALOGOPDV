@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   User,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
@@ -24,6 +25,7 @@ import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSBudgetModal } from '../pos/POSBudgetModal';
 import { BudgetDetailModal } from './BudgetDetailModal';
+import { CsvImportModal } from '../common/CsvImportModal';
 
 interface BudgetsViewProps {
   companySettings: CompanySettings;
@@ -45,6 +47,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [isNewBudgetModalOpen, setIsNewBudgetModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<Budget | null>(null);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -170,6 +173,17 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="btn-import-budgets-csv"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Importar orçamentos a partir de arquivo CSV"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-500" />
+            <span>Importar CSV</span>
+          </button>
+
           <button
             type="button"
             id="btn-export-budgets-csv"
@@ -419,6 +433,18 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           companySettings={companySettings}
         />
       )}
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        entityType="BUDGETS"
+        onSuccess={() => {
+          handleRefresh();
+          setToastMessage('Importação de orçamentos processada com sucesso!');
+          setTimeout(() => setToastMessage(''), 4000);
+        }}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog

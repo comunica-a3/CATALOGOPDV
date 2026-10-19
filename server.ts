@@ -5,12 +5,16 @@ import { initializeDatabase } from './server/db';
 import { authMiddleware } from './server/auth';
 import apiRoutes from './server/routes';
 import { buildPublicCatalogPayload } from './server/catalogPublisher';
+import { startBackupScheduler } from './server/backup';
 
 async function startServer() {
   // Inicializa diretamente o banco de dados SQLite local
   console.log('Iniciando banco de dados SQLite local (data/pdv_database.sqlite)...');
   await initializeDatabase();
   console.log('Banco de dados local pronto.');
+
+  // Inicia o agendador de backup automático diário
+  startBackupScheduler();
 
   const app = express();
   const PORT = 3000;

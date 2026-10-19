@@ -23,6 +23,8 @@ import {
   exportDatabaseSnapshot,
   listLocalBackups,
   restoreDatabaseSnapshot,
+  getBackupStatus,
+  getBackupFilePath,
 } from './backup';
 import { generateAIContent } from './ai';
 import { buildPublicCatalogPayload, publishCatalogToGitHub, saveCatalogLocally } from './catalogPublisher';
@@ -969,6 +971,60 @@ router.delete('/customers/:id', async (req: AuthRequest, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao excluir cliente.' });
+  }
+});
+
+router.post('/customers/batch', async (req: AuthRequest, res) => {
+  try {
+    const { customers } = req.body;
+    if (!Array.isArray(customers) || customers.length === 0) {
+      res.json({ success: true, count: 0 });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let savedCount = 0;
+
+    for (const c of customers) {
+      if (!c.name || !c.name.trim()) continue;
+      const id = c.id || `cust-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      await db.run(
+        `INSERT OR REPLACE INTO customers (
+          id, name, trade_name, type, cpf_cnpj, rg_ie, phone, whatsapp, email,
+          address, number, complement, neighborhood, city, state, cep, notes, active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          c.name.trim(),
+          c.tradeName?.trim() || null,
+          c.type || 'PF',
+          c.cpfCnpj?.trim() || null,
+          c.rgIe?.trim() || null,
+          c.phone?.trim() || null,
+          c.whatsapp?.trim() || null,
+          c.email?.trim() || null,
+          c.address?.trim() || null,
+          c.number?.trim() || null,
+          c.complement?.trim() || null,
+          c.neighborhood?.trim() || null,
+          c.city?.trim() || null,
+          c.state?.trim() || null,
+          c.cep?.trim() || null,
+          c.notes?.trim() || null,
+          c.active !== false ? 1 : 0,
+          c.createdAt || now,
+          c.updatedAt || now,
+        ]
+      );
+      savedCount++;
+    }
+
+    persistDatabase();
+    broadcastSync('customers-updated', { count: savedCount });
+
+    res.json({ success: true, count: savedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao importar lote de clientes.' });
   }
 });
 
@@ -2253,6 +2309,147 @@ router.delete('/sales/:id', async (req: AuthRequest, res) => {
   }
 });
 
+router.post('/sales/batch', async (req: AuthRequest, res) => {
+  try {
+    const { sales } = req.body;
+    if (!Array.isArray(sales) || sales.length === 0) {
+      res.json({ success: true, count: 0 });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let savedCount = 0;
+
+    const maxNum = await db.get<{ m: number }>('SELECT MAX(sale_number) as m FROM sales');
+    let nextCount = (Number(maxNum?.m) || 1000);
+
+    for (const s of sales) {
+      let id = s.id || `sale-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      let saleNum = s.saleNumber || s.code;
+      if (!saleNum) {
+        nextCount += 1;
+        saleNum = `VND-${new Date().getFullYear()}-${String(nextCount).padStart(4, '0')}`;
+      }
+
+      const saleNumberStr = String(saleNum);
+      const saleNumberNumeric = parseInt(saleNumberStr.replace(/\D/g, ''), 10) || 1;
+      const updatedAt = s.updatedAt || now;
+      const createdAt = s.createdAt || now;
+      const subtotal = Number(s.subtotal) || 0;
+      const discount = Number(s.discount) || 0;
+      const addition = Number(s.addition) || 0;
+      const total = Number(s.total) || 0;
+      const paidAmount = Number(s.paidAmount) || 0;
+      const remainingAmount = Number(s.remainingAmount !== undefined ? s.remainingAmount : Math.max(0, total - paidAmount));
+      
+      const paymentStatus = s.paymentStatus === 'A_PRAZO'
+        ? 'A_PRAZO'
+        : (s.paymentStatus || (remainingAmount <= 0 ? 'PAGO' : (paidAmount > 0 ? 'PARCIALMENTE_PAGO' : 'PENDENTE')));
+      const paymentMethod = s.paymentMethod || (paymentStatus === 'A_PRAZO' ? 'A Prazo' : 'DINHEIRO');
+      const paymentsJson = s.payments ? JSON.stringify(s.payments) : JSON.stringify([]);
+      const itemsJson = JSON.stringify(s.items || []);
+      const editHistoryJson = s.editHistory ? JSON.stringify(s.editHistory) : null;
+      const isDeletedNum = s.isDeleted || s.status === 'EXCLUIDA' ? 1 : 0;
+      const saleStatus = s.status || (isDeletedNum === 1 ? 'EXCLUIDA' : 'CONCLUIDA');
+
+      await db.run(
+        `INSERT OR REPLACE INTO sales (
+          id, sale_number, sale_code, customer_id, customer_name, customer_phone, customer_email,
+          seller_id, seller_name, subtotal, discount, addition, total, paid_amount,
+          remaining_amount, status, is_deleted, deleted_at, deleted_by, deleted_by_name, deletion_reason, edit_history_json,
+          payment_status, payment_method, payments_json, items_json,
+          notes, invoice_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          saleNumberNumeric,
+          saleNumberStr,
+          s.customerId || null,
+          s.customerName || 'Consumidor Final',
+          s.customerPhone || null,
+          s.customerEmail || null,
+          s.sellerId || req.user?.id || null,
+          s.sellerName || req.user?.name || 'Atendente',
+          subtotal,
+          discount,
+          addition,
+          total,
+          paidAmount,
+          remainingAmount,
+          saleStatus,
+          isDeletedNum,
+          s.deletedAt || null,
+          s.deletedBy || null,
+          s.deletedByName || null,
+          s.deletionReason || null,
+          editHistoryJson,
+          paymentStatus,
+          paymentMethod,
+          paymentsJson,
+          itemsJson,
+          s.notes || null,
+          s.invoiceStatus || null,
+          createdAt,
+          updatedAt,
+        ]
+      );
+
+      // Sync receivables
+      if (remainingAmount > 0 || paymentStatus === 'PENDENTE' || paymentStatus === 'PARCIALMENTE_PAGO' || paymentStatus === 'A_PRAZO') {
+        const receivableStatus = remainingAmount <= 0 ? 'PAGO' : paymentStatus === 'A_PRAZO' ? 'A_PRAZO' : paidAmount > 0 ? 'PARCIALMENTE_PAGO' : 'PENDENTE';
+        const existingRec = await db.get<any>('SELECT id FROM receivables WHERE sale_id = ?', [id]);
+        const recId = existingRec ? existingRec.id : `rec-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
+        await db.run(
+          `INSERT OR REPLACE INTO receivables (
+            id, sale_id, sale_number, customer_id, customer_name, customer_phone,
+            total_amount, paid_amount, remaining_amount, due_date, status,
+            payment_records_json, notes, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            recId,
+            id,
+            saleNumberStr,
+            s.customerId || null,
+            s.customerName || 'Consumidor',
+            s.customerPhone || null,
+            total,
+            paidAmount,
+            remainingAmount,
+            s.dueDate || new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+            receivableStatus,
+            paymentsJson,
+            s.notes || null,
+            createdAt,
+            updatedAt,
+          ]
+        );
+      } else {
+        await db.run(
+          `UPDATE receivables SET 
+            status = 'PAGO', 
+            paid_amount = ?, 
+            remaining_amount = 0, 
+            payment_records_json = ?, 
+            updated_at = ? 
+          WHERE sale_id = ?`,
+          [total, paymentsJson, updatedAt, id]
+        );
+      }
+
+      savedCount++;
+    }
+
+    persistDatabase();
+    broadcastSync('sales-updated', { count: savedCount });
+    broadcastSync('finance-updated', { count: savedCount });
+
+    res.json({ success: true, count: savedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao importar lote de vendas.' });
+  }
+});
+
 router.post('/sales/:id/cancel', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
@@ -2472,6 +2669,67 @@ router.delete('/budgets/:id', async (req: AuthRequest, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao excluir orçamento.' });
+  }
+});
+
+router.post('/budgets/batch', async (req: AuthRequest, res) => {
+  try {
+    const { budgets } = req.body;
+    if (!Array.isArray(budgets) || budgets.length === 0) {
+      res.json({ success: true, count: 0 });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let savedCount = 0;
+
+    const maxNum = await db.get<{ m: number }>('SELECT MAX(budget_number) as m FROM budgets');
+    let nextNum = Number(maxNum?.m) || 100;
+
+    for (const b of budgets) {
+      const id = b.id || `bgt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      let bgtNum = b.budgetNumber;
+      if (!bgtNum) {
+        nextNum += 1;
+        bgtNum = nextNum;
+      }
+
+      await db.run(
+        `INSERT OR REPLACE INTO budgets (
+          id, budget_number, customer_id, customer_name, customer_phone, customer_email,
+          seller_id, seller_name, subtotal, discount, addition, total, status, valid_until,
+          items_json, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          bgtNum,
+          b.customerId || null,
+          b.customerName || 'Cliente',
+          b.customerPhone || null,
+          b.customerEmail || null,
+          b.sellerId || req.user?.id || null,
+          b.sellerName || req.user?.name || 'Atendente',
+          Number(b.subtotal) || 0,
+          Number(b.discount) || 0,
+          Number(b.addition) || 0,
+          Number(b.total) || 0,
+          b.status || 'PENDENTE',
+          b.validUntil || null,
+          JSON.stringify(b.items || []),
+          b.notes || null,
+          b.createdAt || now,
+          b.updatedAt || now,
+        ]
+      );
+      savedCount++;
+    }
+
+    persistDatabase();
+    broadcastSync('budgets-updated', { count: savedCount });
+
+    res.json({ success: true, count: savedCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao importar lote de orçamentos.' });
   }
 });
 
@@ -4236,6 +4494,30 @@ router.get('/backup/list', requireAdmin, async (req: AuthRequest, res) => {
     res.json(backups);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao listar backups.' });
+  }
+});
+
+router.get('/backup/status', requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const status = getBackupStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao obter status de backup.' });
+  }
+});
+
+router.get('/backup/download/:filename', requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = getBackupFilePath(filename);
+    if (!filePath) {
+      res.status(404).json({ error: 'Arquivo de backup não encontrado no servidor.' });
+      return;
+    }
+
+    res.download(filePath, filename);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Erro ao baixar arquivo de backup.' });
   }
 });
 

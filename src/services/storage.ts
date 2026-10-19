@@ -4983,6 +4983,184 @@ export class StorageService {
     downloadBlobFile(csvContent, `vendas_faturamento_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
   }
 
+  // --- BATCH IMPORT METHODS (CSV) ---
+  static importCustomersBatch(
+    newCustomers: Customer[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getCustomers();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const c of newCustomers) {
+      const cleanPhone = normalizePhone(c.phone);
+      const cleanDoc = c.document ? c.document.replace(/\D/g, '') : '';
+
+      const idx = updatedList.findIndex((item) => {
+        if (item.id === c.id) return true;
+        if (cleanDoc && item.document && item.document.replace(/\D/g, '') === cleanDoc) return true;
+        if (cleanPhone && normalizePhone(item.phone) === cleanPhone) return true;
+        return false;
+      });
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...c,
+            id: updatedList[idx].id,
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.push(c);
+        created++;
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.CUSTOMERS, updatedList);
+    api.saveCustomersBatch(updatedList).catch((e) => console.debug('Background batch customers sync notice:', e));
+    window.dispatchEvent(new CustomEvent('customers-updated'));
+    return { created, updated, skipped };
+  }
+
+  static importBudgetsBatch(
+    newBudgets: Budget[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getBudgets();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const b of newBudgets) {
+      const idx = updatedList.findIndex(
+        (item) => item.id === b.id || (item.budgetNumber && b.budgetNumber && item.budgetNumber.toLowerCase() === b.budgetNumber.toLowerCase())
+      );
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...b,
+            id: updatedList[idx].id,
+            updatedAt: new Date().toISOString(),
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.unshift(b);
+        created++;
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.BUDGETS, updatedList);
+    api.saveBudgetsBatch(updatedList).catch((e) => console.debug('Background batch budgets sync notice:', e));
+    window.dispatchEvent(new CustomEvent('budgets-updated'));
+    return { created, updated, skipped };
+  }
+
+  static importSalesBatch(
+    newSales: Sale[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getSales();
+    const receivables = this.getReceivables();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const s of newSales) {
+      const idx = updatedList.findIndex(
+        (item) => item.id === s.id || (item.saleNumber && s.saleNumber && item.saleNumber.toLowerCase() === s.saleNumber.toLowerCase())
+      );
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...s,
+            id: updatedList[idx].id,
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.unshift(s);
+        created++;
+      }
+
+      // Sincroniza Contas a Receber caso haja saldo aberto ou status pendente
+      const finalSale = idx >= 0 && action === 'UPDATE' ? updatedList[idx] : s;
+      if (
+        finalSale.remainingAmount > 0 ||
+        finalSale.paymentStatus === 'PENDENTE' ||
+        finalSale.paymentStatus === 'PARCIALMENTE_PAGO' ||
+        finalSale.paymentStatus === 'A_PRAZO'
+      ) {
+        const recIndex = receivables.findIndex(
+          (r) => r.saleId === finalSale.id || (r.saleNumber && finalSale.saleNumber && r.saleNumber === finalSale.saleNumber)
+        );
+        const recStatus: ReceivableStatus =
+          finalSale.remainingAmount <= 0
+            ? 'PAGO'
+            : finalSale.paymentStatus === 'A_PRAZO'
+            ? 'A_PRAZO'
+            : finalSale.paidAmount > 0
+            ? 'PARCIALMENTE_PAGO'
+            : 'PENDENTE';
+
+        if (recIndex >= 0) {
+          receivables[recIndex] = {
+            ...receivables[recIndex],
+            customerName: finalSale.customerName,
+            customerPhone: finalSale.customerPhone,
+            totalAmount: finalSale.total,
+            paidAmount: finalSale.paidAmount,
+            remainingAmount: finalSale.remainingAmount,
+            status: recStatus,
+            dueDate: finalSale.dueDate || receivables[recIndex].dueDate,
+          };
+        } else {
+          receivables.unshift({
+            id: `rec-imp-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            saleId: finalSale.id,
+            saleNumber: finalSale.saleNumber,
+            customerId: finalSale.customerId,
+            customerName: finalSale.customerName,
+            customerPhone: finalSale.customerPhone,
+            totalAmount: finalSale.total,
+            paidAmount: finalSale.paidAmount,
+            remainingAmount: finalSale.remainingAmount,
+            dueDate: finalSale.dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+            status: recStatus,
+            payments: [...(finalSale.payments || [])],
+            createdAt: finalSale.createdAt,
+          });
+        }
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.SALES, updatedList);
+    setItemToStorage(STORAGE_KEYS.RECEIVABLES, receivables);
+    api.saveSalesBatch(updatedList).catch((e) => console.debug('Background batch sales sync notice:', e));
+    window.dispatchEvent(new CustomEvent('sales-updated'));
+    window.dispatchEvent(new CustomEvent('receivables-updated'));
+    return { created, updated, skipped };
+  }
+
   // --- ONLINE EXTERNAL SERVICES ("Serviços Online") ---
   static getOnlineServices(): OnlineService[] {
     try {

@@ -225,6 +225,24 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       if (user) {
         req.user = user;
       }
+    } else if (req.headers['x-user-id']) {
+      const userId = String(req.headers['x-user-id']).trim();
+      const row = await db.get<any>('SELECT * FROM users WHERE id = ? AND active = 1', [userId]);
+      if (row) {
+        req.user = {
+          id: row.id,
+          name: row.name,
+          username: row.username || undefined,
+          email: row.email || undefined,
+          phone: row.phone || undefined,
+          role: row.role,
+          active: Number(row.active) === 1,
+          mustChangePassword: Number(row.must_change_password) === 1,
+          isTestUser: Number(row.is_test_user) === 1,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      }
     }
   } catch (err) {
     console.error('Error in authMiddleware:', err);

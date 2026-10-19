@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   User,
   Users,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import { openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { CustomerModal } from './CustomerModal';
+import { CsvImportModal } from '../common/CsvImportModal';
 
 export const CustomersView: React.FC = () => {
   const { isAdmin, isPromotor, currentUser } = useAuth();
@@ -29,6 +31,7 @@ export const CustomersView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<'TODOS' | 'PF' | 'PJ'>('TODOS');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [toastMessage, setToastMessage] = useState('');
@@ -120,6 +123,17 @@ export const CustomersView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-import-customers-csv"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Importar clientes a partir de arquivo CSV"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-500" />
+            <span>Importar CSV</span>
+          </button>
+
           <button
             type="button"
             id="btn-export-customers-csv"
@@ -377,6 +391,18 @@ export const CustomersView: React.FC = () => {
           onSave={handleSaveCustomer}
         />
       )}
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        entityType="CUSTOMERS"
+        onSuccess={() => {
+          handleRefresh();
+          setToastMessage('Importação de clientes processada com sucesso!');
+          setTimeout(() => setToastMessage(''), 4000);
+        }}
+      />
 
       {/* Delete Confirm */}
       <ConfirmDialog

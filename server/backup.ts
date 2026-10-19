@@ -188,3 +188,91 @@ export async function restoreDatabaseSnapshot(
     };
   }
 }
+
+let schedulerInterval: NodeJS.Timeout | null = null;
+let isSchedulerRunning = false;
+
+/**
+ * Returns the current backup status and scheduler info
+ */
+export function getBackupStatus(): {
+  lastBackup: string | null;
+  lastBackupDate: string | null;
+  totalBackups: number;
+  isAutoSchedulerRunning: boolean;
+  nextScheduledEstimate?: string;
+} {
+  const backups = listLocalBackups();
+  const last = backups[0];
+  const lastDate = last ? last.createdAt : null;
+
+  let nextEstimate: string | undefined = undefined;
+  if (lastDate) {
+    const nextTime = new Date(new Date(lastDate).getTime() + 24 * 60 * 60 * 1000);
+    nextEstimate = nextTime.toISOString();
+  }
+
+  return {
+    lastBackup: last ? last.filename : null,
+    lastBackupDate: lastDate,
+    totalBackups: backups.length,
+    isAutoSchedulerRunning: isSchedulerRunning,
+    nextScheduledEstimate: nextEstimate,
+  };
+}
+
+/**
+ * Starts the daily automated backup scheduler
+ */
+export function startBackupScheduler(): void {
+  if (schedulerInterval) return;
+  isSchedulerRunning = true;
+  console.log('[Backup Scheduler] Agendador diário de backup ativado.');
+
+  const checkAndRunAutoBackup = async () => {
+    try {
+      const backups = listLocalBackups();
+      const autoBackups = backups.filter((b) => b.filename.includes('_auto_'));
+      const now = Date.now();
+      const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+      let shouldRun = false;
+      if (autoBackups.length === 0) {
+        shouldRun = true;
+      } else {
+        const lastAutoTime = new Date(autoBackups[0].createdAt).getTime();
+        if (now - lastAutoTime >= TWENTY_FOUR_HOURS) {
+          shouldRun = true;
+        }
+      }
+
+      if (shouldRun) {
+        console.log('[Backup Scheduler] Executando backup automático diário...');
+        const filename = await createLocalBackupFile('auto');
+        console.log(`[Backup Scheduler] Backup automático criado com sucesso: ${filename}`);
+      }
+    } catch (err) {
+      console.error('[Backup Scheduler] Erro ao executar verificação de backup automático:', err);
+    }
+  };
+
+  // Run initial check after 5 seconds to ensure DB is initialized
+  setTimeout(() => {
+    checkAndRunAutoBackup();
+  }, 5000);
+
+  // Check every 1 hour
+  schedulerInterval = setInterval(checkAndRunAutoBackup, 60 * 60 * 1000);
+}
+
+/**
+ * Resolves safe local backup file path
+ */
+export function getBackupFilePath(filename: string): string | null {
+  const safeFilename = path.basename(filename);
+  const filePath = path.join(BACKUPS_DIR, safeFilename);
+  if (fs.existsSync(filePath)) {
+    return filePath;
+  }
+  return null;
+}
