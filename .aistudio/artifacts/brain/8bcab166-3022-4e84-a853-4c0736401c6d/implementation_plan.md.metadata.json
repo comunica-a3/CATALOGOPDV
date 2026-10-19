@@ -1,6 +1,0 @@
-{
-  "summary": "Plano de implementação detalhado para a funcionalidade de importação de arquivos CSV em Clientes, Orçamentos e Faturamento/Contas a Receber, além da correção e ativação do sistema de Backup manual e automático no servidor e na interface administrativa.",
-  "updatedAt": "2026-10-19T17:05:59.786220324Z",
-  "requestFeedback": true,
-  "userFacing": true
-}
