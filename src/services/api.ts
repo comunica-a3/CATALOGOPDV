@@ -35,10 +35,21 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['x-user-id'] = currentUserId;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    console.error(`Network error requesting ${endpoint}:`, netErr);
+    if (netErr.name === 'AbortError') {
+      throw new Error('A requisição foi cancelada por tempo limite.');
+    }
+    throw new Error(
+      `Falha na comunicação com o servidor (${netErr.message || 'Failed to fetch'}). Verifique se o servidor está ativo ou se os dados enviados são muito extensos.`
+    );
+  }
 
   if (!response.ok) {
     let errorMessage = `Erro na requisição (${response.status})`;
@@ -608,7 +619,7 @@ export const api = {
   },
 
   async importBackup(snapshot: any) {
-    return request<{ success: boolean; restoredTables: string[] }>('/backup/import', {
+    return request<{ success: boolean; restoredTables: string[]; error?: string; totalRecordsRestored?: number }>('/backup/import', {
       method: 'POST',
       body: JSON.stringify(snapshot),
     });

@@ -89,6 +89,7 @@ import { api } from './api';
 import { formatPhone, normalizePhone } from '../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../utils/productUtils';
 import { buildApproachWhatsAppMessage } from '../utils/whatsappMessages';
+import { calculateSaleCommission } from '../utils/commissions';
 
 const STORAGE_KEYS = {
   SETTINGS: 'pdv_company_settings',
@@ -272,6 +273,9 @@ function notifyRealtime(event: string, data?: any): void {
 
 export function downloadBlobFile(content: string, filename: string, mimeType: string): void {
   try {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -4939,48 +4943,132 @@ export class StorageService {
     downloadBlobFile(csvContent, `clientes_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
   }
 
-  static exportBudgetsToCSV(budgets: Budget[]): void {
+  static exportBudgetsToCSV(budgets: Budget[]): boolean {
+    if (!budgets || budgets.length === 0) return false;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
     const headers = ['Número Orçamento', 'Cliente', 'Telefone', 'Vendedor', 'Itens Qtd', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)', 'Validade', 'Status', 'Data Criação'];
 
     const rows = budgets.map((b) => [
-      b.budgetNumber,
-      `"${b.customerName.replace(/"/g, '""')}"`,
-      `"${(b.customerPhone || '').replace(/"/g, '""')}"`,
-      `"${b.sellerName.replace(/"/g, '""')}"`,
-      b.items.reduce((acc, it) => acc + it.quantity, 0),
-      b.subtotal.toFixed(2).replace('.', ','),
-      b.discount.toFixed(2).replace('.', ','),
-      b.total.toFixed(2).replace('.', ','),
-      b.validUntil,
-      `"${b.status}"`,
-      `"${b.createdAt.split('T')[0]}"`,
+      escapeCsv(b.budgetNumber || b.id || ''),
+      escapeCsv(b.customerName || 'Cliente'),
+      escapeCsv(b.customerPhone || ''),
+      escapeCsv(b.sellerName || 'Vendedor'),
+      Array.isArray(b.items) ? b.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0,
+      formatMoney(b.subtotal),
+      formatMoney(b.discount),
+      formatMoney(b.total),
+      escapeCsv(b.validUntil || ''),
+      escapeCsv(b.status || 'PENDENTE'),
+      escapeCsv(b.createdAt ? b.createdAt.split('T')[0] : ''),
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `orcamentos_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
-  static exportSalesToCSV(sales: Sale[]): void {
-    const headers = ['Número Venda', 'Data', 'Cliente', 'CPF/CNPJ', 'Vendedor', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)', 'Valor Pago (R$)', 'Saldo Aberto (R$)', 'Status Pagamento', 'Comissão Vendedor (R$)', 'Lucro Bruto (R$)'];
+  static exportSalesToCSV(sales: Sale[]): boolean {
+    if (!sales || sales.length === 0) {
+      return false;
+    }
 
-    const rows = sales.map((s) => [
-      s.saleNumber,
-      `"${s.createdAt.replace('T', ' ').substring(0, 19)}"`,
-      `"${s.customerName.replace(/"/g, '""')}"`,
-      `"${(s.customerDocument || '').replace(/"/g, '""')}"`,
-      `"${s.sellerName.replace(/"/g, '""')}"`,
-      s.subtotal.toFixed(2).replace('.', ','),
-      s.discount.toFixed(2).replace('.', ','),
-      s.total.toFixed(2).replace('.', ','),
-      s.paidAmount.toFixed(2).replace('.', ','),
-      s.remainingAmount.toFixed(2).replace('.', ','),
-      `"${s.paymentStatus}"`,
-      s.commissionAmount.toFixed(2).replace('.', ','),
-      s.grossProfit.toFixed(2).replace('.', ','),
-    ]);
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const headers = [
+      'Número Venda',
+      'Data / Hora',
+      'Cliente',
+      'CPF/CNPJ',
+      'Telefone',
+      'E-mail',
+      'Vendedor',
+      'Forma Pagamento',
+      'Subtotal (R$)',
+      'Desconto (R$)',
+      'Acréscimo (R$)',
+      'Total (R$)',
+      'Valor Pago (R$)',
+      'Saldo Aberto (R$)',
+      'Status Pagamento',
+      'Status Venda',
+      'Comissão Vendedor (R$)',
+      'Lucro Bruto (R$)',
+    ];
+
+    const rows = sales.map((s) => {
+      const saleNum = s.saleNumber || (s as any).sale_code || s.id || '';
+      const dateStr = s.createdAt ? s.createdAt.replace('T', ' ').substring(0, 19) : '';
+      const custName = s.customerName || (s as any).customer_name || 'Consumidor Final';
+      const custDoc = s.customerDocument || (s as any).customer_document || '';
+      const custPhone = s.customerPhone || (s as any).customer_phone || '';
+      const custEmail = (s as any).customerEmail || (s as any).customer_email || '';
+      const seller = s.sellerName || (s as any).seller_name || 'Vendedor';
+      const payMethod = s.paymentMethod || (s as any).payment_method || 'Não informado';
+      const payStatus = s.paymentStatus || (s as any).payment_status || 'PENDENTE';
+      const saleStatus = s.status || 'CONCLUIDA';
+
+      // Commission calculation safely
+      let comm = Number(s.commissionAmount);
+      if (isNaN(comm) || s.commissionAmount === undefined) {
+        try {
+          comm = calculateSaleCommission(s).commissionAmount;
+        } catch {
+          comm = 0;
+        }
+      }
+
+      // Gross profit calculation safely
+      let profit = Number(s.grossProfit);
+      if (isNaN(profit) || s.grossProfit === undefined) {
+        const cost = Number(s.totalCost) || (Array.isArray(s.items) ? s.items.reduce((acc, it) => acc + (Number(it.totalCost ?? ((it.unitCost || 0) * (it.quantity || 1))) || 0), 0) : 0);
+        profit = (Number(s.total) || 0) - cost;
+      }
+
+      return [
+        escapeCsv(saleNum),
+        escapeCsv(dateStr),
+        escapeCsv(custName),
+        escapeCsv(custDoc),
+        escapeCsv(custPhone),
+        escapeCsv(custEmail),
+        escapeCsv(seller),
+        escapeCsv(payMethod),
+        formatMoney(s.subtotal),
+        formatMoney(s.discount),
+        formatMoney(s.addition),
+        formatMoney(s.total),
+        formatMoney(s.paidAmount),
+        formatMoney(s.remainingAmount),
+        escapeCsv(payStatus),
+        escapeCsv(saleStatus),
+        formatMoney(comm),
+        formatMoney(profit),
+      ];
+    });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `vendas_faturamento_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
   // --- BATCH IMPORT METHODS (CSV) ---

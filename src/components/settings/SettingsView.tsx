@@ -360,38 +360,109 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('ATENÇÃO: A restauração substituirá todos os dados do banco de dados pelo conteúdo do arquivo de backup.\n\nUma salvaguarda do estado atual será gerada automaticamente antes da restauração.\n\nDeseja continuar?')) {
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      setBackupErrorMessage('Formato de arquivo inválido. Por favor, selecione um arquivo de backup com extensão .json.');
       if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
       return;
     }
 
-    setIsRestoringBackup(true);
     setBackupSuccessMessage(null);
     setBackupErrorMessage(null);
 
     const reader = new FileReader();
+
+    reader.onerror = () => {
+      setBackupErrorMessage('Erro ao ler o arquivo selecionado no seu dispositivo.');
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+    };
+
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const snapshot = JSON.parse(text);
-        const res = await api.importBackup(snapshot);
+        if (!text || !text.trim()) {
+          setBackupErrorMessage('O arquivo de backup selecionado está vazio.');
+          return;
+        }
+
+        let parsedData: any;
+        try {
+          parsedData = JSON.parse(text);
+        } catch (parseErr: any) {
+          setBackupErrorMessage(`O arquivo selecionado não é um JSON válido: ${parseErr.message}. Verifique se o arquivo está corrompido.`);
+          return;
+        }
+
+        if (!parsedData || typeof parsedData !== 'object') {
+          setBackupErrorMessage('Estrutura de arquivo incompatível. O conteúdo deve ser um objeto JSON.');
+          return;
+        }
+
+        // Inspeção prévia do conteúdo para validação amigável e contagem de registros
+        let tablesObj: Record<string, any[]> = {};
+        if (parsedData.tables && typeof parsedData.tables === 'object') {
+          tablesObj = parsedData.tables;
+        } else if (parsedData.data?.tables && typeof parsedData.data.tables === 'object') {
+          tablesObj = parsedData.data.tables;
+        } else {
+          // Checa propriedades diretas
+          for (const [k, v] of Object.entries(parsedData)) {
+            if (Array.isArray(v)) {
+              tablesObj[k] = v;
+            }
+          }
+        }
+
+        const tableNames = Object.keys(tablesObj);
+        const totalItemsCount = Object.values(tablesObj).reduce((acc, rows) => acc + (Array.isArray(rows) ? rows.length : 0), 0);
+
+        if (tableNames.length === 0 || totalItemsCount === 0) {
+          setBackupErrorMessage(
+            'Nenhuma tabela ou dado reconhecido foi encontrado no arquivo de backup. A restauração foi cancelada para proteger os dados atuais.'
+          );
+          return;
+        }
+
+        const confirmMsg =
+          `CONFIRMAR RESTAURAÇÃO DE BACKUP\n\n` +
+          `Arquivo: ${file.name}\n` +
+          `Tabelas identificadas: ${tableNames.length} (${tableNames.slice(0, 5).join(', ')}${tableNames.length > 5 ? '...' : ''})\n` +
+          `Total de registros a restaurar: ${totalItemsCount}\n\n` +
+          `ATENÇÃO: A restauração substituirá os dados atuais pelo conteúdo deste arquivo.\n` +
+          `Uma salvaguarda de segurança (pre_restore) será criada automaticamente no servidor antes de aplicar as alterações.\n\n` +
+          `Deseja prosseguir com a restauração?`;
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        setIsRestoringBackup(true);
+
+        const res = await api.importBackup(parsedData);
+
         if (res.success) {
-          setBackupSuccessMessage(`Banco de dados restaurado com sucesso! (${res.restoredTables?.length || 0} tabelas processadas)`);
+          const countInfo = (res as any).totalRecordsRestored ? ` com ${(res as any).totalRecordsRestored} registros` : '';
+          setBackupSuccessMessage(
+            `Banco de dados restaurado com sucesso! (${res.restoredTables?.length || 0} tabelas processadas${countInfo}). Sincronizando dados...`
+          );
+          await StorageService.syncWithServer();
           await loadBackups();
-          // Reload page after short delay so new data is reflected
+
+          // Recarrega a página para atualizar todos os componentes com o novo estado
           setTimeout(() => {
             window.location.reload();
-          }, 1500);
+          }, 1800);
         } else {
-          setBackupErrorMessage('Falha ao restaurar banco de dados.');
+          setBackupErrorMessage(res.error || 'Falha ao restaurar banco de dados.');
         }
       } catch (err: any) {
-        setBackupErrorMessage(`Erro ao processar arquivo de backup: ${err.message}`);
+        console.error('Erro na restauração de backup:', err);
+        setBackupErrorMessage(`Erro ao restaurar backup: ${err.message || 'Falha na comunicação'}`);
       } finally {
         setIsRestoringBackup(false);
         if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
       }
     };
+
     reader.readAsText(file);
   };
 

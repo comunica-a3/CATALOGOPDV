@@ -4526,9 +4526,19 @@ router.post('/backup/import', requireAdmin, async (req: AuthRequest, res) => {
     const snapshot = req.body;
     const result = await restoreDatabaseSnapshot(snapshot, req.user?.id, req.user?.name);
     if (result.success) {
+      broadcastSync('backup-restored', { restoredTables: result.restoredTables });
+      broadcastSync('items-updated');
+      broadcastSync('catalog-updated', { type: 'backup-restore' });
+      broadcastSync('catalog-niches-updated');
+      broadcastSync('categories-updated');
+      broadcastSync('customers-updated');
+      broadcastSync('sales-updated');
+      broadcastSync('budgets-updated');
+      broadcastSync('production-updated');
+      broadcastSync('settings-updated');
       res.json(result);
     } else {
-      res.status(500).json(result);
+      res.status(400).json(result);
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao importar backup.' });

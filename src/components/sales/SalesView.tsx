@@ -265,6 +265,26 @@ export const SalesView: React.FC<SalesViewProps> = ({
     }
   };
 
+  const handleExportCSV = () => {
+    if (!filteredSales || filteredSales.length === 0) {
+      setCancelErrorMessage('Nenhuma venda encontrada para exportar no período ou filtros atuais.');
+      setActionSuccessMessage(null);
+      return;
+    }
+    try {
+      const ok = StorageService.exportSalesToCSV(filteredSales);
+      if (ok) {
+        setActionSuccessMessage(`Exportação concluída! Arquivo CSV com ${filteredSales.length} venda(s) gerado e baixado.`);
+        setCancelErrorMessage(null);
+      } else {
+        setCancelErrorMessage('Nenhuma venda disponível para exportação.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao exportar CSV de vendas:', err);
+      setCancelErrorMessage(`Falha ao exportar CSV: ${err.message || 'Erro inesperado'}`);
+    }
+  };
+
   return (
     <div id="sales-management-view" className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
@@ -294,8 +314,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
           <button
             type="button"
             id="btn-export-sales-csv"
-            onClick={() => StorageService.exportSalesToCSV(filteredSales)}
+            onClick={handleExportCSV}
             className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Exportar listagem filtrada para planilha CSV"
           >
             <Download className="w-4 h-4 text-slate-500" />
             <span>Exportar CSV ({filteredSales.length})</span>

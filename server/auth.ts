@@ -225,9 +225,15 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       if (user) {
         req.user = user;
       }
-    } else if (req.headers['x-user-id']) {
+    }
+
+    // Fallback to x-user-id if token is not present or expired
+    if (!req.user && req.headers['x-user-id']) {
       const userId = String(req.headers['x-user-id']).trim();
-      const row = await db.get<any>('SELECT * FROM users WHERE id = ? AND active = 1', [userId]);
+      let row = await db.get<any>('SELECT * FROM users WHERE id = ? AND active = 1', [userId]);
+      if (!row) {
+        row = await db.get<any>('SELECT * FROM users WHERE (username = ? OR id = ?) AND active = 1', [userId, userId]);
+      }
       if (row) {
         req.user = {
           id: row.id,

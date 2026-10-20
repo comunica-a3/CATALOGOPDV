@@ -12,18 +12,25 @@ export interface DatabaseSnapshot {
   tables: Record<string, any[]>;
 }
 
-const ALL_TABLES = [
+export const ALL_TABLES = [
+  'company_settings',
   'users',
   'categories',
   'items',
+  'product_separations',
+  'catalog_niches',
   'customers',
   'sales',
+  'sale_annotations',
   'budgets',
   'production_orders',
   'inventory_movements',
   'receivables',
   'receiving_accounts',
+  'financial_transfers',
   'cash_register_sessions',
+  'account_balance_adjustments',
+  'expenses',
   'online_services',
   'document_templates',
   'generated_documents',
@@ -34,9 +41,128 @@ const ALL_TABLES = [
   'segment_suggestions',
   'complementary_rules',
   'public_segment_pages',
-  'company_settings',
+  'uploaded_files',
   'audit_logs',
 ];
+
+/**
+ * Normalizes different incoming backup formats (native snapshot, direct tables, localStorage dump, camelCase)
+ */
+export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
+  if (!input || typeof input !== 'object') return null;
+
+  // Case 1: Standard snapshot format { version, timestamp, tables: { ... } }
+  if (input.tables && typeof input.tables === 'object') {
+    return {
+      version: input.version || '2.0.0',
+      timestamp: input.timestamp || new Date().toISOString(),
+      tables: input.tables,
+    };
+  }
+
+  // Case 2: Nested inside data or snapshot
+  if (input.data?.tables && typeof input.data.tables === 'object') {
+    return {
+      version: input.data.version || input.version || '2.0.0',
+      timestamp: input.data.timestamp || new Date().toISOString(),
+      tables: input.data.tables,
+    };
+  }
+  if (input.snapshot?.tables && typeof input.snapshot.tables === 'object') {
+    return {
+      version: input.snapshot.version || input.version || '2.0.0',
+      timestamp: input.snapshot.timestamp || new Date().toISOString(),
+      tables: input.snapshot.tables,
+    };
+  }
+
+  // Case 3: Direct tables at root or localStorage dump keys (pdv_items, etc.)
+  const tableAliasMap: Record<string, string> = {
+    pdv_items: 'items',
+    pdv_categories: 'categories',
+    pdv_customers: 'customers',
+    pdv_sales: 'sales',
+    pdv_budgets: 'budgets',
+    pdv_users: 'users',
+    pdv_settings: 'company_settings',
+    pdv_production: 'production_orders',
+    pdv_inventory_movements: 'inventory_movements',
+    pdv_receivables: 'receivables',
+    pdv_receiving_accounts: 'receiving_accounts',
+    pdv_expenses: 'expenses',
+    pdv_opportunities: 'opportunities',
+    pdv_opportunity_activities: 'opportunity_activities',
+    pdv_packages: 'packages',
+    pdv_approach_templates: 'approach_templates',
+    pdv_segment_suggestions: 'segment_suggestions',
+    pdv_complementary_rules: 'complementary_rules',
+    pdv_public_segment_pages: 'public_segment_pages',
+    pdv_catalog_niches: 'catalog_niches',
+    pdv_product_separations: 'product_separations',
+    pdv_document_templates: 'document_templates',
+    pdv_generated_documents: 'generated_documents',
+    pdv_cash_sessions: 'cash_register_sessions',
+    pdv_financial_transfers: 'financial_transfers',
+    pdv_sale_annotations: 'sale_annotations',
+    productionOrders: 'production_orders',
+    inventoryMovements: 'inventory_movements',
+    receivingAccounts: 'receiving_accounts',
+    cashRegisterSessions: 'cash_register_sessions',
+    accountBalanceAdjustments: 'account_balance_adjustments',
+    onlineServices: 'online_services',
+    documentTemplates: 'document_templates',
+    generatedDocuments: 'generated_documents',
+    opportunityActivities: 'opportunity_activities',
+    approachTemplates: 'approach_templates',
+    segmentSuggestions: 'segment_suggestions',
+    complementaryRules: 'complementary_rules',
+    publicSegmentPages: 'public_segment_pages',
+    companySettings: 'company_settings',
+    settings: 'company_settings',
+    auditLogs: 'audit_logs',
+    productSeparations: 'product_separations',
+    catalogNiches: 'catalog_niches',
+    uploadedFiles: 'uploaded_files',
+  };
+
+  const tables: Record<string, any[]> = {};
+  let recognizedCount = 0;
+
+  for (const [key, val] of Object.entries(input)) {
+    const canonical = tableAliasMap[key] || (ALL_TABLES.includes(key) ? key : null);
+    if (canonical && val !== null && val !== undefined) {
+      if (Array.isArray(val)) {
+        tables[canonical] = val;
+        recognizedCount += val.length;
+      } else if (typeof val === 'object') {
+        tables[canonical] = [val];
+        recognizedCount += 1;
+      }
+    }
+  }
+
+  if (recognizedCount > 0 || Object.keys(tables).length > 0) {
+    return {
+      version: input.version || '2.0.0',
+      timestamp: input.timestamp || new Date().toISOString(),
+      tables,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Retrieves valid columns for a specific table directly from SQLite schema
+ */
+async function getTableColumns(tableName: string): Promise<Set<string>> {
+  try {
+    const cols = await db.all<{ name: string }>(`PRAGMA table_info("${tableName}")`);
+    return new Set(cols.map((c) => c.name));
+  } catch {
+    return new Set();
+  }
+}
 
 /**
  * Creates a structured JSON snapshot of all database tables
@@ -126,43 +252,116 @@ export function listLocalBackups(): Array<{ filename: string; size: number; crea
  * Restores the database from a structured snapshot with pre-backup rollback protection
  */
 export async function restoreDatabaseSnapshot(
-  snapshot: DatabaseSnapshot,
+  rawSnapshot: any,
   userId?: string,
   userName?: string
-): Promise<{ success: boolean; error?: string; restoredTables: string[] }> {
-  if (!snapshot || !snapshot.tables) {
-    return { success: false, error: 'Formato de backup inválido.', restoredTables: [] };
+): Promise<{ success: boolean; error?: string; restoredTables: string[]; totalRecordsRestored?: number }> {
+  const snapshot = normalizeSnapshotPayload(rawSnapshot);
+  if (!snapshot || !snapshot.tables || Object.keys(snapshot.tables).length === 0) {
+    return {
+      success: false,
+      error: 'Formato de backup inválido ou nenhum dado reconhecido encontrado no arquivo selecionado.',
+      restoredTables: [],
+    };
   }
 
   // 1. Create safety backup of current state
   const safetyBackupName = await createLocalBackupFile('pre_restore');
 
+  // Disable foreign keys during restore to avoid ordering deadlocks
   try {
-    const restoredTables: string[] = [];
-    const statements: Array<{ sql: string; args?: any[] } | string> = [];
+    await db.run('PRAGMA foreign_keys = OFF;');
+  } catch {}
+
+  const restoredTables: string[] = [];
+  let totalRecordsRestored = 0;
+
+  try {
+    // Start atomic transaction
+    await db.run('BEGIN TRANSACTION;');
 
     for (const table of ALL_TABLES) {
       const rows = snapshot.tables[table];
-      if (Array.isArray(rows)) {
-        statements.push(`DELETE FROM ${table};`);
+      if (!Array.isArray(rows)) continue;
 
-        if (rows.length > 0) {
-          const sample = rows[0];
-          const columns = Object.keys(sample);
-          const placeholders = columns.map(() => '?').join(', ');
-          const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders});`;
+      const validColumns = await getTableColumns(table);
+      if (validColumns.size === 0) continue;
 
-          for (const row of rows) {
-            const values = columns.map((col) => row[col]);
-            statements.push({ sql, args: values });
+      // Clear existing records in this table
+      await db.run(`DELETE FROM "${table}";`);
+
+      if (rows.length > 0) {
+        const columnsToInsert = Array.from(validColumns);
+
+        for (const row of rows) {
+          if (!row || typeof row !== 'object') continue;
+
+          const presentCols: string[] = [];
+          const values: any[] = [];
+
+          for (const col of columnsToInsert) {
+            let val: any = undefined;
+
+            if (col in row) {
+              val = row[col];
+            } else {
+              // Try camelCase counterpart (e.g. customer_name -> customerName)
+              const camelKey = col.replace(/_([a-z0-9])/g, (_, l) => l.toUpperCase());
+              if (camelKey in row) {
+                val = row[camelKey];
+              }
+            }
+
+            if (val !== undefined) {
+              presentCols.push(col);
+              if (val === null) {
+                values.push(null);
+              } else if (typeof val === 'boolean') {
+                values.push(val ? 1 : 0);
+              } else if (typeof val === 'object') {
+                values.push(JSON.stringify(val));
+              } else {
+                values.push(val);
+              }
+            }
+          }
+
+          if (presentCols.length > 0) {
+            const placeholders = presentCols.map(() => '?').join(', ');
+            const sql = `INSERT INTO "${table}" (${presentCols.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders});`;
+            await db.run(sql, values);
+            totalRecordsRestored++;
           }
         }
-        restoredTables.push(table);
       }
+
+      restoredTables.push(table);
     }
 
-    // Execute in atomic batch
-    await db.batch(statements as any);
+    // Safety check: ensure at least one active ADMIN exists in `users`
+    try {
+      const adminCount = await db.get<{ count: number }>(
+        "SELECT COUNT(*) as count FROM users WHERE (role = 'ADMIN' OR role = 'ADMINISTRADOR') AND active = 1"
+      );
+      if (!adminCount || adminCount.count === 0) {
+        console.warn('[Restore] Nenhum administrador ativo encontrado no snapshot. Inserindo administrador padrão de segurança.');
+        const defaultAdminSql = `INSERT OR REPLACE INTO users (id, name, username, email, password_hash, role, active, must_change_password, is_test_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 0, datetime('now'), datetime('now'))`;
+        // Hash for initial password 'admin'
+        await db.run(defaultAdminSql, [
+          'usr-admin-1',
+          'Administrador',
+          'admin',
+          'admin@digitalexpress.com.br',
+          '$2b$10$cliTumfrlJVzQLn5khJ2OOCT9FT./IKOxqa.emBN/SnS.5R9VLyWe',
+          'ADMIN',
+        ]);
+      }
+    } catch (adminErr) {
+      console.warn('Aviso ao verificar administrador pós-restauração:', adminErr);
+    }
+
+    // Commit atomic transaction
+    await db.run('COMMIT;');
     persistDatabase();
 
     await logAudit({
@@ -175,17 +374,26 @@ export async function restoreDatabaseSnapshot(
         safetyBackupName,
         restoredTables,
         sourceTimestamp: snapshot.timestamp,
+        totalRecordsRestored,
       },
     });
 
-    return { success: true, restoredTables };
+    return { success: true, restoredTables, totalRecordsRestored };
   } catch (err: any) {
     console.error('Database restore error:', err);
+    try {
+      await db.run('ROLLBACK;');
+    } catch {}
+
     return {
       success: false,
-      error: `Falha ao restaurar banco de dados: ${err.message}.`,
+      error: `Falha ao restaurar banco de dados: ${err.message}. A salvaguarda '${safetyBackupName}' foi preservada e o banco de dados não foi corrompido.`,
       restoredTables: [],
     };
+  } finally {
+    try {
+      await db.run('PRAGMA foreign_keys = ON;');
+    } catch {}
   }
 }
 
