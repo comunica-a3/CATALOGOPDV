@@ -45,38 +45,44 @@ export const ALL_TABLES = [
   'audit_logs',
 ];
 
+export interface ColumnMeta {
+  name: string;
+  type: string;
+  notnull: boolean;
+  dflt_value: string | null;
+  pk: boolean;
+}
+
 /**
  * Normalizes different incoming backup formats (native snapshot, direct tables, localStorage dump, camelCase)
  */
-export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
+export function normalizeSnapshotPayload(rawInput: any): DatabaseSnapshot | null {
+  if (!rawInput) return null;
+
+  let input = rawInput;
+  if (typeof input === 'string') {
+    try {
+      input = JSON.parse(input);
+    } catch {
+      return null;
+    }
+  }
+
   if (!input || typeof input !== 'object') return null;
 
-  // Case 1: Standard snapshot format { version, timestamp, tables: { ... } }
-  if (input.tables && typeof input.tables === 'object') {
-    return {
-      version: input.version || '2.0.0',
-      timestamp: input.timestamp || new Date().toISOString(),
-      tables: input.tables,
-    };
+  // Extract source tables container
+  let rawTables: Record<string, any> = {};
+  if (input.tables && typeof input.tables === 'object' && !Array.isArray(input.tables)) {
+    rawTables = input.tables;
+  } else if (input.data?.tables && typeof input.data.tables === 'object' && !Array.isArray(input.data.tables)) {
+    rawTables = input.data.tables;
+  } else if (input.snapshot?.tables && typeof input.snapshot.tables === 'object' && !Array.isArray(input.snapshot.tables)) {
+    rawTables = input.snapshot.tables;
+  } else {
+    // Direct root properties or localStorage dump
+    rawTables = input;
   }
 
-  // Case 2: Nested inside data or snapshot
-  if (input.data?.tables && typeof input.data.tables === 'object') {
-    return {
-      version: input.data.version || input.version || '2.0.0',
-      timestamp: input.data.timestamp || new Date().toISOString(),
-      tables: input.data.tables,
-    };
-  }
-  if (input.snapshot?.tables && typeof input.snapshot.tables === 'object') {
-    return {
-      version: input.snapshot.version || input.version || '2.0.0',
-      timestamp: input.snapshot.timestamp || new Date().toISOString(),
-      tables: input.snapshot.tables,
-    };
-  }
-
-  // Case 3: Direct tables at root or localStorage dump keys (pdv_items, etc.)
   const tableAliasMap: Record<string, string> = {
     pdv_items: 'items',
     pdv_categories: 'categories',
@@ -85,7 +91,9 @@ export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
     pdv_budgets: 'budgets',
     pdv_users: 'users',
     pdv_settings: 'company_settings',
+    pdv_company_settings: 'company_settings',
     pdv_production: 'production_orders',
+    pdv_production_orders: 'production_orders',
     pdv_inventory_movements: 'inventory_movements',
     pdv_receivables: 'receivables',
     pdv_receiving_accounts: 'receiving_accounts',
@@ -102,8 +110,12 @@ export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
     pdv_document_templates: 'document_templates',
     pdv_generated_documents: 'generated_documents',
     pdv_cash_sessions: 'cash_register_sessions',
+    pdv_cash_register_sessions: 'cash_register_sessions',
     pdv_financial_transfers: 'financial_transfers',
     pdv_sale_annotations: 'sale_annotations',
+    pdv_uploaded_files: 'uploaded_files',
+    pdv_account_balance_adjustments: 'account_balance_adjustments',
+    pdv_online_services: 'online_services',
     productionOrders: 'production_orders',
     inventoryMovements: 'inventory_movements',
     receivingAccounts: 'receiving_accounts',
@@ -123,14 +135,24 @@ export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
     productSeparations: 'product_separations',
     catalogNiches: 'catalog_niches',
     uploadedFiles: 'uploaded_files',
+    financialTransfers: 'financial_transfers',
+    saleAnnotations: 'sale_annotations',
   };
 
   const tables: Record<string, any[]> = {};
   let recognizedCount = 0;
 
-  for (const [key, val] of Object.entries(input)) {
-    const canonical = tableAliasMap[key] || (ALL_TABLES.includes(key) ? key : null);
-    if (canonical && val !== null && val !== undefined) {
+  for (const [key, val] of Object.entries(rawTables)) {
+    if (val === null || val === undefined) continue;
+    // Map alias or direct snake_case or convert camelCase to snake_case
+    const snakeCaseKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    const canonical =
+      tableAliasMap[key] ||
+      (ALL_TABLES.includes(key) ? key : null) ||
+      tableAliasMap[snakeCaseKey] ||
+      (ALL_TABLES.includes(snakeCaseKey) ? snakeCaseKey : null);
+
+    if (canonical) {
       if (Array.isArray(val)) {
         tables[canonical] = val;
         recognizedCount += val.length;
@@ -153,14 +175,26 @@ export function normalizeSnapshotPayload(input: any): DatabaseSnapshot | null {
 }
 
 /**
- * Retrieves valid columns for a specific table directly from SQLite schema
+ * Retrieves valid columns with schema metadata for a specific table directly from SQLite schema
  */
-async function getTableColumns(tableName: string): Promise<Set<string>> {
+async function getTableColumns(tableName: string): Promise<Map<string, ColumnMeta>> {
   try {
-    const cols = await db.all<{ name: string }>(`PRAGMA table_info("${tableName}")`);
-    return new Set(cols.map((c) => c.name));
+    const cols = await db.all<{ name: string; type: string; notnull: number; dflt_value: string | null; pk: number }>(
+      `PRAGMA table_info("${tableName}")`
+    );
+    const map = new Map<string, ColumnMeta>();
+    for (const c of cols) {
+      map.set(c.name, {
+        name: c.name,
+        type: (c.type || 'TEXT').toUpperCase(),
+        notnull: c.notnull === 1,
+        dflt_value: c.dflt_value,
+        pk: c.pk > 0,
+      });
+    }
+    return map;
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 
@@ -275,45 +309,139 @@ export async function restoreDatabaseSnapshot(
 
   const restoredTables: string[] = [];
   let totalRecordsRestored = 0;
+  let inTransaction = false;
 
   try {
     // Start atomic transaction
     await db.run('BEGIN TRANSACTION;');
+    inTransaction = true;
+
+    const now = new Date().toISOString();
 
     for (const table of ALL_TABLES) {
       const rows = snapshot.tables[table];
       if (!Array.isArray(rows)) continue;
 
-      const validColumns = await getTableColumns(table);
-      if (validColumns.size === 0) continue;
+      const colMap = await getTableColumns(table);
+      if (colMap.size === 0) continue;
 
       // Clear existing records in this table
       await db.run(`DELETE FROM "${table}";`);
 
       if (rows.length > 0) {
-        const columnsToInsert = Array.from(validColumns);
+        for (const rawRow of rows) {
+          if (!rawRow || typeof rawRow !== 'object') continue;
 
-        for (const row of rows) {
-          if (!row || typeof row !== 'object') continue;
+          let row = { ...rawRow };
+
+          // Bridge table-specific schemas and legacy JSON structures
+          if (table === 'company_settings') {
+            if (row.settings_json === undefined) {
+              const settingsPayload = { ...row };
+              delete (settingsPayload as any).id;
+              delete (settingsPayload as any).updated_at;
+              delete (settingsPayload as any).updatedAt;
+              row = {
+                id: row.id || 'default',
+                settings_json: JSON.stringify(settingsPayload),
+                updated_at: row.updatedAt || row.updated_at || now,
+              };
+            }
+          } else if (table === 'sales') {
+            if (row.items_json === undefined) {
+              row.items_json = row.items !== undefined ? (typeof row.items === 'string' ? row.items : JSON.stringify(row.items)) : '[]';
+            }
+            if (row.payments_json === undefined && row.payments !== undefined) {
+              row.payments_json = typeof row.payments === 'string' ? row.payments : JSON.stringify(row.payments);
+            }
+            if (row.edit_history_json === undefined && row.editHistory !== undefined) {
+              row.edit_history_json = typeof row.editHistory === 'string' ? row.editHistory : JSON.stringify(row.editHistory);
+            }
+            if (row.payment_status === undefined) {
+              row.payment_status = row.paymentStatus || 'PENDENTE';
+            }
+            if (row.status === undefined) {
+              row.status = row.status || 'CONCLUIDA';
+            }
+          } else if (table === 'budgets') {
+            if (row.items_json === undefined) {
+              row.items_json = row.items !== undefined ? (typeof row.items === 'string' ? row.items : JSON.stringify(row.items)) : '[]';
+            }
+            if (row.status === undefined) {
+              row.status = row.status || 'PENDENTE';
+            }
+          } else if (table === 'production_orders') {
+            if (row.files_json === undefined && row.files !== undefined) {
+              row.files_json = typeof row.files === 'string' ? row.files : JSON.stringify(row.files);
+            }
+            if (row.stages_json === undefined && row.stages !== undefined) {
+              row.stages_json = typeof row.stages === 'string' ? row.stages : JSON.stringify(row.stages);
+            }
+            if (row.status === undefined) {
+              row.status = row.status || 'PENDENTE';
+            }
+          } else if (table === 'packages') {
+            if (row.items_json === undefined) {
+              row.items_json = row.items !== undefined ? (typeof row.items === 'string' ? row.items : JSON.stringify(row.items)) : '[]';
+            }
+            if (!row.name) row.name = 'Pacote';
+            if (!row.segment) row.segment = row.targetSegment || 'Geral';
+          } else if (table === 'uploaded_files') {
+            if (row.mime_type === undefined) row.mime_type = row.mimeType || 'application/octet-stream';
+            if (row.data_base64 === undefined) row.data_base64 = row.dataBase64 || row.base64 || '';
+            if (row.filename === undefined) row.filename = row.fileName || 'file';
+          } else if (table === 'cash_register_sessions') {
+            if (row.summary_json === undefined && row.summary !== undefined) {
+              row.summary_json = typeof row.summary === 'string' ? row.summary : JSON.stringify(row.summary);
+            }
+            if (row.opened_by_user_id === undefined) row.opened_by_user_id = row.openedByUserId || 'usr-admin-1';
+            if (row.opened_by_user_name === undefined) row.opened_by_user_name = row.openedByUserName || 'Administrador';
+            if (row.opened_at === undefined) row.opened_at = row.openedAt || now;
+            if (row.status === undefined) row.status = 'FECHADO';
+          }
 
           const presentCols: string[] = [];
           const values: any[] = [];
 
-          for (const col of columnsToInsert) {
+          for (const [colName, meta] of colMap.entries()) {
             let val: any = undefined;
 
-            if (col in row) {
-              val = row[col];
+            if (colName in row) {
+              val = row[colName];
             } else {
               // Try camelCase counterpart (e.g. customer_name -> customerName)
-              const camelKey = col.replace(/_([a-z0-9])/g, (_, l) => l.toUpperCase());
+              const camelKey = colName.replace(/_([a-z0-9])/g, (_, l) => l.toUpperCase());
               if (camelKey in row) {
                 val = row[camelKey];
               }
             }
 
+            // Fallback for primary key if missing or null
+            if ((val === undefined || val === null) && meta.pk) {
+              if (table === 'company_settings') {
+                val = 'default';
+              } else if (colName === 'id') {
+                val = `${table}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+              }
+            }
+
+            // Fallback for NOT NULL constraint on missing or null values
+            if ((val === undefined || val === null) && meta.notnull && meta.dflt_value === null && !meta.pk) {
+              if (colName === 'created_at') {
+                val = row.createdAt || row.updatedAt || now;
+              } else if (colName === 'updated_at') {
+                val = row.updatedAt || row.createdAt || now;
+              } else if (colName.endsWith('_json')) {
+                val = '[]';
+              } else if (meta.type.includes('INT') || meta.type.includes('REAL') || meta.type.includes('NUM')) {
+                val = 0;
+              } else {
+                val = '';
+              }
+            }
+
             if (val !== undefined) {
-              presentCols.push(col);
+              presentCols.push(colName);
               if (val === null) {
                 values.push(null);
               } else if (typeof val === 'boolean') {
@@ -328,7 +456,7 @@ export async function restoreDatabaseSnapshot(
 
           if (presentCols.length > 0) {
             const placeholders = presentCols.map(() => '?').join(', ');
-            const sql = `INSERT INTO "${table}" (${presentCols.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders});`;
+            const sql = `INSERT OR REPLACE INTO "${table}" (${presentCols.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders});`;
             await db.run(sql, values);
             totalRecordsRestored++;
           }
@@ -362,6 +490,7 @@ export async function restoreDatabaseSnapshot(
 
     // Commit atomic transaction
     await db.run('COMMIT;');
+    inTransaction = false;
     persistDatabase();
 
     await logAudit({
@@ -381,9 +510,13 @@ export async function restoreDatabaseSnapshot(
     return { success: true, restoredTables, totalRecordsRestored };
   } catch (err: any) {
     console.error('Database restore error:', err);
-    try {
-      await db.run('ROLLBACK;');
-    } catch {}
+    if (inTransaction) {
+      try {
+        await db.run('ROLLBACK;');
+      } catch (rbErr) {
+        console.warn('Rollback notice:', rbErr);
+      }
+    }
 
     return {
       success: false,

@@ -437,7 +437,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         setIsRestoringBackup(true);
 
-        const res = await api.importBackup(parsedData);
+        // Pass text directly to importBackup to avoid re-serializing large objects in browser memory
+        const res = await api.importBackup(text);
 
         if (res.success) {
           const countInfo = (res as any).totalRecordsRestored ? ` com ${(res as any).totalRecordsRestored} registros` : '';

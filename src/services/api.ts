@@ -53,13 +53,31 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     let errorMessage = `Erro na requisição (${response.status})`;
+    let errCode: string | undefined = undefined;
+
     try {
       const errData = await response.json();
       if (errData.error) errorMessage = errData.error;
+      if (errData.code) errCode = errData.code;
     } catch {
-      // Fallback to status text
+      // Fallback based on specific HTTP response status codes
+      if (response.status === 413) {
+        errorMessage = 'Arquivo de backup muito extenso para o servidor processar (413 Payload Too Large). Limite máximo suportado: 200MB.';
+      } else if (response.status === 500) {
+        errorMessage = 'Falha interna no servidor ao processar os dados do backup (500 Internal Server Error).';
+      } else if (response.status === 400) {
+        errorMessage = 'Estrutura de dados ou formato de backup incompatível (400 Bad Request).';
+      } else if (response.status === 401 || response.status === 403) {
+        errorMessage = 'Acesso não autorizado. Apenas o perfil Administrador pode restaurar backups.';
+      } else if (response.statusText) {
+        errorMessage = `${errorMessage}: ${response.statusText}`;
+      }
     }
-    throw new Error(errorMessage);
+
+    const errorObj = new Error(errorMessage);
+    (errorObj as any).status = response.status;
+    (errorObj as any).code = errCode;
+    throw errorObj;
   }
 
   return response.json() as Promise<T>;
@@ -618,10 +636,11 @@ export const api = {
     return request<Array<{ filename: string; size: number; createdAt: string }>>('/backup/list');
   },
 
-  async importBackup(snapshot: any) {
+  async importBackup(snapshot: any | string) {
+    const body = typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot);
     return request<{ success: boolean; restoredTables: string[]; error?: string; totalRecordsRestored?: number }>('/backup/import', {
       method: 'POST',
-      body: JSON.stringify(snapshot),
+      body,
     });
   },
 

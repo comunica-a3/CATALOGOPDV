@@ -31,9 +31,13 @@ async function startServer() {
     next();
   });
 
-  // JSON Body Parser with ample limit for product images & snapshots
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+  // Dedicated Body Parser for Backup Import with controlled 200MB limit (accepts JSON and raw text)
+  app.use('/api/backup/import', express.json({ limit: '200mb' }));
+  app.use('/api/backup/import', express.text({ limit: '200mb', type: ['application/json', 'text/plain'] }));
+
+  // General JSON Body Parser for all standard routes with controlled 15MB limit
+  app.use(express.json({ limit: '15mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
   // Global Auth Token Extraction Middleware
   app.use(authMiddleware);
@@ -53,6 +57,37 @@ async function startServer() {
 
   // Mount API Endpoints
   app.use('/api', apiRoutes);
+
+  // Centralized Error Handling Middleware for API Routes (Catches 413, SyntaxError, and 500s)
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[API Error on ${req.method} ${req.originalUrl || req.url}]:`, err);
+
+    if (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413) {
+      res.status(413).json({
+        success: false,
+        error: 'O arquivo enviado ultrapassa o limite de tamanho permitido pelo servidor (máx. 200 MB).',
+        code: 'PAYLOAD_TOO_LARGE',
+        maxLimitBytes: 200 * 1024 * 1024,
+      });
+      return;
+    }
+
+    if (err instanceof SyntaxError && 'body' in err) {
+      res.status(400).json({
+        success: false,
+        error: 'Conteúdo JSON malformado ou corrompido.',
+        code: 'INVALID_JSON',
+      });
+      return;
+    }
+
+    const statusCode = err.status || err.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: err.message || 'Erro interno no servidor.',
+      code: err.code || 'INTERNAL_ERROR',
+    });
+  });
 
   // Serve static files from public directory (e.g. /catalogo.json)
   app.use(express.static(path.join(process.cwd(), 'public')));

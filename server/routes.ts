@@ -4523,25 +4523,56 @@ router.get('/backup/download/:filename', requireAdmin, async (req: AuthRequest, 
 
 router.post('/backup/import', requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const snapshot = req.body;
+    let snapshot = req.body;
+    if (typeof snapshot === 'string') {
+      try {
+        snapshot = JSON.parse(snapshot);
+      } catch (parseErr: any) {
+        res.status(400).json({
+          success: false,
+          error: `Conteúdo de backup inválido: não foi possível interpretar o JSON (${parseErr.message}).`,
+          code: 'INVALID_JSON',
+        });
+        return;
+      }
+    }
+
+    if (!snapshot || (typeof snapshot !== 'object' && !Array.isArray(snapshot))) {
+      res.status(400).json({
+        success: false,
+        error: 'Nenhum dado ou objeto de backup válido foi recebido.',
+        code: 'EMPTY_PAYLOAD',
+      });
+      return;
+    }
+
     const result = await restoreDatabaseSnapshot(snapshot, req.user?.id, req.user?.name);
     if (result.success) {
-      broadcastSync('backup-restored', { restoredTables: result.restoredTables });
-      broadcastSync('items-updated');
-      broadcastSync('catalog-updated', { type: 'backup-restore' });
-      broadcastSync('catalog-niches-updated');
-      broadcastSync('categories-updated');
-      broadcastSync('customers-updated');
-      broadcastSync('sales-updated');
-      broadcastSync('budgets-updated');
-      broadcastSync('production-updated');
-      broadcastSync('settings-updated');
+      try {
+        broadcastSync('backup-restored', { restoredTables: result.restoredTables });
+        broadcastSync('items-updated');
+        broadcastSync('catalog-updated', { type: 'backup-restore' });
+        broadcastSync('catalog-niches-updated');
+        broadcastSync('categories-updated');
+        broadcastSync('customers-updated');
+        broadcastSync('sales-updated');
+        broadcastSync('budgets-updated');
+        broadcastSync('production-updated');
+        broadcastSync('settings-updated');
+      } catch (syncErr) {
+        console.warn('[Sync Broadcast Warning after Restore]:', syncErr);
+      }
       res.json(result);
     } else {
       res.status(400).json(result);
     }
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Erro ao importar backup.' });
+    console.error('[Backup Import Fatal Error]:', err);
+    res.status(500).json({
+      success: false,
+      error: `Erro no servidor ao processar restauração de backup: ${err.message || 'Falha inesperada.'}`,
+      code: 'RESTORE_INTERNAL_ERROR',
+    });
   }
 });
 
