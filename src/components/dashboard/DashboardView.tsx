@@ -616,73 +616,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Handle Export to CSV
   const handleExportDashboardCSV = () => {
-    const rows = [
-      ['RELATÓRIO EXECUTIVO DE VENDAS - DASHBOARD GERENCIAL'],
-      ['Empresa', companySettings.name || 'Remix Comunicação'],
-      ['Período', periodLabel],
-      ['Data de Geração', new Date().toLocaleString('pt-BR')],
-      [],
-      ['INDICADORES PRINCIPAIS'],
-      ['Faturamento Total (R$)', metrics.totalRevenue.toFixed(2)],
-      ['Quantidade de Vendas', metrics.salesCount.toString()],
-      ['Ticket Médio (R$)', metrics.averageTicket.toFixed(2)],
-      ['Lucro Bruto Estimado (R$)', metrics.grossProfit.toFixed(2)],
-      ['Margem de Lucro (%)', metrics.profitMargin.toFixed(1) + '%'],
-      ['Descontos Concedidos (R$)', metrics.totalDiscounts.toFixed(2)],
-      ['Saldo a Receber / Pendente (R$)', metrics.totalReceivable.toFixed(2)],
-      ['Média Diária de Vendas (R$)', metrics.dailyAverage.toFixed(2)],
-      ['Vendas Canceladas (Qtd)', metrics.canceledCount.toString()],
-      ['Vendas Canceladas (R$)', metrics.canceledValue.toFixed(2)],
-      [],
-      ['FORMAS DE PAGAMENTO'],
-      ['Forma de Pagamento', 'Valor Total (R$)', 'Quantidade', 'Participação (%)'],
-      ...paymentMethodsData.map((p) => [
-        p.name,
-        p.amount.toFixed(2),
-        p.count.toString(),
-        p.percent.toFixed(1) + '%',
-      ]),
-      [],
-      ['VENDAS POR CATEGORIA'],
-      ['Categoria', 'Faturamento (R$)', 'Qtd Itens', 'Participação (%)'],
-      ...categoriesData.map((c) => [
-        c.name,
-        c.amount.toFixed(2),
-        c.qty.toString(),
-        c.percent.toFixed(1) + '%',
-      ]),
-      [],
-      ['PRODUTOS MAIS VENDIDOS'],
-      ['Item / Produto', 'Tipo', 'Qtd Vendida', 'Faturamento (R$)'],
-      ...topSellingByQty.map((item) => [
-        item.itemName,
-        item.itemType,
-        item.totalQty.toString(),
-        item.totalRevenue.toFixed(2),
-      ]),
-      [],
-      ['PRINCIPAIS CLIENTES'],
-      ['Cliente', 'Telefone', 'Total Gasto (R$)', 'Qtd Pedidos', 'Última Compra'],
-      ...topCustomers.map((c) => [
-        c.name,
-        c.phone || '',
-        c.totalSpent.toFixed(2),
-        c.ordersCount.toString(),
-        new Date(c.lastOrderDate).toLocaleDateString('pt-BR'),
-      ]),
-    ];
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      rows.map((e) => e.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `dashboard_vendas_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    StorageService.exportDashboardMetricsToCSV({
+      companyName: companySettings?.name || 'Digital Express',
+      periodLabel,
+      metrics,
+      paymentMethods: paymentMethodsData,
+      categories: categoriesData,
+      topSelling: topSellingByQty,
+      topCustomers,
+    });
   };
 
   return (

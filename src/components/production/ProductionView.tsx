@@ -240,10 +240,10 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
     let statusText = '';
     switch (order.status) {
       case 'AGUARDANDO_PRODUCAO':
-        statusText = 'está aguardando o início da produção gráfica.';
+        statusText = 'está aguardando o início da produção.';
         break;
       case 'EM_PRODUCAO':
-        statusText = 'já está em produção em nossa gráfica!';
+        statusText = 'já está em produção!';
         break;
       case 'REFAZER':
         statusText = 'está passando por ajustes e revisão na produção.';
@@ -375,14 +375,6 @@ export const ProductionView: React.FC<ProductionViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold select-none">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="hidden sm:inline">Tempo Real Ativo</span>
-          </div>
-
           <button
             type="button"
             onClick={handleManualSync}

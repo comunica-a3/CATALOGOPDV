@@ -734,10 +734,10 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
             
             <div>
               <span className="font-extrabold text-sm sm:text-base text-slate-900 leading-tight block">
-                {companySettings?.name || 'Catálogo Digital'}
+                {companySettings?.name || 'Dumorro'}
               </span>
               <span className="text-[10px] text-slate-400 font-medium">
-                {companySettings?.catalogSubtitle || 'Catálogo Digital.'}
+                {companySettings?.catalogSubtitle || 'Dumorro'}
               </span>
             </div>
           </div>

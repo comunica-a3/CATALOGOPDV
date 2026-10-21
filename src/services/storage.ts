@@ -4873,74 +4873,152 @@ export class StorageService {
     return { sale, productionOrdersCreated, budget };
   }
 
-  // --- CSV EXPORT UTILITIES ---
-  static exportItemsToCSV(items: Item[], canViewCosts: boolean): void {
+  // --- CSV EXPORT UTILITIES (STANDARDIZED) ---
+  static exportItemsToCSV(items: Item[], canViewCosts: boolean): boolean {
+    if (!items || items.length === 0) return false;
+
     const categories = this.getCategories();
     const catMap = new Map(categories.map((c) => [c.id, c.name]));
 
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
     const headers = canViewCosts
-      ? ['ID', 'Código SKU', 'Nome', 'Tipo', 'Categoria', 'Custo Fornecedor (R$)', 'Frete Fornecedor (R$)', 'Custo Total (R$)', 'Preço de Venda (R$)', 'Margem Bruta (R$)', 'Margem (%)', 'Status', 'Visível Vitrine']
-      : ['ID', 'Código SKU', 'Nome', 'Tipo', 'Categoria', 'Preço de Venda (R$)', 'Status', 'Visível Vitrine'];
+      ? [
+          'Código / SKU',
+          'Nome do Produto',
+          'Código de Barras',
+          'Tipo (Físico / Gráfico / Serviço)',
+          'Categoria',
+          'Preço de Custo (R$)',
+          'Custo Fornecedor (R$)',
+          'Frete Fornecedor (R$)',
+          'Preço de Venda (R$)',
+          'Margem Bruta (R$)',
+          'Margem (%)',
+          'Estoque',
+          'Estoque Mínimo',
+          'Descrição',
+          'Marca',
+          'Fornecedor',
+          'Ativo (Sim/Não)',
+          'Exibir no Catálogo (Sim/Não)',
+        ]
+      : [
+          'Código / SKU',
+          'Nome do Produto',
+          'Código de Barras',
+          'Tipo (Físico / Gráfico / Serviço)',
+          'Categoria',
+          'Preço de Venda (R$)',
+          'Estoque',
+          'Estoque Mínimo',
+          'Descrição',
+          'Marca',
+          'Ativo (Sim/Não)',
+          'Exibir no Catálogo (Sim/Não)',
+        ];
 
     const rows = items.map((item) => {
       const catName = catMap.get(item.categoryId) || 'Geral';
       const typeLabel = item.type === 'PRODUTO_GRAFICO' ? 'Gráfico' : item.type === 'PRODUTO_FISICO' ? 'Físico' : 'Serviço';
-      const statusLabel = item.active ? 'Ativo' : 'Inativo';
+      const statusLabel = item.active !== false ? 'Sim' : 'Não';
       const catalogLabel = item.showInCatalog ? 'Sim' : 'Não';
 
       if (canViewCosts) {
         return [
-          item.id,
-          `"${item.sku.replace(/"/g, '""')}"`,
-          `"${item.name.replace(/"/g, '""')}"`,
-          `"${typeLabel}"`,
-          `"${catName.replace(/"/g, '""')}"`,
-          (item.supplierCost || 0).toFixed(2).replace('.', ','),
-          (item.supplierFreight || 0).toFixed(2).replace('.', ','),
-          (item.costPrice || 0).toFixed(2).replace('.', ','),
-          (item.salePrice || 0).toFixed(2).replace('.', ','),
-          (item.marginReais || 0).toFixed(2).replace('.', ','),
-          (item.marginPercent || 0).toFixed(2).replace('.', ','),
-          `"${statusLabel}"`,
-          `"${catalogLabel}"`,
+          escapeCsv(item.sku || ''),
+          escapeCsv(item.name || ''),
+          escapeCsv(item.barcode || ''),
+          escapeCsv(typeLabel),
+          escapeCsv(catName),
+          formatMoney(item.costPrice || 0),
+          formatMoney(item.supplierCost || 0),
+          formatMoney(item.supplierFreight || 0),
+          formatMoney(item.salePrice || 0),
+          formatMoney(item.marginReais || 0),
+          formatMoney(item.marginPercent || 0),
+          escapeCsv(item.stock ?? 0),
+          escapeCsv(item.minStock ?? 0),
+          escapeCsv(item.description || ''),
+          escapeCsv(item.brand || ''),
+          escapeCsv(item.supplier || ''),
+          escapeCsv(statusLabel),
+          escapeCsv(catalogLabel),
         ];
       } else {
         return [
-          item.id,
-          `"${item.sku.replace(/"/g, '""')}"`,
-          `"${item.name.replace(/"/g, '""')}"`,
-          `"${typeLabel}"`,
-          `"${catName.replace(/"/g, '""')}"`,
-          (item.salePrice || 0).toFixed(2).replace('.', ','),
-          `"${statusLabel}"`,
-          `"${catalogLabel}"`,
+          escapeCsv(item.sku || ''),
+          escapeCsv(item.name || ''),
+          escapeCsv(item.barcode || ''),
+          escapeCsv(typeLabel),
+          escapeCsv(catName),
+          formatMoney(item.salePrice || 0),
+          escapeCsv(item.stock ?? 0),
+          escapeCsv(item.minStock ?? 0),
+          escapeCsv(item.description || ''),
+          escapeCsv(item.brand || ''),
+          escapeCsv(statusLabel),
+          escapeCsv(catalogLabel),
         ];
       }
     });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `produtos_catalogo_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
-  static exportCustomersToCSV(customers: Customer[]): void {
-    const headers = ['ID', 'Nome / Razão Social', 'Tipo', 'CPF / CNPJ', 'Telefone / WhatsApp', 'E-mail', 'Endereço', 'Cidade', 'Estado', 'CEP', 'Data Cadastro'];
+  static exportCustomersToCSV(customers: Customer[]): boolean {
+    if (!customers || customers.length === 0) return false;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const headers = [
+      'Nome / Razão Social',
+      'Tipo (PF / PJ)',
+      'CPF / CNPJ',
+      'Telefone / WhatsApp',
+      'E-mail',
+      'Endereço',
+      'Cidade',
+      'Estado / UF',
+      'CEP',
+      'Observações',
+      'Promotor / Indicador',
+      'Data Cadastro',
+    ];
 
     const rows = customers.map((c) => [
-      c.id,
-      `"${c.name.replace(/"/g, '""')}"`,
-      `"${c.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}"`,
-      `"${(c.document || '').replace(/"/g, '""')}"`,
-      `"${(c.phone || '').replace(/"/g, '""')}"`,
-      `"${(c.email || '').replace(/"/g, '""')}"`,
-      `"${(c.address || '').replace(/"/g, '""')}"`,
-      `"${(c.city || '').replace(/"/g, '""')}"`,
-      `"${(c.state || '').replace(/"/g, '""')}"`,
-      `"${(c.zipCode || '').replace(/"/g, '""')}"`,
-      `"${c.createdAt.split('T')[0]}"`,
+      escapeCsv(c.name || ''),
+      escapeCsv(c.type === 'PJ' ? 'PJ' : 'PF'),
+      escapeCsv(c.document || ''),
+      escapeCsv(c.phone || ''),
+      escapeCsv(c.email || ''),
+      escapeCsv(c.address || ''),
+      escapeCsv(c.city || ''),
+      escapeCsv(c.state || ''),
+      escapeCsv(c.zipCode || ''),
+      escapeCsv(c.notes || ''),
+      escapeCsv(c.promoterName || ''),
+      escapeCsv(c.createdAt ? c.createdAt.split('T')[0] : ''),
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `clientes_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
   static exportBudgetsToCSV(budgets: Budget[]): boolean {
@@ -4957,21 +5035,48 @@ export class StorageService {
       return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
     };
 
-    const headers = ['Número Orçamento', 'Cliente', 'Telefone', 'Vendedor', 'Itens Qtd', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)', 'Validade', 'Status', 'Data Criação'];
+    const headers = [
+      'Número Orçamento',
+      'Data Criação',
+      'Cliente',
+      'Telefone',
+      'E-mail',
+      'Vendedor',
+      'Itens Qtd',
+      'Itens Descrição',
+      'Subtotal (R$)',
+      'Desconto (R$)',
+      'Acréscimo / Frete (R$)',
+      'Total (R$)',
+      'Validade',
+      'Status',
+      'Observações',
+    ];
 
-    const rows = budgets.map((b) => [
-      escapeCsv(b.budgetNumber || b.id || ''),
-      escapeCsv(b.customerName || 'Cliente'),
-      escapeCsv(b.customerPhone || ''),
-      escapeCsv(b.sellerName || 'Vendedor'),
-      Array.isArray(b.items) ? b.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0,
-      formatMoney(b.subtotal),
-      formatMoney(b.discount),
-      formatMoney(b.total),
-      escapeCsv(b.validUntil || ''),
-      escapeCsv(b.status || 'PENDENTE'),
-      escapeCsv(b.createdAt ? b.createdAt.split('T')[0] : ''),
-    ]);
+    const rows = budgets.map((b) => {
+      const itemsCount = Array.isArray(b.items) ? b.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0;
+      const itemsSummary = Array.isArray(b.items)
+        ? b.items.map((it) => `${it.quantity}x ${it.item?.name || (it as any).itemName || (it as any).name || 'Item'}`).join(' | ')
+        : '';
+
+      return [
+        escapeCsv(b.budgetNumber || b.id || ''),
+        escapeCsv(b.createdAt ? b.createdAt.replace('T', ' ').substring(0, 19) : ''),
+        escapeCsv(b.customerName || 'Cliente'),
+        escapeCsv(b.customerPhone || ''),
+        escapeCsv(b.customerEmail || ''),
+        escapeCsv(b.sellerName || 'Vendedor'),
+        escapeCsv(itemsCount),
+        escapeCsv(itemsSummary),
+        formatMoney(b.subtotal),
+        formatMoney(b.discount),
+        formatMoney(b.freight || 0),
+        formatMoney(b.total),
+        escapeCsv(b.validUntil || ''),
+        escapeCsv(b.status || 'ABERTO'),
+        escapeCsv(b.notes || ''),
+      ];
+    });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `orcamentos_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
@@ -5003,6 +5108,8 @@ export class StorageService {
       'E-mail',
       'Vendedor',
       'Forma Pagamento',
+      'Itens Qtd',
+      'Itens Descrição',
       'Subtotal (R$)',
       'Desconto (R$)',
       'Acréscimo (R$)',
@@ -5026,6 +5133,8 @@ export class StorageService {
       const payMethod = s.paymentMethod || (s as any).payment_method || 'Não informado';
       const payStatus = s.paymentStatus || (s as any).payment_status || 'PENDENTE';
       const saleStatus = s.status || 'CONCLUIDA';
+      const itemsCount = Array.isArray(s.items) ? s.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0;
+      const itemsSummary = Array.isArray(s.items) ? s.items.map((it) => `${it.quantity}x ${it.itemName}`).join(' | ') : '';
 
       // Commission calculation safely
       let comm = Number(s.commissionAmount);
@@ -5053,6 +5162,8 @@ export class StorageService {
         escapeCsv(custEmail),
         escapeCsv(seller),
         escapeCsv(payMethod),
+        escapeCsv(itemsCount),
+        escapeCsv(itemsSummary),
         formatMoney(s.subtotal),
         formatMoney(s.discount),
         formatMoney(s.addition),
@@ -5068,6 +5179,139 @@ export class StorageService {
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `vendas_faturamento_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
+  }
+
+  static exportFinancialTransactionsToCSV(transactions: any[], periodLabel: string = 'geral'): boolean {
+    if (!transactions || transactions.length === 0) return false;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const headers = [
+      'Data / Hora',
+      'Número Venda',
+      'Categoria',
+      'Produto(s)',
+      'Cliente',
+      'Vendedor',
+      'Forma de Pagamento',
+      'Conta de Recebimento',
+      'Valor Bruto (R$)',
+      'Taxa (%)',
+      'Custo da Loja (Taxa R$)',
+      'Valor Líquido (R$)',
+    ];
+
+    const rows = transactions.map((t) => [
+      escapeCsv(t.saleCreatedAt ? t.saleCreatedAt.replace('T', ' ').substring(0, 19) : ''),
+      escapeCsv(t.saleNumber || ''),
+      escapeCsv(t.categoryLabel || 'Sem Categoria'),
+      escapeCsv((t.items || []).map((i: any) => `${i.quantity}x ${i.itemName}`).join(' | ') || '—'),
+      escapeCsv(t.customerName || ''),
+      escapeCsv(t.sellerName || ''),
+      escapeCsv(t.method || ''),
+      escapeCsv(t.accountName || ''),
+      formatMoney(t.grossAmount),
+      formatMoney(t.feePercent),
+      formatMoney(t.feeAmount),
+      formatMoney(t.netAmount),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const cleanPeriod = periodLabel.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    downloadBlobFile(csvContent, `relatorio_financeiro_${cleanPeriod}_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
+  }
+
+  static exportDashboardMetricsToCSV(params: {
+    companyName: string;
+    periodLabel: string;
+    metrics: any;
+    paymentMethods: any[];
+    categories: any[];
+    topSelling: any[];
+    topCustomers: any[];
+  }): boolean {
+    const { companyName, periodLabel, metrics, paymentMethods, categories, topSelling, topCustomers } = params;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const rows: string[][] = [
+      ['RELATÓRIO EXECUTIVO DE VENDAS - DASHBOARD GERENCIAL'],
+      ['Empresa', companyName || 'Digital Express'],
+      ['Período', periodLabel],
+      ['Data de Geração', new Date().toLocaleString('pt-BR')],
+      [],
+      ['INDICADORES PRINCIPAIS'],
+      ['Faturamento Total (R$)', formatMoney(metrics.totalRevenue)],
+      ['Quantidade de Vendas', String(metrics.salesCount || 0)],
+      ['Ticket Médio (R$)', formatMoney(metrics.averageTicket)],
+      ['Lucro Bruto Estimado (R$)', formatMoney(metrics.grossProfit)],
+      ['Margem de Lucro (%)', formatMoney(metrics.profitMargin) + '%'],
+      ['Descontos Concedidos (R$)', formatMoney(metrics.totalDiscounts)],
+      ['Saldo a Receber / Pendente (R$)', formatMoney(metrics.totalReceivable)],
+      ['Média Diária de Vendas (R$)', formatMoney(metrics.dailyAverage)],
+      ['Vendas Canceladas (Qtd)', String(metrics.canceledCount || 0)],
+      ['Vendas Canceladas (R$)', formatMoney(metrics.canceledValue)],
+      [],
+      ['FORMAS DE PAGAMENTO'],
+      ['Forma de Pagamento', 'Valor Total (R$)', 'Quantidade', 'Participação (%)'],
+      ...paymentMethods.map((p: any) => [
+        p.name || '',
+        formatMoney(p.amount),
+        String(p.count || 0),
+        formatMoney(p.percent) + '%',
+      ]),
+      [],
+      ['VENDAS POR CATEGORIA'],
+      ['Categoria', 'Faturamento (R$)', 'Qtd Itens', 'Participação (%)'],
+      ...categories.map((c: any) => [
+        c.name || '',
+        formatMoney(c.amount),
+        String(c.qty || 0),
+        formatMoney(c.percent) + '%',
+      ]),
+      [],
+      ['PRODUTOS MAIS VENDIDOS'],
+      ['Item / Produto', 'Tipo', 'Qtd Vendida', 'Faturamento (R$)'],
+      ...topSelling.map((it: any) => [
+        it.itemName || '',
+        it.itemType || '',
+        String(it.totalQty || 0),
+        formatMoney(it.totalRevenue),
+      ]),
+      [],
+      ['PRINCIPAIS CLIENTES'],
+      ['Cliente', 'Telefone', 'Total Gasto (R$)', 'Qtd Pedidos', 'Última Compra'],
+      ...topCustomers.map((c: any) => [
+        c.name || '',
+        c.phone || '',
+        formatMoney(c.totalSpent),
+        String(c.ordersCount || 0),
+        c.lastOrderDate ? new Date(c.lastOrderDate).toLocaleDateString('pt-BR') : '',
+      ]),
+    ];
+
+    const csvContent = '\uFEFF' + rows.map((r) => r.map(escapeCsv).join(';')).join('\r\n');
+    downloadBlobFile(csvContent, `dashboard_vendas_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
     return true;
   }
 

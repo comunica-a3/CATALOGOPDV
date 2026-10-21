@@ -103,16 +103,45 @@ export function validateCsvRows(
     const warnings: string[] = [];
 
     if (entityType === 'CUSTOMERS') {
-      const name = row.nome || row.name || row.cliente || row.razaosocial || '';
-      const phone = row.telefone || row.celular || row.phone || row.whatsapp || row.contato || '';
-      const document = row.cpf || row.cnpj || row.documento || row.cpfcnpj || row.document || '';
-      const email = row.email || row.correio || '';
+      const name =
+        row.nomerazaosocial ||
+        row.nome ||
+        row.name ||
+        row.razaosocial ||
+        row.razao ||
+        row.cliente ||
+        row.customername ||
+        '';
+      const phone =
+        row.telefonewhatsapp ||
+        row.telefone ||
+        row.celular ||
+        row.phone ||
+        row.whatsapp ||
+        row.contato ||
+        row.tel ||
+        '';
+      const document =
+        row.cpfcnpj ||
+        row.cpf ||
+        row.cnpj ||
+        row.documento ||
+        row.document ||
+        '';
+      const email = row.email || row.correio || row.mail || '';
       const address = row.endereco || row.logradouro || row.address || '';
       const city = row.cidade || row.city || '';
-      const state = row.estado || row.uf || row.state || '';
+      const state = row.estadouf || row.estado || row.uf || row.state || '';
       const zipCode = row.cep || row.zipcode || row.codigopostal || '';
       const notes = row.observacoes || row.obs || row.notas || row.notes || '';
-      const promoterName = row.promotor || row.promoter || row.indicadopor || '';
+      const promoterName =
+        row.promotorindicador ||
+        row.promotor ||
+        row.promoter ||
+        row.indicadopor ||
+        row.indicador ||
+        '';
+      const rawType = String(row.tipopfpj || row.tipo || '').toUpperCase();
 
       if (!name) {
         errors.push({ field: 'Nome', message: 'O nome do cliente é obrigatório.', rawValue: name });
@@ -144,10 +173,18 @@ export function validateCsvRows(
         newCount++;
       }
 
+      const calculatedType = rawType.includes('PJ')
+        ? 'PJ'
+        : rawType.includes('PF')
+        ? 'PF'
+        : document && document.replace(/\D/g, '').length > 11
+        ? 'PJ'
+        : 'PF';
+
       const customer: Customer = {
         id: match ? match.id : `cust-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
         name,
-        type: document && document.replace(/\D/g, '').length > 11 ? 'PJ' : 'PF',
+        type: calculatedType,
         document: document || undefined,
         phone,
         email: email || undefined,
@@ -157,7 +194,7 @@ export function validateCsvRows(
         zipCode: zipCode || undefined,
         notes: notes || undefined,
         promoterName: promoterName || undefined,
-        createdAt: match ? match.createdAt : now,
+        createdAt: match ? match.createdAt : row.datacadastro || now,
       };
 
       if (errors.length > 0) {
@@ -178,14 +215,21 @@ export function validateCsvRows(
         matchReason,
       });
     } else if (entityType === 'BUDGETS') {
-      const budgetNumber = row.numero || row.numerorcamento || row.budgetnumber || row.orcamento || `ORC-IMP-${rowNum}`;
+      const budgetNumber =
+        row.numeroorcamento ||
+        row.numero ||
+        row.numerorcamento ||
+        row.budgetnumber ||
+        row.orcamento ||
+        `ORC-IMP-${rowNum}`;
       const customerName = row.cliente || row.customername || row.nomecliente || row.nome || '';
-      const customerPhone = row.telefone || row.celular || row.phone || '';
+      const customerPhone = row.telefone || row.celular || row.phone || row.whatsapp || '';
+      const customerEmail = row.email || row.correio || '';
       const sellerName = row.vendedor || row.sellername || 'Vendedor Padrão';
-      const subtotal = parseNumber(row.subtotal || row.valor || row.total, 0);
-      const discount = parseNumber(row.desconto || row.discount, 0);
-      const freight = parseNumber(row.frete || row.freight || row.acrescimo, 0);
-      const totalRaw = parseNumber(row.total || row.valortotal, subtotal - discount + freight);
+      const subtotal = parseNumber(row.subtotalr || row.subtotal || row.valor || row.total, 0);
+      const discount = parseNumber(row.descontor || row.desconto || row.discount, 0);
+      const freight = parseNumber(row.acrescimofreter || row.acrescimo || row.frete || row.freight, 0);
+      const totalRaw = parseNumber(row.totalr || row.total || row.valortotal, subtotal - discount + freight);
       const total = totalRaw > 0 ? totalRaw : Math.max(0, subtotal - discount + freight);
       
       const rawStatus = String(row.status || '').toUpperCase();
@@ -196,8 +240,13 @@ export function validateCsvRows(
       else if (rawStatus.includes('CONVERT') || rawStatus.includes('VENDA')) statusField = 'CONVERTIDO_EM_VENDA';
 
       const notes = row.observacoes || row.obs || row.condicoes || '';
-      const itemName = row.item || row.produto || row.descricao || 'Item do Orçamento';
-      const itemQty = Math.max(1, parseNumber(row.quantidade || row.qtd, 1));
+      const itemName =
+        row.itensdescricao ||
+        row.item ||
+        row.produto ||
+        row.descricao ||
+        'Item do Orçamento';
+      const itemQty = Math.max(1, parseNumber(row.itensqtd || row.quantidade || row.qtd, 1));
       const itemUnitPrice = total / itemQty;
 
       if (!customerName) {
@@ -262,6 +311,7 @@ export function validateCsvRows(
         sellerName,
         customerName,
         customerPhone: customerPhone || undefined,
+        customerEmail: customerEmail || undefined,
         items: [cartItem],
         subtotal: subtotal || total,
         discount,
@@ -269,8 +319,8 @@ export function validateCsvRows(
         total,
         status: statusField,
         notes: notes || undefined,
-        validUntil: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-        createdAt: match ? match.createdAt : now,
+        validUntil: row.validade || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: match ? match.createdAt : row.datacriacao || now,
         updatedAt: now,
       };
 
@@ -293,18 +343,30 @@ export function validateCsvRows(
         matchReason,
       });
     } else if (entityType === 'SALES') {
-      const saleNumber = row.numero || row.numerovenda || row.salenumber || row.venda || `VND-IMP-${rowNum}`;
-      const customerName = row.cliente || row.customername || row.nomecliente || row.nome || 'Consumidor';
+      const saleNumber =
+        row.numerovenda ||
+        row.numero ||
+        row.salenumber ||
+        row.venda ||
+        `VND-IMP-${rowNum}`;
+      const customerName =
+        row.cliente ||
+        row.customername ||
+        row.nomecliente ||
+        row.nome ||
+        'Consumidor';
+      const customerDoc = row.cpfcnpj || row.documento || row.cpf || row.cnpj || '';
       const customerPhone = row.telefone || row.celular || row.phone || '';
+      const customerEmail = row.email || '';
       const sellerName = row.vendedor || row.sellername || 'Vendedor Padrão';
-      const subtotal = parseNumber(row.subtotal || row.valor || row.total, 0);
-      const discount = parseNumber(row.desconto || row.discount, 0);
-      const freight = parseNumber(row.frete || row.freight || row.acrescimo, 0);
-      const totalRaw = parseNumber(row.total || row.valortotal, subtotal - discount + freight);
+      const subtotal = parseNumber(row.subtotalr || row.subtotal || row.valor || row.total, 0);
+      const discount = parseNumber(row.descontor || row.desconto || row.discount, 0);
+      const freight = parseNumber(row.acrescimor || row.acrescimo || row.frete || row.freight, 0);
+      const totalRaw = parseNumber(row.totalr || row.total || row.valortotal, subtotal - discount + freight);
       const total = totalRaw > 0 ? totalRaw : Math.max(0, subtotal - discount + freight);
-      const paidRaw = parseNumber(row.valorpago || row.paidamount || row.pago, total);
+      const paidRaw = parseNumber(row.valorpagor || row.valorpago || row.paidamount || row.pago, total);
       const paidAmount = Math.min(total, Math.max(0, paidRaw));
-      const remainingAmount = Math.max(0, total - paidAmount);
+      const remainingAmount = parseNumber(row.saldoabertor || row.saldoaberto || row.saldo, Math.max(0, total - paidAmount));
 
       const rawPaymentStatus = String(row.statuspagamento || row.paymentstatus || '').toUpperCase();
       let paymentStatus: PaymentStatus = 'PAGO';
@@ -318,15 +380,20 @@ export function validateCsvRows(
         paymentStatus = paidAmount > 0 ? 'PARCIALMENTE_PAGO' : 'PENDENTE';
       }
 
-      const rawSaleStatus = String(row.status || row.salestatus || '').toUpperCase();
+      const rawSaleStatus = String(row.statusvenda || row.status || row.salestatus || '').toUpperCase();
       let saleStatus: SaleStatus = 'CONCLUIDA';
       if (rawSaleStatus.includes('CANC')) saleStatus = 'CANCELADA';
       else if (rawSaleStatus.includes('EDIT')) saleStatus = 'EDITADA';
       else if (rawSaleStatus.includes('EXCLU')) saleStatus = 'EXCLUIDA';
 
       const paymentMethod = row.formapagamento || row.metodopagamento || row.paymentmethod || 'Outro';
-      const itemName = row.item || row.produto || row.descricao || 'Produto / Serviço';
-      const itemQty = Math.max(1, parseNumber(row.quantidade || row.qtd, 1));
+      const itemName =
+        row.itensdescricao ||
+        row.item ||
+        row.produto ||
+        row.descricao ||
+        'Produto / Serviço';
+      const itemQty = Math.max(1, parseNumber(row.itensqtd || row.quantidade || row.qtd, 1));
       const itemUnitPrice = total / itemQty;
 
       if (!customerName) {
@@ -376,11 +443,12 @@ export function validateCsvRows(
         sellerId: 'admin',
         sellerName,
         customerName,
+        customerDocument: customerDoc || undefined,
         customerPhone: customerPhone || undefined,
         items: [saleItem],
         subtotal: subtotal || total,
         discount,
-        freight,
+        addition: freight,
         total,
         totalCost: total * 0.5,
         grossProfit: total * 0.5,
@@ -399,7 +467,7 @@ export function validateCsvRows(
         remainingAmount,
         dueDate: remainingAmount > 0 ? new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString() : undefined,
         status: saleStatus,
-        createdAt: match ? match.createdAt : now,
+        createdAt: match ? match.createdAt : row.datahora || now,
       };
 
       if (errors.length > 0) {
@@ -436,19 +504,25 @@ export function validateCsvRows(
 
 export function generateCsvTemplate(entityType: CsvEntityType): string {
   if (entityType === 'CUSTOMERS') {
-    return 'Nome;Telefone;CPF_CNPJ;Email;Endereco;Cidade;UF;CEP;Observacoes;Promotor\n' +
-      'Ana Silva;11999998888;12345678901;ana.silva@email.com;Av Paulista, 1000;São Paulo;SP;01310-100;Cliente VIP;Carlos Vendas\n' +
-      'Gráfica Alfa Ltda;1133334444;12345678000199;contato@alfa.com.br;Rua do Comércio, 50;São Paulo;SP;01000-000;Faturamento quinzenal;';
+    return (
+      'Nome / Razão Social;Tipo (PF / PJ);CPF / CNPJ;Telefone / WhatsApp;E-mail;Endereço;Cidade;Estado / UF;CEP;Observações;Promotor / Indicador\n' +
+      'Ana Silva;PF;12345678901;11999998888;ana.silva@email.com;Av Paulista, 1000;São Paulo;SP;01310-100;Cliente VIP;Carlos Vendas\n' +
+      'Gráfica Alfa Ltda;PJ;12345678000199;1133334444;contato@alfa.com.br;Rua do Comércio, 50;São Paulo;SP;01000-000;Faturamento quinzenal;'
+    );
   }
   if (entityType === 'BUDGETS') {
-    return 'Numero;Cliente;Telefone;Vendedor;Subtotal;Desconto;Frete;Total;Status;Item;Quantidade;Observacoes\n' +
-      'ORC-2026-0001;João Santos;11988887777;Vendedor Carlos;250.00;10.00;0.00;240.00;ABERTO;Panfletos 4x4 1000un;1;Validade 15 dias\n' +
-      'ORC-2026-0002;Mariana Lima;21977776666;Vendedor Carlos;120.00;0.00;15.00;135.00;APROVADO;Cartão de Visita Couchê;2;Aguardando arte';
+    return (
+      'Número Orçamento;Cliente;Telefone;Vendedor;Itens Descrição;Itens Qtd;Subtotal (R$);Desconto (R$);Acréscimo / Frete (R$);Total (R$);Status;Observações\n' +
+      'ORC-2026-0001;João Santos;11988887777;Vendedor Carlos;Panfletos 4x4 1000un;1;250,00;10,00;0,00;240,00;ABERTO;Validade 15 dias\n' +
+      'ORC-2026-0002;Mariana Lima;21977776666;Vendedor Carlos;Cartão de Visita Couchê;2;120,00;0,00;15,00;135,00;APROVADO;Aguardando arte'
+    );
   }
   // SALES
-  return 'Numero;Cliente;Telefone;Vendedor;Subtotal;Desconto;Frete;Total;ValorPago;StatusPagamento;FormaPagamento;Status;Item;Quantidade\n' +
-    'VND-2026-0001;Lucas Pereira;11966665555;Vendedor Carlos;150.00;0.00;0.00;150.00;150.00;PAGO;PIX;FINALIZADA;Banner 1x1m Lona;1\n' +
-    'VND-2026-0002;Boutique Bella;11955554444;Vendedor Carlos;500.00;50.00;0.00;450.00;200.00;PARCIALMENTE_PAGO;CARTAO_CREDITO;FINALIZADA;Etiquetas Adesivas;5';
+  return (
+    'Número Venda;Data / Hora;Cliente;CPF/CNPJ;Telefone;Vendedor;Forma Pagamento;Itens Descrição;Itens Qtd;Subtotal (R$);Desconto (R$);Acréscimo (R$);Total (R$);Valor Pago (R$);Status Pagamento;Status Venda\n' +
+    'VND-2026-0001;2026-01-10 14:30:00;Lucas Pereira;12345678901;11966665555;Vendedor Carlos;PIX;Banner 1x1m Lona;1;150,00;0,00;0,00;150,00;150,00;PAGO;CONCLUIDA\n' +
+    'VND-2026-0002;2026-01-11 10:15:00;Boutique Bella;12345678000199;11955554444;Vendedor Carlos;Cartão de Crédito;Etiquetas Adesivas;5;500,00;50,00;0,00;450,00;200,00;PARCIALMENTE_PAGO;CONCLUIDA'
+  );
 }
 
 export function downloadCsvTemplate(entityType: CsvEntityType): void {

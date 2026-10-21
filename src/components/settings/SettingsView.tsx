@@ -357,11 +357,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleFileSelectedForRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isRestoringBackup) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.json')) {
       setBackupErrorMessage('Formato de arquivo inválido. Por favor, selecione um arquivo de backup com extensão .json.');
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      return;
+    }
+
+    const MAX_BACKUP_SIZE_BYTES = 200 * 1024 * 1024; // 200 MB
+    if (file.size > MAX_BACKUP_SIZE_BYTES) {
+      setBackupErrorMessage(
+        `O arquivo selecionado (${(file.size / (1024 * 1024)).toFixed(1)} MB) ultrapassa o limite máximo seguro de 200 MB permitido pelo servidor.`
+      );
       if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
       return;
     }
@@ -1774,6 +1784,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ref={restoreFileInputRef}
                   accept=".json"
                   onChange={handleFileSelectedForRestore}
+                  disabled={isRestoringBackup}
                   className="hidden"
                 />
                 <button
