@@ -44,7 +44,11 @@ export const CommissionStatementModal: React.FC<CommissionStatementModalProps> =
     let totalCompany = 0;
 
     sales.forEach((sale) => {
-      const comm = calculateSaleCommission(sale);
+      const comm = calculateSaleCommission(
+        sale,
+        companySettings?.commissionRates,
+        companySettings?.promoterCommissionPercent
+      );
       totalSold += sale.total;
       if (isPromoter) {
         totalCommission += comm.promoterCommissionAmount;
@@ -174,7 +178,11 @@ export const CommissionStatementModal: React.FC<CommissionStatementModalProps> =
                 <tbody className="divide-y divide-slate-100">
                   {sales.length > 0 ? (
                     sales.map((s) => {
-                      const comm = calculateSaleCommission(s);
+                      const comm = calculateSaleCommission(
+                        s,
+                        companySettings?.commissionRates,
+                        companySettings?.promoterCommissionPercent
+                      );
                       const earned = isPromoter
                         ? comm.promoterCommissionAmount
                         : comm.sellerCommissionAmount;

@@ -1887,6 +1887,14 @@ router.get('/sales', async (req, res) => {
       items: JSON.parse(r.items_json),
       notes: r.notes || undefined,
       invoiceStatus: r.invoice_status || undefined,
+      promoterId: r.promoter_id || undefined,
+      promoterName: r.promoter_name || undefined,
+      promoterCommissionPercent: r.promoter_commission_percent !== null && r.promoter_commission_percent !== undefined ? Number(r.promoter_commission_percent) : undefined,
+      promoterCommissionAmount: r.promoter_commission_amount !== null && r.promoter_commission_amount !== undefined ? Number(r.promoter_commission_amount) : undefined,
+      sellerCommissionAmount: r.seller_commission_amount !== null && r.seller_commission_amount !== undefined ? Number(r.seller_commission_amount) : undefined,
+      commissionRate: r.commission_rate !== null && r.commission_rate !== undefined ? Number(r.commission_rate) : undefined,
+      commissionAmount: r.commission_amount !== null && r.commission_amount !== undefined ? Number(r.commission_amount) : undefined,
+      companyAmount: r.company_amount !== null && r.company_amount !== undefined ? Number(r.company_amount) : undefined,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -1955,8 +1963,9 @@ router.post('/sales', async (req: AuthRequest, res) => {
         seller_id, seller_name, subtotal, discount, addition, total, paid_amount,
         remaining_amount, status, is_deleted, deleted_at, deleted_by, deleted_by_name, deletion_reason, edit_history_json,
         payment_status, payment_method, payments_json, items_json,
-        notes, invoice_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        notes, invoice_status, created_at, updated_at,
+        promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         saleNumberNumeric,
@@ -1988,6 +1997,14 @@ router.post('/sales', async (req: AuthRequest, res) => {
         s.invoiceStatus || null,
         createdAt,
         updatedAt,
+        s.promoterId || null,
+        s.promoterName || null,
+        s.promoterCommissionPercent !== undefined ? Number(s.promoterCommissionPercent) : null,
+        s.promoterCommissionAmount !== undefined ? Number(s.promoterCommissionAmount) : null,
+        s.sellerCommissionAmount !== undefined ? Number(s.sellerCommissionAmount) : null,
+        s.commissionRate !== undefined ? Number(s.commissionRate) : null,
+        s.commissionAmount !== undefined ? Number(s.commissionAmount) : null,
+        s.companyAmount !== undefined ? Number(s.companyAmount) : null,
       ]
     );
 
@@ -2105,6 +2122,7 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
           seller_id = ?, seller_name = ?, subtotal = ?, discount = ?, addition = ?, total = ?,
           paid_amount = ?, remaining_amount = ?, status = 'EDITADA', edit_history_json = ?,
           payment_status = ?, payment_method = ?, payments_json = ?, items_json = ?,
+          promoter_id = ?, promoter_name = ?, promoter_commission_percent = ?, promoter_commission_amount = ?, seller_commission_amount = ?, commission_rate = ?, commission_amount = ?, company_amount = ?,
           notes = ?, updated_at = ?
         WHERE id = ?`,
         [
@@ -2125,6 +2143,14 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
           paymentMethod,
           paymentsJson,
           itemsJson,
+          body.promoterId || existingSale.promoter_id || null,
+          body.promoterName || existingSale.promoter_name || null,
+          body.promoterCommissionPercent !== undefined ? Number(body.promoterCommissionPercent) : (existingSale.promoter_commission_percent !== null ? Number(existingSale.promoter_commission_percent) : null),
+          body.promoterCommissionAmount !== undefined ? Number(body.promoterCommissionAmount) : (existingSale.promoter_commission_amount !== null ? Number(existingSale.promoter_commission_amount) : null),
+          body.sellerCommissionAmount !== undefined ? Number(body.sellerCommissionAmount) : (existingSale.seller_commission_amount !== null ? Number(existingSale.seller_commission_amount) : null),
+          body.commissionRate !== undefined ? Number(body.commissionRate) : (existingSale.commission_rate !== null ? Number(existingSale.commission_rate) : null),
+          body.commissionAmount !== undefined ? Number(body.commissionAmount) : (existingSale.commission_amount !== null ? Number(existingSale.commission_amount) : null),
+          body.companyAmount !== undefined ? Number(body.companyAmount) : (existingSale.company_amount !== null ? Number(existingSale.company_amount) : null),
           body.notes || existingSale.notes,
           now,
           targetId,
@@ -2138,8 +2164,9 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
           id, sale_number, sale_code, customer_id, customer_name, customer_phone, customer_email,
           seller_id, seller_name, subtotal, discount, addition, total, paid_amount,
           remaining_amount, status, is_deleted, edit_history_json, payment_status,
-          payment_method, payments_json, items_json, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EDITADA', 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          payment_method, payments_json, items_json, notes, created_at, updated_at,
+          promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EDITADA', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           targetId,
           saleNumberNumeric,
@@ -2164,6 +2191,14 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
           body.notes || null,
           body.createdAt || now,
           now,
+          body.promoterId || null,
+          body.promoterName || null,
+          body.promoterCommissionPercent !== undefined ? Number(body.promoterCommissionPercent) : null,
+          body.promoterCommissionAmount !== undefined ? Number(body.promoterCommissionAmount) : null,
+          body.sellerCommissionAmount !== undefined ? Number(body.sellerCommissionAmount) : null,
+          body.commissionRate !== undefined ? Number(body.commissionRate) : null,
+          body.commissionAmount !== undefined ? Number(body.commissionAmount) : null,
+          body.companyAmount !== undefined ? Number(body.companyAmount) : null,
         ]
       );
     }
@@ -2358,8 +2393,9 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
           seller_id, seller_name, subtotal, discount, addition, total, paid_amount,
           remaining_amount, status, is_deleted, deleted_at, deleted_by, deleted_by_name, deletion_reason, edit_history_json,
           payment_status, payment_method, payments_json, items_json,
-          notes, invoice_status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          notes, invoice_status, created_at, updated_at,
+          promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           saleNumberNumeric,
@@ -2391,6 +2427,14 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
           s.invoiceStatus || null,
           createdAt,
           updatedAt,
+          s.promoterId || null,
+          s.promoterName || null,
+          s.promoterCommissionPercent !== undefined ? Number(s.promoterCommissionPercent) : null,
+          s.promoterCommissionAmount !== undefined ? Number(s.promoterCommissionAmount) : null,
+          s.sellerCommissionAmount !== undefined ? Number(s.sellerCommissionAmount) : null,
+          s.commissionRate !== undefined ? Number(s.commissionRate) : null,
+          s.commissionAmount !== undefined ? Number(s.commissionAmount) : null,
+          s.companyAmount !== undefined ? Number(s.companyAmount) : null,
         ]
       );
 

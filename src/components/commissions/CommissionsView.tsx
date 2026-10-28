@@ -21,7 +21,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { CompanySettings, Sale, User } from '../../types';
 import {
@@ -29,6 +29,8 @@ import {
   aggregateCommissionsBySeller,
   calculateSaleCommission,
   filterSalesByPeriod,
+  getItemCommissionRate,
+  getItemTypeLabel,
 } from '../../utils/commissions';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
@@ -36,7 +38,6 @@ import { POSReceiptModal } from '../pos/POSReceiptModal';
 import { CommissionStatementModal } from './CommissionStatementModal';
 import { downloadOrderReceiptPDF } from '../../utils/pdfReceipt';
 import { StorageService } from '../../services/storage';
-import { api } from '../../services/api';
 
 interface CommissionsViewProps {
   sales: Sale[];
@@ -75,69 +76,20 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
   // Receipt Modal
   const [selectedReceiptSale, setSelectedReceiptSale] = useState<Sale | null>(null);
 
-  // Complete Sales Store: garante consulta completa ao banco de dados no período selecionado
-  const [dbSales, setDbSales] = useState<Sale[]>(() => {
-    const local = StorageService.getSales();
-    return sales && sales.length > 0 ? sales : local;
-  });
-
-  // Atualiza as vendas consultando o banco/servidor central ao montar e sempre que o período mudar
-  useEffect(() => {
-    let isMounted = true;
-    api.getSales()
-      .then((serverSales) => {
-        if (isMounted && Array.isArray(serverSales) && serverSales.length > 0) {
-          setDbSales(serverSales);
-        }
-      })
-      .catch((err) => {
-        console.debug('Aviso ao carregar vendas para comissões:', err);
-        if (isMounted) {
-          setDbSales(StorageService.getSales());
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [period, customStartDate, customEndDate]);
-
-  // Sincroniza com vendas passadas via props
-  useEffect(() => {
-    if (sales && sales.length > 0) {
-      setDbSales(sales);
-    }
-  }, [sales]);
-
-  // Ouvir eventos de vendas atualizadas para recalcular os relatórios em tempo real
-  useEffect(() => {
-    const handleSalesUpdated = () => {
-      api.getSales()
-        .then((serverSales) => {
-          if (Array.isArray(serverSales)) setDbSales(serverSales);
-        })
-        .catch(() => {
-          setDbSales(StorageService.getSales());
-        });
-    };
-
-    window.addEventListener('sales-updated', handleSalesUpdated);
-    window.addEventListener('storage-sync-completed', handleSalesUpdated);
-    return () => {
-      window.removeEventListener('sales-updated', handleSalesUpdated);
-      window.removeEventListener('storage-sync-completed', handleSalesUpdated);
-    };
-  }, []);
-
-  // 1. Filter sales by Period (considera todos os dados do período selecionado)
+  // 1. Filter sales by Period (Fonte única oficial: props.sales gerenciada centralmente no App)
   const periodFilteredSales = useMemo(() => {
-    return filterSalesByPeriod(dbSales, period, customStartDate, customEndDate);
-  }, [dbSales, period, customStartDate, customEndDate]);
+    return filterSalesByPeriod(sales || [], period, customStartDate, customEndDate);
+  }, [sales, period, customStartDate, customEndDate]);
 
-  // 2. Aggregate stats by Seller (Using all period filtered sales)
+  // 2. Aggregate stats by Seller (usando as taxas configuradas e percentual de promotor)
   const aggregation = useMemo(() => {
-    return aggregateCommissionsBySeller(periodFilteredSales, users);
-  }, [periodFilteredSales, users]);
+    return aggregateCommissionsBySeller(
+      periodFilteredSales,
+      users,
+      companySettings?.commissionRates,
+      companySettings?.promoterCommissionPercent
+    );
+  }, [periodFilteredSales, users, companySettings?.commissionRates, companySettings?.promoterCommissionPercent]);
 
   const activeDrillDownSummary = useMemo(() => {
     if (!drillDownSellerId) return null;
@@ -707,7 +659,11 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {displaySales.length > 0 ? (
                 displaySales.map((sale) => {
-                  const comm = calculateSaleCommission(sale);
+                  const comm = calculateSaleCommission(
+                    sale,
+                    companySettings?.commissionRates,
+                    companySettings?.promoterCommissionPercent
+                  );
 
                   return (
                     <tr key={sale.id} className="hover:bg-slate-50/80 transition-colors">
@@ -738,10 +694,11 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                       <td className="py-3 px-3">
                         <div className="space-y-1">
                           {(sale.items || []).map((i, idx) => {
-                            const isAcc =
-                              i.commissionRate === 30 ||
-                              i.itemType === 'PRODUTO_FISICO' ||
-                              Boolean(i.sku && i.sku.startsWith('FIS-'));
+                            const itemComm = comm.itemsCommission?.[idx];
+                            const rate = itemComm !== undefined
+                              ? itemComm.rate
+                              : (i.commissionRate ?? getItemCommissionRate(i, companySettings?.commissionRates));
+                            const typeLabel = getItemTypeLabel(i.itemType);
                             const itemName = i.itemName || (i as any)?.name || 'Item';
                             return (
                               <div
@@ -752,18 +709,10 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                                   {i.quantity}x {itemName}
                                 </span>
                                 <span
-                                  className={`text-[9px] font-bold px-1 rounded shrink-0 ${
-                                    isAcc
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-blue-100 text-blue-800'
-                                  }`}
-                                  title={
-                                    isAcc
-                                      ? 'Acessórios/Eletrônicos (30% de comissão)'
-                                      : 'Padrão (50% de comissão)'
-                                  }
+                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-blue-100 text-blue-800 border border-blue-200"
+                                  title={`${typeLabel} (${rate}% de comissão)`}
                                 >
-                                  {isAcc ? '30%' : '50%'}
+                                  {rate}%
                                 </span>
                               </div>
                             );
@@ -852,7 +801,13 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                   <td className="py-3.5 px-3 text-emerald-700">
                     {formatCurrency(
                       displaySales.reduce(
-                        (a, b) => a + calculateSaleCommission(b).commissionAmount,
+                        (a, b) =>
+                          a +
+                          calculateSaleCommission(
+                            b,
+                            companySettings?.commissionRates,
+                            companySettings?.promoterCommissionPercent
+                          ).commissionAmount,
                         0
                       )
                     )}
@@ -860,7 +815,13 @@ export const CommissionsView: React.FC<CommissionsViewProps> = ({
                   <td className="py-3.5 px-3 text-slate-800">
                     {formatCurrency(
                       displaySales.reduce(
-                        (a, b) => a + calculateSaleCommission(b).companyAmount,
+                        (a, b) =>
+                          a +
+                          calculateSaleCommission(
+                            b,
+                            companySettings?.commissionRates,
+                            companySettings?.promoterCommissionPercent
+                          ).companyAmount,
                         0
                       )
                     )}
