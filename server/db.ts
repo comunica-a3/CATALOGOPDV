@@ -77,6 +77,14 @@ export interface DbWrapper {
   batch(statements: InStatement[]): Promise<any[]>;
 }
 
+function getLocalClient(): Client {
+  if (!localClient) {
+    ensureDirectories();
+    localClient = createClient({ url: DB_URL });
+  }
+  return localClient;
+}
+
 export const db: DbWrapper = {
   get isTurso(): boolean {
     return false;
@@ -87,7 +95,7 @@ export const db: DbWrapper = {
   },
 
   get raw(): any {
-    return localClient;
+    return getLocalClient();
   },
 
   get turso(): Client | null {
@@ -95,45 +103,30 @@ export const db: DbWrapper = {
   },
 
   get client(): Client | null {
-    return localClient;
+    return getLocalClient();
   },
 
   async run(sqlText: string, params: any[] = []): Promise<void> {
-    if (!localClient) {
-      throw new Error('Banco de dados local não inicializado.');
-    }
-    await localClient.execute({ sql: sqlText, args: params });
+    await getLocalClient().execute({ sql: sqlText, args: params });
   },
 
   async exec(sqlText: string): Promise<any[]> {
-    if (!localClient) {
-      throw new Error('Banco de dados local não inicializado.');
-    }
-    await localClient.executeMultiple(sqlText);
+    await getLocalClient().executeMultiple(sqlText);
     return [];
   },
 
   async all<T = any>(sqlText: string, params: any[] = []): Promise<T[]> {
-    if (!localClient) {
-      throw new Error('Banco de dados local não inicializado.');
-    }
-    const rs = await localClient.execute({ sql: sqlText, args: params });
+    const rs = await getLocalClient().execute({ sql: sqlText, args: params });
     return rs.rows as unknown as T[];
   },
 
   async get<T = any>(sqlText: string, params: any[] = []): Promise<T | null> {
-    if (!localClient) {
-      throw new Error('Banco de dados local não inicializado.');
-    }
-    const rs = await localClient.execute({ sql: sqlText, args: params });
+    const rs = await getLocalClient().execute({ sql: sqlText, args: params });
     return rs.rows.length > 0 ? (rs.rows[0] as unknown as T) : null;
   },
 
   async batch(statements: InStatement[]): Promise<any[]> {
-    if (!localClient) {
-      throw new Error('Banco de dados local não inicializado.');
-    }
-    return await localClient.batch(statements);
+    return await getLocalClient().batch(statements);
   },
 };
 

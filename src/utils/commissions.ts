@@ -274,11 +274,88 @@ export interface PromoterCommissionSummary {
 }
 
 /**
+ * Recalcula comissões de uma venda já existente utilizando novas taxas configuradas,
+ * preservando integralmente o valor total da venda, descontos, acréscimos, frete,
+ * pagamentos efetuados, cliente, vendedor, promotor e demais dados contábeis.
+ */
+export function recalculateSaleCommission(
+  sale: Sale,
+  newRates: ItemTypeCommissionRates,
+  newPromoterPercent?: number
+): Sale {
+  // Se a venda estiver cancelada ou excluída, preserva
+  if (sale.status === 'CANCELADA' || sale.paymentStatus === 'CANCELADO' || sale.status === 'EXCLUIDA' || sale.isDeleted) {
+    return sale;
+  }
+
+  const finalTotal = Math.max(0, Number(sale.total) || 0);
+  const subtotal = Math.max(0.01, Number(sale.subtotal) || finalTotal);
+  const discountFactor = finalTotal / subtotal;
+
+  let totalCommissionPool = 0;
+
+  // Recalcula a comissão de cada item da venda baseado no seu tipo de item
+  const updatedItems = (sale.items || []).map((item) => {
+    const itemType = (item.itemType || 'PRODUTO_GRAFICO') as ItemType;
+    const rate =
+      newRates[itemType] !== undefined
+        ? Math.max(0, Math.min(100, Number(newRates[itemType])))
+        : DEFAULT_COMMISSION_RATES[itemType] ?? 10;
+
+    const itemTotal = Number((item.totalPrice !== undefined ? item.totalPrice : (item.quantity * item.unitPrice)) || 0);
+    const netItemTotal = Number((itemTotal * discountFactor).toFixed(2));
+    const commissionAmount = Number(((netItemTotal * rate) / 100).toFixed(2));
+
+    totalCommissionPool += commissionAmount;
+
+    return {
+      ...item,
+      commissionRate: rate,
+      commissionAmount,
+    };
+  });
+
+  totalCommissionPool = Number(totalCommissionPool.toFixed(2));
+
+  // Promotor & Vendedor Split
+  const isPromoterSale = Boolean(sale.promoterId);
+  const effectivePromoterPercent =
+    newPromoterPercent !== undefined
+      ? Math.max(0, Math.min(100, Number(newPromoterPercent)))
+      : (sale.promoterCommissionPercent ?? 20);
+
+  let promoterCommissionAmount = 0;
+  let sellerCommissionAmount = totalCommissionPool;
+
+  if (isPromoterSale) {
+    promoterCommissionAmount = Number(((totalCommissionPool * effectivePromoterPercent) / 100).toFixed(2));
+    sellerCommissionAmount = Number(Math.max(0, totalCommissionPool - promoterCommissionAmount).toFixed(2));
+  }
+
+  const companyAmount = Number(Math.max(0, finalTotal - totalCommissionPool).toFixed(2));
+  const avgRate = finalTotal > 0 ? Number(((totalCommissionPool / finalTotal) * 100).toFixed(2)) : 0;
+
+  return {
+    ...sale,
+    items: updatedItems,
+    commissionRate: avgRate,
+    commissionAmount: totalCommissionPool,
+    sellerCommissionAmount,
+    promoterCommissionAmount: isPromoterSale ? promoterCommissionAmount : undefined,
+    promoterCommissionPercent: isPromoterSale ? effectivePromoterPercent : undefined,
+    companyAmount,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
  * Agrupa e calcula as comissões consolidadas por vendedor
  */
 export function aggregateCommissionsBySeller(
   sales: Sale[],
-  users: User[]
+  users: User[],
+  configuredRates?: ItemTypeCommissionRates,
+  promoterPercent = 20
 ): {
   summaries: SellerCommissionSummary[];
   totalSoldAll: number;
@@ -293,6 +370,7 @@ export function aggregateCommissionsBySeller(
     (s) => s.status !== 'CANCELADA' && s.paymentStatus !== 'CANCELADO'
   );
 
+  const defaultAvg = configuredRates ? Number(configuredRates.PRODUTO_GRAFICO || 10) : 10;
   const sellerMap = new Map<string, SellerCommissionSummary>();
 
   // Inicializa todos os vendedores conhecidos (Vendedores e Colaboradores)
@@ -308,7 +386,7 @@ export function aggregateCommissionsBySeller(
         sellerCommission: 0,
         totalCommissionPool: 0,
         promoterDeductions: 0,
-        averageCommissionPercent: 50,
+        averageCommissionPercent: defaultAvg,
         sales: [],
       });
     });
@@ -333,14 +411,14 @@ export function aggregateCommissionsBySeller(
         sellerCommission: 0,
         totalCommissionPool: 0,
         promoterDeductions: 0,
-        averageCommissionPercent: 50,
+        averageCommissionPercent: defaultAvg,
         sales: [],
       };
       sellerMap.set(sId, current);
     }
 
     const { commissionAmount, sellerCommissionAmount, promoterCommissionAmount, companyAmount } =
-      calculateSaleCommission(sale);
+      calculateSaleCommission(sale, configuredRates, promoterPercent);
 
     current.salesCount += 1;
     current.totalSold = Number((current.totalSold + sale.total).toFixed(2));
@@ -352,7 +430,7 @@ export function aggregateCommissionsBySeller(
   });
 
   const summaries = Array.from(sellerMap.values()).map((item) => {
-    const avg = item.totalSold > 0 ? Number(((item.sellerCommission / item.totalSold) * 100).toFixed(2)) : 50;
+    const avg = item.totalSold > 0 ? Number(((item.sellerCommission / item.totalSold) * 100).toFixed(2)) : defaultAvg;
     return {
       ...item,
       averageCommissionPercent: avg,
