@@ -25,15 +25,38 @@ export const ProductImage: React.FC<ProductImageProps> = ({
 }) => {
   const [hasError, setHasError] = useState(false);
 
+  const resolvedSrc = React.useMemo(() => {
+    if (!src || typeof src !== 'string' || src.trim() === '') return '';
+    let url = src.trim();
+    // Resolve /api/uploads/ para caminho estático acessível em qualquer ambiente (GitHub Pages ou local)
+    if (url.startsWith('/api/uploads/')) {
+      url = url.replace(/^\/api\/uploads\//, 'uploads/');
+    }
+    // Garante que uploads/ seja precedido pelo BASE_URL do Vite no GitHub Pages
+    if (url.startsWith('uploads/')) {
+      const baseUrl = (import.meta as any).env?.BASE_URL || '/';
+      const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      url = `${cleanBase}${url}`;
+    }
+    return url;
+  }, [src]);
+
   React.useEffect(() => {
     setHasError(false);
-  }, [src]);
+  }, [resolvedSrc]);
 
   const isGoogleDrive =
     imageSource === 'google_drive' ||
-    (typeof src === 'string' && (src.includes('drive.google.com') || src.includes('/api/drive/image/')));
+    (typeof resolvedSrc === 'string' && (resolvedSrc.includes('drive.google.com') || resolvedSrc.includes('/api/drive/image/')));
+
+  const isPersonalized =
+    itemType === 'sep_personalizados_1789070149013' ||
+    (typeof itemType === 'string' && itemType.toLowerCase().includes('personalizad'));
 
   const getIcon = () => {
+    if (isPersonalized) {
+      return <Sparkles className={`${iconClassName} text-pink-500`} />;
+    }
     switch (itemType) {
       case 'PRODUTO_GRAFICO':
         return <Layers className={`${iconClassName} text-blue-500`} />;
@@ -47,6 +70,9 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   };
 
   const getBgColor = () => {
+    if (isPersonalized) {
+      return 'bg-pink-50/70 border-pink-100';
+    }
     switch (itemType) {
       case 'PRODUTO_GRAFICO':
         return 'bg-blue-50/70 border-blue-100';
@@ -74,7 +100,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     );
   }
 
-  if (!src || hasError || src.trim() === '') {
+  if (!resolvedSrc || hasError || resolvedSrc.trim() === '') {
     return (
       <div
         className={`flex flex-col items-center justify-center border select-none transition-colors ${getBgColor()} ${className}`}
@@ -95,7 +121,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   return (
     <div className={`relative overflow-hidden shrink-0 ${className}`}>
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
         onError={() => setHasError(true)}
         className="w-full h-full object-cover"

@@ -37,7 +37,9 @@ import {
   ProductPackage,
 } from '../../types';
 import { formatCurrency, formatPhone } from '../../utils/formatters';
+import { openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 
 interface OpportunityDetailModalProps {
@@ -85,6 +87,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
 
   // Feedback de conversão
   const [conversionSuccess, setConversionSuccess] = useState<string | null>(null);
+  const [activityToDelete, setActivityToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || !opportunity) {
@@ -219,9 +222,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
     }
 
     onRefresh();
-
-    const encoded = encodeURIComponent(customMessage);
-    window.open(`https://wa.me/55${cleanPhone}?text=${encoded}`, '_blank');
+    openWhatsApp(cleanPhone, customMessage);
   };
 
   const handleCopyMessage = () => {
@@ -249,13 +250,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
   };
 
   const handleDeleteActivity = (actId: string) => {
-    if (confirm('Deseja excluir esta ação/anotação executada?')) {
-      StorageService.deleteOpportunityActivity(actId);
-      if (opportunity) {
-        setActivities(StorageService.getOpportunityActivities(opportunity.id));
-      }
-      onRefresh();
-    }
+    setActivityToDelete(actId);
   };
 
   const handleConvertToCustomer = () => {
@@ -621,12 +616,35 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+            className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
           >
             Fechar
           </button>
         </div>
       </div>
+
+      {/* Delete Activity Confirmation */}
+      {activityToDelete && (
+        <ConfirmDialog
+          isOpen={!!activityToDelete}
+          title="Excluir Ação / Anotação"
+          message="Deseja realmente excluir esta ação/anotação executada? O registro será removido do histórico da oportunidade."
+          confirmText="Sim, excluir"
+          cancelText="Cancelar"
+          type="danger"
+          onConfirm={() => {
+            if (activityToDelete) {
+              StorageService.deleteOpportunityActivity(activityToDelete);
+              if (opportunity) {
+                setActivities(StorageService.getOpportunityActivities(opportunity.id));
+              }
+              onRefresh();
+              setActivityToDelete(null);
+            }
+          }}
+          onCancel={() => setActivityToDelete(null)}
+        />
+      )}
     </Modal>
   );
 };

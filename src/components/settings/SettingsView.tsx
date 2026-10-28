@@ -7,12 +7,15 @@ import {
   CheckCircle2,
   Coins,
   CreditCard,
+  Database,
+  Download,
   Edit2,
   Eye,
   EyeOff,
   FileText,
   FolderTree,
   HelpCircle,
+  History,
   KeyRound,
   Layers,
   Loader2,
@@ -20,6 +23,8 @@ import {
   Megaphone,
   Percent,
   Plus,
+  QrCode,
+  RefreshCw,
   RotateCcw,
   Save,
   Settings,
@@ -38,12 +43,12 @@ import {
   Globe,
   Github,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { StorageService } from '../../services/storage';
 import { Category, CompanySettings, User, UserRole } from '../../types';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { compressImage } from '../../utils/imageCompressor';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
@@ -144,6 +149,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [defaultSupplierFreight, setDefaultSupplierFreight] = useState<number>(
     companySettings.defaultSupplierFreight ?? 20.0
   );
+  const [pixQrCodeUrl, setPixQrCodeUrl] = useState<string>(
+    companySettings.pixQrCodeUrl || ''
+  );
+  const [isUploadingPixQr, setIsUploadingPixQr] = useState(false);
+  const [pixQrError, setPixQrError] = useState('');
   const [isPublishCatalogModalOpen, setIsPublishCatalogModalOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<string[]>(
     companySettings.paymentMethods
@@ -166,6 +176,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isChangingPwd, setIsChangingPwd] = useState(false);
 
   const { changePassword } = useAuth();
+
+  // Backup Management State (Admin tab)
+  const [backups, setBackups] = useState<Array<{ filename: string; size: number; createdAt: string }>>([]);
+  const [backupStatus, setBackupStatus] = useState<{
+    lastBackup: string | null;
+    lastBackupDate: string | null;
+    totalBackups: number;
+    isAutoSchedulerRunning: boolean;
+    nextScheduledEstimate?: string;
+  } | null>(null);
+  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
+  const [backupErrorMessage, setBackupErrorMessage] = useState<string | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   // User Manager State (All hierarchy levels)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -261,6 +287,194 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } finally {
       setIsChangingPwd(false);
     }
+  };
+
+  // --- BACKUP HANDLERS ---
+  const loadBackups = async () => {
+    setIsLoadingBackups(true);
+    try {
+      const [list, status] = await Promise.all([
+        api.listBackups().catch(() => []),
+        api.getBackupStatus().catch(() => null),
+      ]);
+      setBackups(list || []);
+      setBackupStatus(status);
+    } catch (err: any) {
+      console.error('Error loading backups:', err);
+    } finally {
+      setIsLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'admin') {
+      loadBackups();
+    }
+  }, [activeTab]);
+
+  const handleCreateManualBackup = async () => {
+    setIsCreatingBackup(true);
+    setBackupSuccessMessage(null);
+    setBackupErrorMessage(null);
+    try {
+      const res = await api.createBackup();
+      if (res.success) {
+        setBackupSuccessMessage(`Backup manual criado com sucesso: ${res.filename}`);
+        await loadBackups();
+      }
+    } catch (err: any) {
+      setBackupErrorMessage(err.message || 'Falha ao iniciar backup manual.');
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  };
+
+  const handleExportFullSnapshot = async () => {
+    try {
+      const snapshot = await api.exportBackup();
+      const jsonStr = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_export_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setBackupSuccessMessage('Cópia completa (snapshot) baixada com sucesso!');
+    } catch (err: any) {
+      setBackupErrorMessage(err.message || 'Erro ao exportar snapshot de backup.');
+    }
+  };
+
+  const handleDownloadSpecificBackup = async (filename: string) => {
+    try {
+      await api.downloadBackupFile(filename);
+    } catch (err: any) {
+      setBackupErrorMessage(err.message || 'Erro ao baixar arquivo de backup.');
+    }
+  };
+
+  const handleFileSelectedForRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isRestoringBackup) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      setBackupErrorMessage('Formato de arquivo inválido. Por favor, selecione um arquivo de backup com extensão .json.');
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      return;
+    }
+
+    const MAX_BACKUP_SIZE_BYTES = 200 * 1024 * 1024; // 200 MB
+    if (file.size > MAX_BACKUP_SIZE_BYTES) {
+      setBackupErrorMessage(
+        `O arquivo selecionado (${(file.size / (1024 * 1024)).toFixed(1)} MB) ultrapassa o limite máximo seguro de 200 MB permitido pelo servidor.`
+      );
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      return;
+    }
+
+    setBackupSuccessMessage(null);
+    setBackupErrorMessage(null);
+
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      setBackupErrorMessage('Erro ao ler o arquivo selecionado no seu dispositivo.');
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+    };
+
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text || !text.trim()) {
+          setBackupErrorMessage('O arquivo de backup selecionado está vazio.');
+          return;
+        }
+
+        let parsedData: any;
+        try {
+          parsedData = JSON.parse(text);
+        } catch (parseErr: any) {
+          setBackupErrorMessage(`O arquivo selecionado não é um JSON válido: ${parseErr.message}. Verifique se o arquivo está corrompido.`);
+          return;
+        }
+
+        if (!parsedData || typeof parsedData !== 'object') {
+          setBackupErrorMessage('Estrutura de arquivo incompatível. O conteúdo deve ser um objeto JSON.');
+          return;
+        }
+
+        // Inspeção prévia do conteúdo para validação amigável e contagem de registros
+        let tablesObj: Record<string, any[]> = {};
+        if (parsedData.tables && typeof parsedData.tables === 'object') {
+          tablesObj = parsedData.tables;
+        } else if (parsedData.data?.tables && typeof parsedData.data.tables === 'object') {
+          tablesObj = parsedData.data.tables;
+        } else {
+          // Checa propriedades diretas
+          for (const [k, v] of Object.entries(parsedData)) {
+            if (Array.isArray(v)) {
+              tablesObj[k] = v;
+            }
+          }
+        }
+
+        const tableNames = Object.keys(tablesObj);
+        const totalItemsCount = Object.values(tablesObj).reduce((acc, rows) => acc + (Array.isArray(rows) ? rows.length : 0), 0);
+
+        if (tableNames.length === 0 || totalItemsCount === 0) {
+          setBackupErrorMessage(
+            'Nenhuma tabela ou dado reconhecido foi encontrado no arquivo de backup. A restauração foi cancelada para proteger os dados atuais.'
+          );
+          return;
+        }
+
+        const confirmMsg =
+          `CONFIRMAR RESTAURAÇÃO DE BACKUP\n\n` +
+          `Arquivo: ${file.name}\n` +
+          `Tabelas identificadas: ${tableNames.length} (${tableNames.slice(0, 5).join(', ')}${tableNames.length > 5 ? '...' : ''})\n` +
+          `Total de registros a restaurar: ${totalItemsCount}\n\n` +
+          `ATENÇÃO: A restauração substituirá os dados atuais pelo conteúdo deste arquivo.\n` +
+          `Uma salvaguarda de segurança (pre_restore) será criada automaticamente no servidor antes de aplicar as alterações.\n\n` +
+          `Deseja prosseguir com a restauração?`;
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        setIsRestoringBackup(true);
+
+        // Pass text directly to importBackup to avoid re-serializing large objects in browser memory
+        const res = await api.importBackup(text);
+
+        if (res.success) {
+          const countInfo = (res as any).totalRecordsRestored ? ` com ${(res as any).totalRecordsRestored} registros` : '';
+          setBackupSuccessMessage(
+            `Banco de dados restaurado com sucesso! (${res.restoredTables?.length || 0} tabelas processadas${countInfo}). Sincronizando dados...`
+          );
+          await StorageService.syncWithServer();
+          await loadBackups();
+
+          // Recarrega a página para atualizar todos os componentes com o novo estado
+          setTimeout(() => {
+            window.location.reload();
+          }, 1800);
+        } else {
+          setBackupErrorMessage(res.error || 'Falha ao restaurar banco de dados.');
+        }
+      } catch (err: any) {
+        console.error('Erro na restauração de backup:', err);
+        setBackupErrorMessage(`Erro ao restaurar backup: ${err.message || 'Falha na comunicação'}`);
+      } finally {
+        setIsRestoringBackup(false);
+        if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      }
+    };
+
+    reader.readAsText(file);
   };
 
   // --- USER HANDLERS (ADMINISTRADOR, COLABORADOR, VENDEDOR) ---
@@ -500,6 +714,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const handlePixQrCodeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPixQrError('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setPixQrError('O arquivo de imagem do QR Code deve ter no máximo 5MB.');
+      return;
+    }
+
+    setPixQrError('');
+    setIsUploadingPixQr(true);
+    try {
+      const compressed = await compressImage(file, 800, 800, 0.9);
+      setPixQrCodeUrl(compressed);
+      try {
+        const uploadRes = await api.uploadImage(compressed, 'pix_qr');
+        if (uploadRes && uploadRes.url) {
+          setPixQrCodeUrl(uploadRes.url);
+        }
+      } catch (uploadErr) {
+        console.warn('Upload remoto de QR Code PIX não completou, mantendo dataUrl comprimido:', uploadErr);
+      }
+    } catch (err: any) {
+      setPixQrError(err.message || 'Falha ao processar a imagem do QR Code.');
+    } finally {
+      setIsUploadingPixQr(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleRemovePixQrCode = () => {
+    setPixQrCodeUrl('');
+    setPixQrError('');
+  };
+
   const handleSaveCompany = (e: React.FormEvent) => {
     e.preventDefault();
     const updated: CompanySettings = {
@@ -519,6 +773,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       receiptFooterMessage: receiptFooter.trim(),
       paymentMethods,
       defaultSupplierFreight: Number(defaultSupplierFreight) || 20.0,
+      pixQrCodeUrl: pixQrCodeUrl.trim() || undefined,
     };
 
     StorageService.saveCompanySettings(updated);
@@ -742,14 +997,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setCommissionError('');
   };
 
-  const handleDeleteCategory = async (catId: string) => {
-    if (confirm('Deseja excluir esta categoria?')) {
-      try {
-        await StorageService.deleteCategory(catId);
-        onSettingsSaved();
-      } catch (err: any) {
-        showToast(err.message || 'Erro ao excluir categoria.');
-      }
+  const handleDeleteCategory = (catId: string) => {
+    const cat = categories.find((c) => c.id === catId);
+    if (cat) {
+      setCategoryToDelete(cat);
     }
   };
 
@@ -1348,6 +1599,206 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </form>
           </div>
+
+          {/* Backup & System Snapshots Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-indigo-600" />
+                  <span>Cópias de Segurança e Backup (SQLite)</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Gerencie cópias de segurança locais e automáticas do banco de dados completo do sistema.
+                </p>
+              </div>
+
+              {/* Primary Action Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleCreateManualBackup}
+                  disabled={isCreatingBackup}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCreatingBackup ? 'animate-spin' : ''}`} />
+                  <span>{isCreatingBackup ? 'Criando Backup...' : 'Iniciar Backup Manual'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportFullSnapshot}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded-xl shadow-2xs transition-colors cursor-pointer"
+                  title="Baixar arquivo JSON completo de snapshot para seu computador"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Baixar Snapshot (.json)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Status & Auto-Backup Scheduler Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rotina Automática</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-xs font-bold text-slate-800">Diário (Servidor)</span>
+                </div>
+                <span className="text-[11px] text-slate-500 block">Retenção dos últimos 20 backups</span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Último Backup</span>
+                <span className="text-xs font-bold text-slate-800 block truncate">
+                  {backupStatus?.lastBackupDate ? formatDateTime(backupStatus.lastBackupDate) : 'Nenhum ainda'}
+                </span>
+                <span className="text-[11px] text-slate-400 block truncate font-mono">
+                  {backupStatus?.lastBackup || 'Aguardando rotina'}
+                </span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Armazenado</span>
+                <span className="text-xs font-bold text-slate-800 block">
+                  {backups.length} cópia(s) disponível(is)
+                </span>
+                <span className="text-[11px] text-slate-500 block">Armazenamento local seguro</span>
+              </div>
+            </div>
+
+            {/* Feedback Messages */}
+            {backupSuccessMessage && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center justify-between text-xs font-bold">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{backupSuccessMessage}</span>
+                </div>
+                <button type="button" onClick={() => setBackupSuccessMessage(null)} className="cursor-pointer text-slate-400 hover:text-slate-700">✕</button>
+              </div>
+            )}
+
+            {backupErrorMessage && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center justify-between text-xs font-bold">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{backupErrorMessage}</span>
+                </div>
+                <button type="button" onClick={() => setBackupErrorMessage(null)} className="cursor-pointer text-slate-400 hover:text-slate-700">✕</button>
+              </div>
+            )}
+
+            {/* Local Backups List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <History className="w-4 h-4 text-slate-500" />
+                  <span>Histórico de Backups no Servidor ({backups.length}/20)</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={loadBackups}
+                  disabled={isLoadingBackups}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingBackups ? 'animate-spin' : ''}`} />
+                  <span>Atualizar</span>
+                </button>
+              </div>
+
+              {backups.length === 0 ? (
+                <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                  Nenhum arquivo de backup encontrado no diretório do servidor.
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3.5 py-2.5">Arquivo / Tipo</th>
+                        <th className="px-3.5 py-2.5">Data & Hora</th>
+                        <th className="px-3.5 py-2.5">Tamanho</th>
+                        <th className="px-3.5 py-2.5 text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {backups.map((b) => {
+                        const isAuto = b.filename.includes('_auto_');
+                        const isPreRestore = b.filename.includes('_pre_restore_');
+                        const tagLabel = isAuto ? 'Automático' : isPreRestore ? 'Salvaguarda' : 'Manual';
+
+                        return (
+                          <tr key={b.filename} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-3.5 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                  {tagLabel}
+                                </span>
+                                <span className="font-mono text-[11px] text-slate-700 font-medium truncate max-w-xs">{b.filename}</span>
+                              </div>
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-600 text-[11px]">
+                              {formatDateTime(b.createdAt)}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-slate-500 font-mono text-[11px]">
+                              {(b.size / 1024).toFixed(1)} KB
+                            </td>
+                            <td className="px-3.5 py-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadSpecificBackup(b.filename)}
+                                className="px-2.5 py-1 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                                title="Baixar arquivo de backup"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Baixar</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Restore from File section */}
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Restaurar Banco de Dados via Arquivo Snapshot</h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Selecione um arquivo de backup (.json) exportado anteriormente. O sistema cria uma salvaguarda automática antes de restaurar.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="file"
+                  id="backup-file-upload-input"
+                  ref={restoreFileInputRef}
+                  accept=".json"
+                  onChange={handleFileSelectedForRestore}
+                  disabled={isRestoringBackup}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => restoreFileInputRef.current?.click()}
+                  disabled={isRestoringBackup}
+                  className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isRestoringBackup ? 'Restaurando...' : 'Carregar e Restaurar'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1709,6 +2160,112 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm font-bold border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* QR Code PIX para POSFácil e Balcão */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <QrCode className="w-4 h-4 text-emerald-600" />
+                      <label className="text-xs font-bold text-slate-800">
+                        QR Code PIX (POSFácil e Balcão)
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Cadastre a imagem do seu QR Code PIX. Ela será exibida na tela ao dar <strong>duplo clique</strong> no botão PIX do POSFácil para leitura rápida pelo cliente.
+                    </p>
+                  </div>
+                </div>
+
+                {pixQrCodeUrl ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-20 h-20 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1 overflow-hidden shadow-xs shrink-0">
+                        <img
+                          src={pixQrCodeUrl}
+                          alt="QR Code PIX Configurado"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>QR Code PIX Ativo</span>
+                          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-semibold rounded">
+                            Configurado
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Esta imagem será exibida ao dar duplo clique no botão PIX do POSFácil.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+                        <Upload className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Substituir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePixQrCodeUpload}
+                          disabled={isUploadingPixQr}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleRemovePixQrCode}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Remover imagem do QR Code"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-white border border-dashed border-slate-300 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">
+                          Nenhum QR Code PIX cadastrado
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Envie a imagem do QR Code gerado pelo seu banco (PNG, JPG ou WEBP até 5MB).
+                        </p>
+                      </div>
+                    </div>
+
+                    <label className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer shrink-0">
+                      {isUploadingPixQr ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Carregando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>+ Cadastrar Imagem do QR Code PIX</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePixQrCodeUpload}
+                        disabled={isUploadingPixQr}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {pixQrError && (
+                  <p className="text-xs text-rose-600 font-semibold">{pixQrError}</p>
+                )}
               </div>
 
               {/* Payment Methods Config */}

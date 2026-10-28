@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Trash2,
   TrendingUp,
+  Upload,
   User,
   Users,
   Wallet,
@@ -33,6 +34,7 @@ import { CompanySettings, PaymentStatus, Sale } from '../../types';
 import { calculateSaleCommission } from '../../utils/commissions';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { downloadOrderReceiptPDF } from '../../utils/pdfReceipt';
+import { buildSaleProductionTrackingWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSReceiptModal } from '../pos/POSReceiptModal';
@@ -42,6 +44,7 @@ import { SaleNotesModal } from './SaleNotesModal';
 import { EditSaleModal } from './EditSaleModal';
 import { DeleteSaleModal } from './DeleteSaleModal';
 import { SaleAuditModal } from './SaleAuditModal';
+import { CsvImportModal } from '../common/CsvImportModal';
 
 interface SalesViewProps {
   sales: Sale[];
@@ -70,6 +73,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
   const [auditSale, setAuditSale] = useState<Sale | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -222,23 +226,21 @@ export const SalesView: React.FC<SalesViewProps> = ({
     const companyName = companySettings?.name || 'Nossa Gráfica';
     const customerName = sale.customerName || 'Cliente';
 
-    let msg = `Olá, *${customerName}*!\n\n`;
-    msg += `Atualização sobre o estado da produção gráfica do seu *Pedido #${sale.saleNumber}* na *${companyName}*:\n\n`;
+    const ordersData = productionOrders.map((po) => ({
+      quantity: po.quantity,
+      itemName: po.itemName,
+      statusLabel: getProductionStatusLabel(po.status),
+      leadTime: po.leadTime,
+    }));
 
-    productionOrders.forEach((po, idx) => {
-      const statusLabel = getProductionStatusLabel(po.status);
-      msg += `📦 *Item ${idx + 1}:* ${po.quantity}x ${po.itemName}\n`;
-      msg += `⚙️ *Status da Produção:* *${statusLabel}*\n`;
-      if (po.leadTime) {
-        msg += `⏱️ *Previsão informada:* ${po.leadTime}\n`;
-      }
-      msg += `\n`;
+    const msg = buildSaleProductionTrackingWhatsAppMessage({
+      customerName,
+      companyName,
+      saleNumber: sale.saleNumber,
+      orders: ordersData,
     });
 
-    msg += `Qualquer dúvida, estamos à disposição!`;
-
-    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (sale: Sale) => {
@@ -263,6 +265,26 @@ export const SalesView: React.FC<SalesViewProps> = ({
     }
   };
 
+  const handleExportCSV = () => {
+    if (!filteredSales || filteredSales.length === 0) {
+      setCancelErrorMessage('Nenhuma venda encontrada para exportar no período ou filtros atuais.');
+      setActionSuccessMessage(null);
+      return;
+    }
+    try {
+      const ok = StorageService.exportSalesToCSV(filteredSales);
+      if (ok) {
+        setActionSuccessMessage(`Exportação concluída! Arquivo CSV com ${filteredSales.length} venda(s) gerado e baixado.`);
+        setCancelErrorMessage(null);
+      } else {
+        setCancelErrorMessage('Nenhuma venda disponível para exportação.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao exportar CSV de vendas:', err);
+      setCancelErrorMessage(`Falha ao exportar CSV: ${err.message || 'Erro inesperado'}`);
+    }
+  };
+
   return (
     <div id="sales-management-view" className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
@@ -280,9 +302,21 @@ export const SalesView: React.FC<SalesViewProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            id="btn-export-sales-csv"
-            onClick={() => StorageService.exportSalesToCSV(filteredSales)}
+            id="btn-import-sales-csv"
+            onClick={() => setIsImportModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Importar vendas e contas a receber via CSV"
+          >
+            <Upload className="w-4 h-4 text-slate-500" />
+            <span>Importar CSV</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-export-sales-csv"
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Exportar listagem filtrada para planilha CSV"
           >
             <Download className="w-4 h-4 text-slate-500" />
             <span>Exportar CSV ({filteredSales.length})</span>
@@ -733,6 +767,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        entityType="SALES"
+        onSuccess={() => {
+          onSalesChange();
+          setActionSuccessMessage('Importação de vendas processada com sucesso!');
+          setTimeout(() => setActionSuccessMessage(null), 4000);
+        }}
+      />
 
       {/* Cancel Sale Confirmation */}
       <ConfirmDialog

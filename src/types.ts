@@ -628,6 +628,7 @@ export interface CompanySettings {
     funilTitle?: string;
     funilDesc?: string;
   };
+  pixQrCodeUrl?: string; // URL ou base64 do QR Code PIX cadastrado pelo Admin para exibição no POSFácil
 }
 
 // --- PRODUCT NICHE CARDS (Vitrine Pública) ---

@@ -539,10 +539,14 @@ export async function runMigrations(): Promise<void> {
         content TEXT NOT NULL,
         variables_json TEXT,
         active INTEGER DEFAULT 1,
+        default_price REAL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
     `);
+
+    // Migrate document_templates table columns if missing
+    try { await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;'); } catch {}
 
     await db.run(`
       CREATE TABLE IF NOT EXISTS generated_documents (
@@ -556,9 +560,34 @@ export async function runMigrations(): Promise<void> {
         rendered_content TEXT NOT NULL,
         created_by_user_id TEXT,
         created_by_user_name TEXT,
+        price_charged REAL DEFAULT 0,
         created_at TEXT NOT NULL
       );
     `);
+
+    // Migrate generated_documents table columns if missing
+    try { await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;'); } catch {}
+
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        category TEXT,
+        observation TEXT,
+        payment_method TEXT,
+        account_id TEXT,
+        account_name TEXT,
+        nature TEXT DEFAULT 'OPERACIONAL',
+        type TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    try { await db.run('CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);'); } catch {}
 
     await db.run(
       'INSERT INTO schema_migrations VALUES (?, ?, ?)',
@@ -838,6 +867,38 @@ export async function runMigrations(): Promise<void> {
     );
   }
 
+  // Migration 011: Ensure document_templates default_price and generated_documents price_charged
+  if (!appliedVersions.has('011_document_templates_default_price')) {
+    console.log('Applying migration 011_document_templates_default_price...');
+    try {
+      await db.run(`
+        CREATE TABLE IF NOT EXISTS document_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT NOT NULL,
+          content TEXT NOT NULL,
+          variables_json TEXT,
+          active INTEGER DEFAULT 1,
+          default_price REAL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    } catch {}
+    try {
+      await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;');
+    } catch {}
+    try {
+      await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;');
+    } catch {}
+
+    await db.run(
+      'INSERT INTO schema_migrations VALUES (?, ?, ?)',
+      ['011_document_templates_default_price', 'Ensure document_templates default_price and generated_documents price_charged', new Date().toISOString()]
+    );
+  }
+
   // Always run unconditional column check to heal any existing database schema drift
   await ensureAllTableColumns();
 }
@@ -846,6 +907,30 @@ export async function runMigrations(): Promise<void> {
  * Unconditionally guarantees all required columns exist in tables across all SQLite/Turso instances.
  */
 export async function ensureAllTableColumns(): Promise<void> {
+  // Guarantee document_templates and generated_documents tables and columns exist
+  try {
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS document_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        content TEXT NOT NULL,
+        variables_json TEXT,
+        active INTEGER DEFAULT 1,
+        default_price REAL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    await db.run('ALTER TABLE document_templates ADD COLUMN default_price REAL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.run('ALTER TABLE generated_documents ADD COLUMN price_charged REAL DEFAULT 0;');
+  } catch {}
+
   // Directly attempt to add service_url and image columns if missing
   try {
     await db.run('ALTER TABLE items ADD COLUMN service_url TEXT;');
@@ -1010,6 +1095,36 @@ export async function ensureAllTableColumns(): Promise<void> {
         { name: 'completed_at', type: 'TEXT' },
       ],
     },
+    {
+      table: 'document_templates',
+      columns: [
+        { name: 'name', type: 'TEXT' },
+        { name: 'description', type: 'TEXT' },
+        { name: 'category', type: 'TEXT' },
+        { name: 'content', type: 'TEXT' },
+        { name: 'variables_json', type: 'TEXT' },
+        { name: 'active', type: 'INTEGER DEFAULT 1' },
+        { name: 'default_price', type: 'REAL DEFAULT 0' },
+        { name: 'created_at', type: 'TEXT' },
+        { name: 'updated_at', type: 'TEXT' },
+      ],
+    },
+    {
+      table: 'generated_documents',
+      columns: [
+        { name: 'template_id', type: 'TEXT' },
+        { name: 'template_name', type: 'TEXT' },
+        { name: 'title', type: 'TEXT' },
+        { name: 'customer_id', type: 'TEXT' },
+        { name: 'customer_name', type: 'TEXT' },
+        { name: 'customer_cpf_cnpj', type: 'TEXT' },
+        { name: 'rendered_content', type: 'TEXT' },
+        { name: 'created_by_user_id', type: 'TEXT' },
+        { name: 'created_by_user_name', type: 'TEXT' },
+        { name: 'price_charged', type: 'REAL DEFAULT 0' },
+        { name: 'created_at', type: 'TEXT' },
+      ],
+    },
   ];
 
   for (const tc of tableColumns) {
@@ -1103,6 +1218,26 @@ export async function ensureAllTableColumns(): Promise<void> {
         updated_at TEXT NOT NULL
       );
     `);
+    await db.run(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        category TEXT,
+        observation TEXT,
+        payment_method TEXT,
+        account_id TEXT,
+        account_name TEXT,
+        nature TEXT DEFAULT 'OPERACIONAL',
+        type TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    try { await db.run('CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);'); } catch {}
   } catch {}
 }
 
@@ -1427,6 +1562,159 @@ export async function seedDefaultDataIfEmpty(): Promise<void> {
 
   // 9. Ensure Initial Administrator exists (admin / admin, must_change_password = 1)
   await ensureDefaultAdminUser();
+
+  // 10. Sincroniza dados oficiais do catalogo.json para garantir que nichos personalizados (como 'p'),
+  // categorias e produtos adicionados estejam 100% consistentes no banco SQLite
+  await syncCatalogDataFromCatalogJson();
+}
+
+/**
+ * Sincroniza dados existentes em public/catalogo.json para o banco SQLite local
+ */
+export async function syncCatalogDataFromCatalogJson(): Promise<void> {
+  try {
+    const catalogPath = path.join(process.cwd(), 'public', 'catalogo.json');
+    if (!fs.existsSync(catalogPath)) return;
+    const raw = fs.readFileSync(catalogPath, 'utf8');
+    const cat = JSON.parse(raw);
+
+    // 1. Sincroniza categorias com os tipos canônicos corretos
+    if (Array.isArray(cat.categories)) {
+      for (const c of cat.categories) {
+        if (!c.id || !c.name) continue;
+        let itemType = c.itemType || 'PRODUTO_FISICO';
+        if (
+          [
+            'cat-adesivos',
+            'cat-banners',
+            'cat-blocos',
+            'cat-cartoes',
+            'cat-impressos',
+            'cat-panfletos',
+            'cat-embalagens',
+            'cat-1789068083093',
+          ].includes(c.id)
+        ) {
+          itemType = 'PRODUTO_GRAFICO';
+        } else if (c.id === 'cat-servicos') {
+          itemType = 'SERVICO';
+        } else if (c.id === 'cat-1788350843601' || c.id === 'cat-1789045808132') {
+          itemType = 'PRODUTO_FISICO';
+        }
+
+        await db.run(
+          `INSERT OR REPLACE INTO categories (
+            id, name, slug, description, item_type, icon, active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 1, COALESCE((SELECT created_at FROM categories WHERE id = ?), ?), ?)`,
+          [
+            c.id,
+            c.name.trim(),
+            c.slug || c.id,
+            c.description || '',
+            itemType,
+            c.icon || 'Tag',
+            c.id,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          ]
+        );
+      }
+    }
+
+    // 2. Sincroniza nichos de catálogo (garante nicho 'p' e customizações)
+    if (Array.isArray(cat.niches)) {
+      for (const n of cat.niches) {
+        if (!n.id || !n.title) continue;
+        await db.run(
+          `INSERT OR REPLACE INTO catalog_niches (
+            id, title, description, cta_text, badge, image_url, item_type_match,
+            category_match_keywords_json, custom_keywords_json, active, niche_order,
+            data_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM catalog_niches WHERE id = ?), ?), ?)`,
+          [
+            n.id,
+            n.title,
+            n.description || '',
+            n.ctaText || 'Ver produtos',
+            n.badge || '',
+            n.imageUrl || '',
+            n.itemTypeMatch || 'ALL',
+            n.categoryMatchKeywords ? JSON.stringify(n.categoryMatchKeywords) : null,
+            n.customKeywords ? JSON.stringify(n.customKeywords) : null,
+            n.active !== false ? 1 : 0,
+            Number(n.order ?? 1),
+            JSON.stringify(n),
+            n.id,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          ]
+        );
+      }
+    }
+
+    // 3. Sincroniza itens (garante produtos personalizados e itens do catálogo)
+    if (Array.isArray(cat.items)) {
+      for (const item of cat.items) {
+        if (!item.id || !item.name) continue;
+        let cleanImg = item.imageUrl || '';
+        if (cleanImg.startsWith('data:image/')) {
+          cleanImg = 'uploads/item-1789578753355-bab30ee29dba.jpg';
+        } else if (cleanImg.startsWith('/api/uploads/')) {
+          cleanImg = cleanImg.replace(/^\/api\/uploads\//, 'uploads/');
+        }
+
+        await db.run(
+          `INSERT OR REPLACE INTO items (
+            id, name, sku, barcode, category_id, type, description, cost_price, supplier_cost, supplier_freight,
+            sale_price, margin_reais, margin_percent, stock, min_stock, unit, image_url, show_in_catalog, featured_in_catalog,
+            pricing_model, production_type, lead_time, requires_file, brand, supplier, price_rules_json, packages_json,
+            area_pricing_json, variants_json, estimated_time, service_fields_json, options_json, data_json, active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM items WHERE id = ?), ?), ?)`,
+          [
+            item.id,
+            item.name,
+            item.sku || '',
+            item.barcode || null,
+            item.categoryId || '',
+            item.type || 'PRODUTO_FISICO',
+            item.description || '',
+            Number(item.costPrice || 0),
+            Number(item.supplierCost || 0),
+            Number(item.supplierFreight || 0),
+            Number(item.salePrice || 0),
+            Number(item.marginReais || 0),
+            Number(item.marginPercent || 0),
+            Number(item.stock || 0),
+            Number(item.minStock || 0),
+            item.unit || 'UN',
+            cleanImg,
+            item.showInCatalog ? 1 : 0,
+            item.featuredInCatalog ? 1 : 0,
+            item.pricingModel || null,
+            item.productionType || null,
+            item.leadTime || null,
+            item.requiresFile ? 1 : 0,
+            item.brand || null,
+            item.supplier || null,
+            item.priceRules ? JSON.stringify(item.priceRules) : null,
+            item.packages ? JSON.stringify(item.packages) : null,
+            item.areaPricing ? JSON.stringify(item.areaPricing) : null,
+            item.variants ? JSON.stringify(item.variants) : null,
+            item.estimatedTime || null,
+            item.serviceFields ? JSON.stringify(item.serviceFields) : null,
+            item.options ? JSON.stringify(item.options) : null,
+            JSON.stringify(item),
+            item.active !== false ? 1 : 0,
+            item.id,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          ]
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('Notice synchronizing catalog data from catalogo.json:', err);
+  }
 }
 
 /**
@@ -1460,6 +1748,7 @@ export async function resetDatabaseToSeed(userId?: string, userName?: string): P
     'complementary_rules',
     'public_segment_pages',
     'catalog_niches',
+    'expenses',
   ];
 
   try {

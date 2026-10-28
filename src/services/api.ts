@@ -30,20 +30,54 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const currentUserId = localStorage.getItem('pdv_current_user_id');
+  if (currentUserId) {
+    headers['x-user-id'] = currentUserId;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    console.error(`Network error requesting ${endpoint}:`, netErr);
+    if (netErr.name === 'AbortError') {
+      throw new Error('A requisição foi cancelada por tempo limite.');
+    }
+    throw new Error(
+      `Falha na comunicação com o servidor (${netErr.message || 'Failed to fetch'}). Verifique se o servidor está ativo ou se os dados enviados são muito extensos.`
+    );
+  }
 
   if (!response.ok) {
     let errorMessage = `Erro na requisição (${response.status})`;
+    let errCode: string | undefined = undefined;
+
     try {
       const errData = await response.json();
       if (errData.error) errorMessage = errData.error;
+      if (errData.code) errCode = errData.code;
     } catch {
-      // Fallback to status text
+      // Fallback based on specific HTTP response status codes
+      if (response.status === 413) {
+        errorMessage = 'Arquivo de backup muito extenso para o servidor processar (413 Payload Too Large). Limite máximo suportado: 200MB.';
+      } else if (response.status === 500) {
+        errorMessage = 'Falha interna no servidor ao processar os dados do backup (500 Internal Server Error).';
+      } else if (response.status === 400) {
+        errorMessage = 'Estrutura de dados ou formato de backup incompatível (400 Bad Request).';
+      } else if (response.status === 401 || response.status === 403) {
+        errorMessage = 'Acesso não autorizado. Apenas o perfil Administrador pode restaurar backups.';
+      } else if (response.statusText) {
+        errorMessage = `${errorMessage}: ${response.statusText}`;
+      }
     }
-    throw new Error(errorMessage);
+
+    const errorObj = new Error(errorMessage);
+    (errorObj as any).status = response.status;
+    (errorObj as any).code = errCode;
+    throw errorObj;
   }
 
   return response.json() as Promise<T>;
@@ -365,6 +399,29 @@ export const api = {
     return request<{ success: boolean }>(`/finance/receiving-accounts/${id}`, { method: 'DELETE' });
   },
 
+  // Expenses (Saídas Financeiras)
+  async getExpenses() {
+    return request<any[]>('/finance/expenses');
+  },
+
+  async saveExpense(expense: any) {
+    return request<any>('/finance/expenses', {
+      method: 'POST',
+      body: JSON.stringify(expense),
+    });
+  },
+
+  async saveExpensesBatch(expenses: any[]) {
+    return request<{ success: boolean; count: number }>('/finance/expenses/batch', {
+      method: 'POST',
+      body: JSON.stringify({ expenses }),
+    });
+  },
+
+  async deleteExpense(id: string) {
+    return request<{ success: boolean; id: string }>(`/finance/expenses/${id}`, { method: 'DELETE' });
+  },
+
   async getFinancialTransfers() {
     return request<any[]>('/finance/transfers');
   },
@@ -579,10 +636,63 @@ export const api = {
     return request<Array<{ filename: string; size: number; createdAt: string }>>('/backup/list');
   },
 
-  async importBackup(snapshot: any) {
-    return request<{ success: boolean; restoredTables: string[] }>('/backup/import', {
+  async importBackup(snapshot: any | string) {
+    const body = typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot);
+    return request<{ success: boolean; restoredTables: string[]; error?: string; totalRecordsRestored?: number }>('/backup/import', {
       method: 'POST',
-      body: JSON.stringify(snapshot),
+      body,
+    });
+  },
+
+  async getBackupStatus() {
+    return request<{
+      lastBackup: string | null;
+      lastBackupDate: string | null;
+      totalBackups: number;
+      isAutoSchedulerRunning: boolean;
+      nextScheduledEstimate?: string;
+    }>('/backup/status');
+  },
+
+  async downloadBackupFile(filename: string): Promise<void> {
+    const token = getAuthToken();
+    const currentUserId = localStorage.getItem('pdv_current_user_id');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (currentUserId) headers['x-user-id'] = currentUserId;
+
+    const res = await fetch(`/api/backup/download/${encodeURIComponent(filename)}`, { headers });
+    if (!res.ok) throw new Error('Falha ao baixar arquivo de backup');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Batch Save Operations for CSV Imports
+  async saveCustomersBatch(customers: any[]) {
+    return request<{ success: boolean; count: number }>('/customers/batch', {
+      method: 'POST',
+      body: JSON.stringify({ customers }),
+    });
+  },
+
+  async saveBudgetsBatch(budgets: any[]) {
+    return request<{ success: boolean; count: number }>('/budgets/batch', {
+      method: 'POST',
+      body: JSON.stringify({ budgets }),
+    });
+  },
+
+  async saveSalesBatch(sales: any[]) {
+    return request<{ success: boolean; count: number }>('/sales/batch', {
+      method: 'POST',
+      body: JSON.stringify({ sales }),
     });
   },
 

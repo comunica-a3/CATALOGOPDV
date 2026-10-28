@@ -70,17 +70,17 @@ export const INITIAL_RECEIVING_ACCOUNTS: ReceivingAccount[] = [
 ];
 
 export const INITIAL_COMPANY_SETTINGS: CompanySettings = {
-  name: 'Gráfica Rápida e Digital Express',
-  tradingName: 'Digital Express Impressões e Serviços',
+  name: 'DUMORRO',
+  tradingName: 'DUMORRO',
   document: '12.345.678/0001-90',
-  phone: '(11) 3456-7890',
-  whatsapp: '11987654321',
-  email: 'contato@digitalexpress.com.br',
-  address: 'Rua do Comércio, 450 - Centro Comercial',
-  city: 'São Paulo',
-  state: 'SP',
-  logoUrl: 'https://images.unsplash.com/photo-1572044162444-ad60f128bdea?w=150&auto=format&fit=crop&q=80',
-  receiptFooterMessage: 'Agradecemos a preferência! Orçamentos e pedidos via WhatsApp (11) 98765-4321.',
+  phone: '(31) 98620-0503',
+  whatsapp: '31986200503',
+  email: 'falecomdumorro@gmail.com',
+  address: '',
+  city: '',
+  state: '',
+  logoUrl: 'https://drive.google.com/file/d/14NBeyoY4eSIHd1SBSUa09P154ZoWCsVv/view?usp=drive_link',
+  receiptFooterMessage: 'Agradecemos a preferência!',
   paymentMethods: [
     'PIX',
     'Cartão de Crédito',

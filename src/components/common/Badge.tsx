@@ -2,7 +2,7 @@ import React from 'react';
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' | 'amber' | 'gray';
+  variant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' | 'amber' | 'gray' | 'pink' | 'indigo';
   size?: 'sm' | 'md';
   id?: string;
 }
@@ -23,6 +23,8 @@ export const Badge: React.FC<BadgeProps> = ({
     amber: 'bg-amber-50 text-amber-800 border-amber-200',
     neutral: 'bg-slate-100 text-slate-700 border-slate-200',
     gray: 'bg-slate-100 text-slate-600 border-slate-200',
+    pink: 'bg-pink-50 text-pink-700 border-pink-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   };
 
   const sizeStyles = {

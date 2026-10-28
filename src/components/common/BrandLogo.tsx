@@ -33,7 +33,16 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
     if (fileId) {
       return getGoogleDriveDisplayUrl(fileId, 1200);
     }
-    return logoUrl?.trim() || '';
+    let url = logoUrl?.trim() || '';
+    if (url.startsWith('/api/uploads/')) {
+      url = url.replace(/^\/api\/uploads\//, 'uploads/');
+    }
+    if (url.startsWith('uploads/')) {
+      const baseUrl = (import.meta as any).env?.BASE_URL || '/';
+      const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      url = `${cleanBase}${url}`;
+    }
+    return url;
   };
 
   const [src, setSrc] = useState<string>(getInitialSrc);

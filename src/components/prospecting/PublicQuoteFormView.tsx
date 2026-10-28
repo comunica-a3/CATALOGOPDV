@@ -22,7 +22,12 @@ import {
   Opportunity,
   ProductPackage,
 } from '../../types';
-import { formatCurrency, formatPhone, isValidPhone } from '../../utils/formatters';
+import { formatCurrency, formatPhone, formatWhatsAppLink, isValidPhone } from '../../utils/formatters';
+import {
+  buildDirectWhatsAppContactMessage,
+  buildPublicQuoteSubmittedMessage,
+  openWhatsApp,
+} from '../../utils/whatsappMessages';
 import { PhoneInput } from '../common/PhoneInput';
 import { BrandLogo } from '../common/BrandLogo';
 
@@ -181,12 +186,16 @@ export const PublicQuoteFormView: React.FC<PublicQuoteFormViewProps> = ({
   const handleOpenWhatsAppConfirmation = () => {
     const cleanCompanyPhone = (companySettings.whatsapp || companySettings.phone || '').replace(/\D/g, '');
     const clientName = submittedOpp?.name || 'Cliente';
-    const need = submittedOpp?.needs?.[0] || 'Orçamento Gráfico';
+    const demand = submittedOpp?.needs?.[0] || 'Orçamento Gráfico';
     const clientPhone = submittedOpp?.phone || '';
-    const msg = `Olá! Acabei de enviar uma solicitação de orçamento pelo site da *${companySettings.name}*.\nCliente: *${clientName}*\nDemanda: *${need}*\nContato: *${clientPhone}*`;
-    const encoded = encodeURIComponent(msg);
+    const msg = buildPublicQuoteSubmittedMessage({
+      companyName: companySettings.name,
+      clientName,
+      demand,
+      clientPhone,
+    });
     if (cleanCompanyPhone) {
-      window.open(`https://wa.me/55${cleanCompanyPhone}?text=${encoded}`, '_blank');
+      openWhatsApp(cleanCompanyPhone, msg);
     }
   };
 
@@ -210,7 +219,7 @@ export const PublicQuoteFormView: React.FC<PublicQuoteFormViewProps> = ({
           </p>
           {cleanCompanyPhone && (
             <a
-              href={`https://wa.me/55${cleanCompanyPhone}?text=${encodeURIComponent('Olá! Gostaria de solicitar um orçamento diretamente pelo WhatsApp.')}`}
+              href={formatWhatsAppLink(cleanCompanyPhone, buildDirectWhatsAppContactMessage())}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"

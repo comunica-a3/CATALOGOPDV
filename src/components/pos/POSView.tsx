@@ -53,11 +53,14 @@ import {
 import {
   compileDocumentTemplate,
   formatDocumentToHtml,
+  normalizeTemplateFieldInstances,
   printDocumentContent,
 } from '../../utils/documentGenerator';
 import { formatCurrency } from '../../utils/formatters';
 import { getCustomerFacingPresentation } from '../../utils/freightUtils';
+import { api } from '../../services/api';
 import { Badge } from '../common/Badge';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
 import { CustomerSearchModal } from '../customers/CustomerSearchModal';
@@ -116,12 +119,23 @@ export const POSView: React.FC<POSViewProps> = ({
   const [selectedDocTemplate, setSelectedDocTemplate] = useState<DocumentTemplate | null>(null);
   const [docFormData, setDocFormData] = useState<Record<string, string>>({});
   const [docPreviewContent, setDocPreviewContent] = useState<string>('');
+  const [docServicePrice, setDocServicePrice] = useState<string>('0.00');
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [isDocEditing, setIsDocEditing] = useState<boolean>(false);
 
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false);
+
+  // Synchronize document templates from backend
+  useEffect(() => {
+    api.getDocumentTemplates().then((remoteTemplates) => {
+      if (Array.isArray(remoteTemplates) && remoteTemplates.length > 0) {
+        setDocTemplates(remoteTemplates);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Modals
   const [configItem, setConfigItem] = useState<Item | null>(null);
@@ -362,12 +376,18 @@ export const POSView: React.FC<POSViewProps> = ({
 
   // Quick Open Document Generator Modal inside POS
   const handleOpenDocModal = (tmpl: DocumentTemplate) => {
-    setSelectedDocTemplate(tmpl);
+    const normalized = normalizeTemplateFieldInstances(tmpl.templateBody, tmpl.fields);
+    const effectiveTemplate: DocumentTemplate = {
+      ...tmpl,
+      templateBody: normalized.templateBody,
+      fields: normalized.fields,
+    };
+    setSelectedDocTemplate(effectiveTemplate);
     setIsDocEditing(false);
 
     // Initial form state pre-filled with selected customer
     const initialValues: Record<string, string> = {};
-    tmpl.fields.forEach((f) => {
+    effectiveTemplate.fields.forEach((f) => {
       if (selectedCustomer && f.customerFieldMapping) {
         if (f.customerFieldMapping === 'name') initialValues[f.id] = selectedCustomer.name || '';
         if (f.customerFieldMapping === 'document') initialValues[f.id] = selectedCustomer.document || '';
@@ -381,7 +401,15 @@ export const POSView: React.FC<POSViewProps> = ({
     });
 
     setDocFormData(initialValues);
-    const compiled = compileDocumentTemplate(tmpl.templateBody, initialValues, tmpl.fields);
+    const rawPrice = (effectiveTemplate as any).defaultPrice !== undefined
+      ? (effectiveTemplate as any).defaultPrice
+      : (effectiveTemplate as any).default_price;
+    const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice)
+      ? rawPrice
+      : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+    setDocServicePrice(numPrice.toFixed(2).replace('.', ','));
+
+    const compiled = compileDocumentTemplate(effectiveTemplate.templateBody, initialValues, effectiveTemplate.fields);
     setDocPreviewContent(compiled);
     setIsDocModalOpen(true);
   };
@@ -398,7 +426,11 @@ export const POSView: React.FC<POSViewProps> = ({
   const handleAddDocToCart = () => {
     if (!selectedDocTemplate) return;
 
-    const price = selectedDocTemplate.defaultPrice || 30.0;
+    const cleanPrice = String(docServicePrice || '').replace(/[^\d.,]/g, '').replace(',', '.');
+    const parsedPrice = parseFloat(cleanPrice);
+    const price = !isNaN(parsedPrice) && parsedPrice >= 0
+      ? parsedPrice
+      : (typeof selectedDocTemplate.defaultPrice === 'number' ? selectedDocTemplate.defaultPrice : 0);
     const docTitle = `${selectedDocTemplate.title} - ${selectedCustomer?.name || docFormData['nome_completo'] || 'Cliente'}`;
 
     // Also persist to history
@@ -492,9 +524,8 @@ export const POSView: React.FC<POSViewProps> = ({
   };
 
   const handleClearCart = () => {
-    if (cart.length > 0 && confirm('Deseja realmente limpar todo o carrinho?')) {
-      setCart([]);
-      setSelectedCustomer(null);
+    if (cart.length > 0) {
+      setIsClearCartConfirmOpen(true);
     }
   };
 
@@ -1285,12 +1316,27 @@ export const POSView: React.FC<POSViewProps> = ({
           maxWidth="max-w-4xl"
         >
           <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-xs">
-              <span className="text-slate-500">
-                Preço do serviço: <strong className="text-emerald-700 font-bold">R$ {selectedDocTemplate.defaultPrice.toFixed(2).replace('.', ',')}</strong>
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-600 font-medium">Preço do serviço:</span>
+                <div className="relative w-24">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                  <input
+                    type="text"
+                    value={docServicePrice}
+                    onChange={(e) => setDocServicePrice(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full pl-7 pr-2 py-1 text-xs font-bold text-emerald-700 bg-emerald-50/70 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:bg-white text-right"
+                  />
+                </div>
+                {selectedDocTemplate.defaultPrice > 0 && (
+                  <span className="text-[11px] text-slate-400">
+                    (Padrão: R$ {selectedDocTemplate.defaultPrice.toFixed(2).replace('.', ',')})
+                  </span>
+                )}
+              </div>
               {selectedCustomer && (
-                <span className="text-violet-700 font-semibold">
+                <span className="text-violet-700 font-semibold bg-violet-50 px-2.5 py-1 rounded-md border border-violet-100">
                   Cliente vinculado: {selectedCustomer.name}
                 </span>
               )}
@@ -1302,11 +1348,23 @@ export const POSView: React.FC<POSViewProps> = ({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Preenchimento dos Campos
                 </h4>
-                {selectedDocTemplate.fields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </label>
+                {selectedDocTemplate.fields.map((field, idx) => {
+                  const sameLabelCount = selectedDocTemplate.fields.filter(
+                    (f) => f.label.toLowerCase() === field.label.toLowerCase()
+                  ).length;
+                  let instanceLabel = field.label;
+                  if (sameLabelCount > 1) {
+                    const occIndex = selectedDocTemplate.fields
+                      .slice(0, idx + 1)
+                      .filter((f) => f.label.toLowerCase() === field.label.toLowerCase()).length;
+                    instanceLabel = `${field.label} (${occIndex}ª ocorrência)`;
+                  }
+
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        {instanceLabel} {field.required && <span className="text-red-500">*</span>}
+                      </label>
                     {field.type === 'textarea' ? (
                       <textarea
                         rows={2}
@@ -1325,7 +1383,8 @@ export const POSView: React.FC<POSViewProps> = ({
                       />
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Live Preview */}
@@ -1390,7 +1449,7 @@ export const POSView: React.FC<POSViewProps> = ({
                   className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Adicionar ao Pedido (R$ {selectedDocTemplate.defaultPrice.toFixed(2).replace('.', ',')})</span>
+                  <span>Adicionar ao Pedido (R$ {(parseFloat(String(docServicePrice).replace(/[^\d.,]/g, '').replace(',', '.')) || (selectedDocTemplate?.defaultPrice || 0)).toFixed(2).replace('.', ',')})</span>
                 </button>
               </div>
             </div>
@@ -1409,6 +1468,24 @@ export const POSView: React.FC<POSViewProps> = ({
           }}
         />
       )}
+
+      {/* Clear Cart Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isClearCartConfirmOpen}
+        title="Limpar Carrinho"
+        message="Deseja realmente limpar todos os itens adicionados ao carrinho atual? Esta ação não pode ser desfeita."
+        confirmText="Sim, limpar carrinho"
+        cancelText="Cancelar"
+        type="warning"
+        onConfirm={() => {
+          setCart([]);
+          setSelectedCustomer(null);
+          setIsClearCartConfirmOpen(false);
+          setToastMessage('Carrinho esvaziado.');
+          setTimeout(() => setToastMessage(''), 2500);
+        }}
+        onCancel={() => setIsClearCartConfirmOpen(false)}
+      />
     </div>
   );
 };

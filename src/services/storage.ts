@@ -88,6 +88,8 @@ import {
 import { api } from './api';
 import { formatPhone, normalizePhone } from '../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../utils/productUtils';
+import { buildApproachWhatsAppMessage } from '../utils/whatsappMessages';
+import { calculateSaleCommission } from '../utils/commissions';
 
 const STORAGE_KEYS = {
   SETTINGS: 'pdv_company_settings',
@@ -271,6 +273,9 @@ function notifyRealtime(event: string, data?: any): void {
 
 export function downloadBlobFile(content: string, filename: string, mimeType: string): void {
   try {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -373,6 +378,7 @@ export class StorageService {
         productionRes,
         separationsRes,
         docTemplatesRes,
+        expensesRes,
       ] = await Promise.allSettled([
         api.getSettings(),
         api.getUsers(),
@@ -393,6 +399,7 @@ export class StorageService {
         api.getProductionOrders(),
         api.getProductSeparations(),
         api.getDocumentTemplates(),
+        api.getExpenses(),
       ]);
 
       if (settingsRes.status === 'fulfilled' && settingsRes.value) {
@@ -541,7 +548,9 @@ export class StorageService {
       if (salesRes.status === 'fulfilled' && Array.isArray(salesRes.value)) {
         const localSales = this.getSales();
         const mergedSales = salesRes.value.map((remoteSale: any) => {
-          const localMatch = localSales.find((ls) => ls.id === remoteSale.id);
+          const localMatch = localSales.find(
+            (ls) => ls.id === remoteSale.id || (ls.saleNumber && remoteSale.saleNumber && ls.saleNumber === remoteSale.saleNumber)
+          );
           const saleNumber =
             (localMatch?.saleNumber && !String(localMatch.saleNumber).includes('NaN'))
               ? localMatch.saleNumber
@@ -659,7 +668,10 @@ export class StorageService {
 
         // Preserve and sync any local sales not yet returned by the server
         const remoteIds = new Set(salesRes.value.map((rs: any) => rs.id));
-        const unsyncedLocal = localSales.filter((ls) => !remoteIds.has(ls.id));
+        const remoteNumbers = new Set(salesRes.value.map((rs: any) => rs.saleNumber).filter(Boolean));
+        const unsyncedLocal = localSales.filter(
+          (ls) => !remoteIds.has(ls.id) && (!ls.saleNumber || !remoteNumbers.has(ls.saleNumber))
+        );
         for (const unsynced of unsyncedLocal) {
           api.saveSale(unsynced).catch(() => {});
         }
@@ -747,11 +759,38 @@ export class StorageService {
             api.saveReceivingAccount(acc).catch(() => {});
           }
           setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, [...remoteAccounts, ...missingOnServer]);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
         } else if (localAccounts.length > 0) {
           // Se o servidor estiver vazio (primeira migração), envia as contas existentes ao servidor
           for (const acc of localAccounts) {
             api.saveReceivingAccount(acc).catch(() => {});
           }
+        }
+      }
+
+      // Sincronização e persistência de Saídas Financeiras (Despesas) no Servidor
+      if (expensesRes.status === 'fulfilled' && Array.isArray(expensesRes.value)) {
+        const remoteExpenses = expensesRes.value;
+        const localExpenses = this.getExpenses();
+        if (remoteExpenses.length > 0) {
+          const remoteIds = new Set(remoteExpenses.map((e: any) => e.id));
+          const missingOnServer = localExpenses.filter((e) => !remoteIds.has(e.id));
+          for (const exp of missingOnServer) {
+            api.saveExpense(exp).catch(() => {});
+          }
+          const merged = [...remoteExpenses, ...missingOnServer].sort(
+            (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
+          );
+          setItemToStorage(STORAGE_KEYS.EXPENSES, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('expenses-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
+        } else if (localExpenses.length > 0) {
+          api.saveExpensesBatch(localExpenses).catch(() => {});
         }
       }
 
@@ -769,6 +808,10 @@ export class StorageService {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.FINANCIAL_TRANSFERS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+          }
         } else if (localTransfers.length > 0) {
           for (const trf of localTransfers) {
             api.saveFinancialTransfer(trf).catch(() => {});
@@ -790,6 +833,10 @@ export class StorageService {
             (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.CASH_REGISTER_SESSIONS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cash-sessions-updated'));
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+          }
         } else if (localSessions.length > 0) {
           for (const sess of localSessions) {
             api.saveCashRegisterSession(sess).catch(() => {});
@@ -811,6 +858,10 @@ export class StorageService {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.ACCOUNT_BALANCE_ADJUSTMENTS, merged);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('finance-updated'));
+            window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
+          }
         } else if (localAdjs.length > 0) {
           for (const adj of localAdjs) {
             api.saveAccountAdjustment(adj).catch(() => {});
@@ -1773,26 +1824,33 @@ export class StorageService {
       return itemToSend;
     }
 
-    // 1. Envia para o backend e aguarda gravação no banco de dados do servidor
-    let serverItem: Item;
+    // 1. Atualiza o cache local imediatamente para consistência instantânea e tolerância a falhas
+    this.unmarkItemAsDeleted(itemToSend.id);
+    const localItems = this.getItems();
+    const localIndex = localItems.findIndex((i) => i.id === itemToSend.id);
+    if (localIndex >= 0) {
+      localItems[localIndex] = itemToSend;
+    } else {
+      localItems.unshift(itemToSend);
+    }
+    setItemToStorage(STORAGE_KEYS.ITEMS, localItems);
+
+    // 2. Envia para o backend e aguarda gravação no banco de dados do servidor
+    let serverItem: Item = itemToSend;
     try {
       serverItem = await api.saveItem(itemToSend);
+      this.unmarkItemAsDeleted(serverItem.id);
+      const items = this.getItems();
+      const index = items.findIndex((i) => i.id === serverItem.id);
+      if (index >= 0) {
+        items[index] = serverItem;
+      } else {
+        items.unshift(serverItem);
+      }
+      setItemToStorage(STORAGE_KEYS.ITEMS, items);
     } catch (err: any) {
-      console.error('Falha ao persistir item no servidor:', err);
-      throw new Error(err.message || 'Falha ao gravar o produto no banco de dados do servidor.');
+      console.warn('Aviso ao sincronizar produto no backend (cache local mantido):', err?.message || err);
     }
-
-    // 2. Com a confirmação autoritativa do servidor, atualiza o cache local
-    this.unmarkItemAsDeleted(serverItem.id);
-
-    const items = this.getItems();
-    const index = items.findIndex((i) => i.id === serverItem.id);
-    if (index >= 0) {
-      items[index] = serverItem;
-    } else {
-      items.unshift(serverItem);
-    }
-    setItemToStorage(STORAGE_KEYS.ITEMS, items);
 
     // If saving a service that has a URL, keep corresponding online service synchronized
     if (serverItem.type === 'SERVICO' && (serverItem.serviceUrl !== undefined || serverItem.url !== undefined)) {
@@ -3007,28 +3065,49 @@ export class StorageService {
       setItemToStorage(STORAGE_KEYS.RECEIVABLES, receivables);
     }
 
-    // 5. Atualizar ordens de produção para itens gráficos
+    // 5. Atualizar ordens de produção para itens gráficos mantendo os IDs originais
     const prodOrders = this.getProductionOrders();
     const existingOrdersForSale = prodOrders.filter((po) => po.saleId === sale.id);
-    if (existingOrdersForSale.length > 0) {
-      prodOrders.forEach((po) => {
-        if (po.saleId === sale.id && po.status !== 'ENTREGUE' && po.status !== 'CANCELADO') {
-          po.status = 'CANCELADO' as ProductionStatus;
-          po.updatedAt = now;
-          po.notes = `${po.notes ? po.notes + ' | ' : ''}Cancelada por edição da venda ${sale.saleNumber}.`;
-        }
-      });
-    }
 
-    params.items.forEach((si) => {
+    const graphicItems = params.items.filter((si) => {
       const itemObj = this.getItemById(si.itemId);
-      const isGraphicOrPers =
+      return (
         si.itemType === 'PRODUTO_GRAFICO' ||
         si.itemType === 'PRODUTO_PERSONALIZADO' ||
-        isGraphicOrPersonalizedItem(itemObj);
+        isGraphicOrPersonalizedItem(itemObj)
+      );
+    });
 
-      if (isGraphicOrPers) {
-        prodOrders.unshift({
+    const usedOrderIds = new Set<string>();
+
+    graphicItems.forEach((si) => {
+      const itemObj = this.getItemById(si.itemId);
+      // Procurar ordem existente para esse item na venda (por saleItemId ou itemId)
+      const existingOrder = existingOrdersForSale.find(
+        (po) => !usedOrderIds.has(po.id) && (po.saleItemId === si.id || po.itemId === si.itemId)
+      ) || existingOrdersForSale.find((po) => !usedOrderIds.has(po.id));
+
+      if (existingOrder) {
+        usedOrderIds.add(existingOrder.id);
+        existingOrder.saleItemId = si.id;
+        existingOrder.itemId = si.itemId;
+        existingOrder.itemName = si.itemName;
+        existingOrder.quantity = si.quantity;
+        existingOrder.configuration = si.configuration;
+        existingOrder.customerId = params.customerId || sale.customerId;
+        existingOrder.customerName = params.customerName || sale.customerName;
+        existingOrder.customerPhone = params.customerPhone || sale.customerPhone;
+        existingOrder.sellerId = params.sellerId || sale.sellerId;
+        existingOrder.sellerName = params.sellerName || sale.sellerName;
+        existingOrder.productionType = itemObj?.productionType || existingOrder.productionType || 'PRODUCAO_PROPRIA';
+        existingOrder.leadTime = itemObj?.leadTime || existingOrder.leadTime || '2 a 3 dias úteis';
+        existingOrder.notes = si.configuration?.notes || existingOrder.notes;
+        existingOrder.updatedAt = now;
+        if (existingOrder.status === 'CANCELADO') {
+          existingOrder.status = 'AGUARDANDO_PRODUCAO';
+        }
+      } else {
+        const newOrder: ProductionOrder = {
           id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
           orderNumber: `PRD-${new Date().getFullYear()}-${String(prodOrders.length + 1).padStart(4, '0')}`,
           saleId: sale.id,
@@ -3047,12 +3126,24 @@ export class StorageService {
           leadTime: itemObj?.leadTime || '2 a 3 dias úteis',
           status: 'AGUARDANDO_PRODUCAO',
           files: [],
-          notes: si.configuration?.notes || `Produção gerada pela edição da venda ${sale.saleNumber}`,
+          notes: si.configuration?.notes || `Produção gerada pela venda ${sale.saleNumber}`,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        prodOrders.unshift(newOrder);
+        usedOrderIds.add(newOrder.id);
       }
     });
+
+    // Se itens gráficos foram removidos da venda, cancela apenas as ordens órfãs não aproveitadas
+    existingOrdersForSale.forEach((po) => {
+      if (!usedOrderIds.has(po.id) && po.status !== 'ENTREGUE' && po.status !== 'CANCELADO') {
+        po.status = 'CANCELADO' as ProductionStatus;
+        po.updatedAt = now;
+        po.notes = `${po.notes ? po.notes + ' | ' : ''}Item removido na edição da venda ${sale.saleNumber}.`;
+      }
+    });
+
     setItemToStorage(STORAGE_KEYS.PRODUCTION, prodOrders);
     const affectedOrders = prodOrders.filter((po) => po.saleId === sale.id);
     if (affectedOrders.length > 0) {
@@ -3113,6 +3204,9 @@ export class StorageService {
       userId: currentUser.id,
       userName,
     }).catch((e) => console.debug('Background updateCompletedSale sync notice:', e));
+
+    notifyRealtime('sales-updated', { id: sale.id, action: 'edit' });
+    notifyRealtime('finance-updated', { type: 'sale', id: sale.id });
 
     return sale;
   }
@@ -3684,6 +3778,8 @@ export class StorageService {
     sales[saleIndex] = sale;
     setItemToStorage(STORAGE_KEYS.SALES, sales);
     api.saveSale(sale).catch((e) => console.debug('Background saveSale payment sync notice:', e));
+    notifyRealtime('sales-updated', { id: sale.id, action: 'payment' });
+    notifyRealtime('finance-updated', { type: 'sale-payment', id: sale.id });
 
     // Sync into receivables
     const receivables = this.getReceivables();
@@ -3745,6 +3841,17 @@ export class StorageService {
         user,
       });
     }
+
+    // Persiste e sincroniza as movimentações com o banco de dados do servidor
+    const movements = this.getInventoryMovements();
+    if (movements.length > 0) {
+      api.saveInventoryMovementsBatch(movements.slice(0, 10)).catch((e) =>
+        console.debug('Background saveInventoryMovements sync notice:', e)
+      );
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('items-updated'));
+    }
   }
 
   // --- FINANCIAL & RECEIVING ACCOUNTS ---
@@ -3770,6 +3877,8 @@ export class StorageService {
     }
     setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, accounts);
     api.saveReceivingAccount(updatedAccount).catch((e) => console.debug('Background saveReceivingAccount sync notice:', e));
+    notifyRealtime('receiving-accounts-updated', { id: updatedAccount.id });
+    notifyRealtime('finance-updated', { type: 'account', id: updatedAccount.id });
     return updatedAccount;
   }
 
@@ -3777,6 +3886,8 @@ export class StorageService {
     const accounts = this.getReceivingAccounts().filter((a) => a.id !== id);
     setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, accounts);
     api.deleteReceivingAccount(id).catch((e) => console.debug('Background deleteReceivingAccount sync notice:', e));
+    notifyRealtime('receiving-accounts-updated', { id, deleted: true });
+    notifyRealtime('finance-updated', { type: 'account-deleted', id });
   }
 
   // --- ACCOUNT BALANCES & TRANSFERS ENTRE CONTAS ---
@@ -3788,6 +3899,63 @@ export class StorageService {
     const accounts = this.getReceivingAccounts();
     const account = accounts.find((a) => a.id === accountId);
     if (!account) return 0;
+
+    // Se a conta for do tipo CAIXA (Caixa Físico), unifica o valor com o Caixa Físico
+    if (account.type === 'CAIXA') {
+      const sessions = this.getCashRegisterSessions();
+      const activeSession = sessions.find((s) => s.status === 'ABERTO');
+      if (activeSession) {
+        return this.calculateSessionSummary(activeSession).expectedCashAmount;
+      }
+      const lastClosed = sessions.find((s) => s.status === 'FECHADO');
+      if (lastClosed) {
+        let bal = Number(lastClosed.countedCashAmount || 0);
+        const closedTime = new Date(lastClosed.closedAt || lastClosed.updatedAt || 0).getTime();
+
+        // 1. Vendas em dinheiro concluídas após o fechamento
+        const sales = this.getSales();
+        sales.forEach((sale) => {
+          if (sale.status === 'CANCELADA' || sale.status === 'EXCLUIDA' || sale.isDeleted || sale.paymentStatus === 'CANCELADO') return;
+          const sTime = new Date(sale.createdAt).getTime();
+          if (sTime > closedTime) {
+            sale.payments?.forEach((p) => {
+              const pMethod = String(p.method || '').toLowerCase();
+              if (p.accountId === accountId || (!p.accountId && pMethod.includes('dinheiro'))) {
+                bal += Number(p.amount || 0);
+              }
+            });
+          }
+        });
+
+        // 2. Transferências internas após o fechamento
+        const transfers = this.getFinancialTransfers();
+        transfers.forEach((t) => {
+          const tTime = new Date(t.createdAt).getTime();
+          if (tTime > closedTime) {
+            if (t.fromAccountId === accountId) bal -= Number(t.amount || 0);
+            if (t.toAccountId === accountId) bal += Number(t.amount || 0);
+          }
+        });
+
+        // 3. Despesas pagas em dinheiro após o fechamento
+        const expenses = this.getExpenses();
+        expenses.forEach((exp) => {
+          const eTime = new Date(`${exp.date}T00:00:00`).getTime();
+          if (eTime > closedTime && (exp.accountId === accountId || (!exp.accountId && String(exp.paymentMethod || '').toLowerCase().includes('dinheiro')))) {
+            bal -= Number(exp.amount || 0);
+          }
+        });
+
+        // 4. Ajustes manuais de saldo após o fechamento
+        const adjustments = this.getAccountBalanceAdjustments(accountId);
+        adjustments.forEach((adj) => {
+          const aTime = new Date(adj.createdAt).getTime();
+          if (aTime > closedTime) bal += Number(adj.adjustedAmount || 0);
+        });
+
+        return Number(bal.toFixed(2));
+      }
+    }
 
     let balance = Number(account.initialBalance || 0);
 
@@ -4080,12 +4248,18 @@ export class StorageService {
     }
 
     setItemToStorage(STORAGE_KEYS.EXPENSES, expenses);
+    api.saveExpense(expense).catch((e) => console.debug('Background saveExpense sync notice:', e));
+    notifyRealtime('expenses-updated', { id: expense.id });
+    notifyRealtime('finance-updated', { type: 'expense', id: expense.id });
     return expense;
   }
 
   static deleteExpense(id: string): void {
     const expenses = this.getExpenses().filter((e) => e.id !== id);
     setItemToStorage(STORAGE_KEYS.EXPENSES, expenses);
+    api.deleteExpense(id).catch((e) => console.debug('Background deleteExpense sync notice:', e));
+    notifyRealtime('expenses-updated', { id, deleted: true });
+    notifyRealtime('finance-updated', { type: 'expense-deleted', id });
   }
 
   // --- CASH REGISTER SESSIONS (ABERTURA & FECHAMENTO) ---
@@ -4101,8 +4275,8 @@ export class StorageService {
       if (userSession) return userSession;
       const unassignedSession = sessions.find((s) => s.status === 'ABERTO' && !s.openedByUserId);
       if (unassignedSession) return unassignedSession;
-      return null;
     }
+    // Caixa físico aberto no estabelecimento (para controle compartilhado do PDV e Financeiro)
     return sessions.find((s) => s.status === 'ABERTO') || null;
   }
 
@@ -4155,6 +4329,9 @@ export class StorageService {
     api.saveCashRegisterSession(newSession).catch((err) => {
       console.warn('Sessão de caixa salva localmente; aviso de sincronização:', err);
     });
+
+    notifyRealtime('cash-sessions-updated', { id: newSession.id, action: 'open' });
+    notifyRealtime('finance-updated', { type: 'cash-session', id: newSession.id });
 
     return newSession;
   }
@@ -4265,10 +4442,40 @@ export class StorageService {
       });
     });
 
+    // Considerar movimentações financeiras (sangrias / suprimentos) ocorridas durante a sessão
+    const transfers = this.getFinancialTransfers();
+    let cashTransfersIn = 0;
+    let cashTransfersOut = 0;
+    transfers.forEach((t) => {
+      const tTime = new Date(t.createdAt).getTime();
+      if (tTime >= openedTime && tTime <= closedTime) {
+        if (cashAccountIds.has(t.fromAccountId)) {
+          cashTransfersOut += Number(t.amount || 0);
+        }
+        if (cashAccountIds.has(t.toAccountId)) {
+          cashTransfersIn += Number(t.amount || 0);
+        }
+      }
+    });
+
+    // Considerar ajustes de saldo ocorridos durante a sessão
+    const adjustments = this.getAccountBalanceAdjustments();
+    let cashAdjustments = 0;
+    adjustments.forEach((adj) => {
+      const adjTime = new Date(adj.createdAt).getTime();
+      if (adjTime >= openedTime && adjTime <= closedTime && cashAccountIds.has(adj.accountId)) {
+        cashAdjustments += Number(adj.adjustedAmount || 0);
+      }
+    });
+
+    const expectedCash = Number(
+      (session.initialAmount + cashSales - cashExpenses + cashTransfersIn - cashTransfersOut + cashAdjustments).toFixed(2)
+    );
+
     return {
       cashSalesAmount: Number(cashSales.toFixed(2)),
       cashExpensesAmount: Number(cashExpenses.toFixed(2)),
-      expectedCashAmount: Number((session.initialAmount + cashSales - cashExpenses).toFixed(2)),
+      expectedCashAmount: expectedCash,
       totalSalesCount: sessionSales.length,
       totalGrossSales: Number(totalGross.toFixed(2)),
       totalCardFees: Number(totalFees.toFixed(2)),
@@ -4342,6 +4549,9 @@ export class StorageService {
     api.saveCashRegisterSession(updatedSession).catch((err) => {
       console.warn('Fechamento de caixa salvo localmente; aviso de sincronização:', err);
     });
+
+    notifyRealtime('cash-sessions-updated', { id: updatedSession.id, action: 'close' });
+    notifyRealtime('finance-updated', { type: 'cash-session', id: updatedSession.id });
 
     return updatedSession;
   }
@@ -4663,118 +4873,624 @@ export class StorageService {
     return { sale, productionOrdersCreated, budget };
   }
 
-  // --- CSV EXPORT UTILITIES ---
-  static exportItemsToCSV(items: Item[], canViewCosts: boolean): void {
+  // --- CSV EXPORT UTILITIES (STANDARDIZED) ---
+  static exportItemsToCSV(items: Item[], canViewCosts: boolean): boolean {
+    if (!items || items.length === 0) return false;
+
     const categories = this.getCategories();
     const catMap = new Map(categories.map((c) => [c.id, c.name]));
 
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
     const headers = canViewCosts
-      ? ['ID', 'Código SKU', 'Nome', 'Tipo', 'Categoria', 'Custo Fornecedor (R$)', 'Frete Fornecedor (R$)', 'Custo Total (R$)', 'Preço de Venda (R$)', 'Margem Bruta (R$)', 'Margem (%)', 'Status', 'Visível Vitrine']
-      : ['ID', 'Código SKU', 'Nome', 'Tipo', 'Categoria', 'Preço de Venda (R$)', 'Status', 'Visível Vitrine'];
+      ? [
+          'Código / SKU',
+          'Nome do Produto',
+          'Código de Barras',
+          'Tipo (Físico / Gráfico / Serviço)',
+          'Categoria',
+          'Preço de Custo (R$)',
+          'Custo Fornecedor (R$)',
+          'Frete Fornecedor (R$)',
+          'Preço de Venda (R$)',
+          'Margem Bruta (R$)',
+          'Margem (%)',
+          'Estoque',
+          'Estoque Mínimo',
+          'Descrição',
+          'Marca',
+          'Fornecedor',
+          'Ativo (Sim/Não)',
+          'Exibir no Catálogo (Sim/Não)',
+        ]
+      : [
+          'Código / SKU',
+          'Nome do Produto',
+          'Código de Barras',
+          'Tipo (Físico / Gráfico / Serviço)',
+          'Categoria',
+          'Preço de Venda (R$)',
+          'Estoque',
+          'Estoque Mínimo',
+          'Descrição',
+          'Marca',
+          'Ativo (Sim/Não)',
+          'Exibir no Catálogo (Sim/Não)',
+        ];
 
     const rows = items.map((item) => {
       const catName = catMap.get(item.categoryId) || 'Geral';
       const typeLabel = item.type === 'PRODUTO_GRAFICO' ? 'Gráfico' : item.type === 'PRODUTO_FISICO' ? 'Físico' : 'Serviço';
-      const statusLabel = item.active ? 'Ativo' : 'Inativo';
+      const statusLabel = item.active !== false ? 'Sim' : 'Não';
       const catalogLabel = item.showInCatalog ? 'Sim' : 'Não';
 
       if (canViewCosts) {
         return [
-          item.id,
-          `"${item.sku.replace(/"/g, '""')}"`,
-          `"${item.name.replace(/"/g, '""')}"`,
-          `"${typeLabel}"`,
-          `"${catName.replace(/"/g, '""')}"`,
-          (item.supplierCost || 0).toFixed(2).replace('.', ','),
-          (item.supplierFreight || 0).toFixed(2).replace('.', ','),
-          (item.costPrice || 0).toFixed(2).replace('.', ','),
-          (item.salePrice || 0).toFixed(2).replace('.', ','),
-          (item.marginReais || 0).toFixed(2).replace('.', ','),
-          (item.marginPercent || 0).toFixed(2).replace('.', ','),
-          `"${statusLabel}"`,
-          `"${catalogLabel}"`,
+          escapeCsv(item.sku || ''),
+          escapeCsv(item.name || ''),
+          escapeCsv(item.barcode || ''),
+          escapeCsv(typeLabel),
+          escapeCsv(catName),
+          formatMoney(item.costPrice || 0),
+          formatMoney(item.supplierCost || 0),
+          formatMoney(item.supplierFreight || 0),
+          formatMoney(item.salePrice || 0),
+          formatMoney(item.marginReais || 0),
+          formatMoney(item.marginPercent || 0),
+          escapeCsv(item.stock ?? 0),
+          escapeCsv(item.minStock ?? 0),
+          escapeCsv(item.description || ''),
+          escapeCsv(item.brand || ''),
+          escapeCsv(item.supplier || ''),
+          escapeCsv(statusLabel),
+          escapeCsv(catalogLabel),
         ];
       } else {
         return [
-          item.id,
-          `"${item.sku.replace(/"/g, '""')}"`,
-          `"${item.name.replace(/"/g, '""')}"`,
-          `"${typeLabel}"`,
-          `"${catName.replace(/"/g, '""')}"`,
-          (item.salePrice || 0).toFixed(2).replace('.', ','),
-          `"${statusLabel}"`,
-          `"${catalogLabel}"`,
+          escapeCsv(item.sku || ''),
+          escapeCsv(item.name || ''),
+          escapeCsv(item.barcode || ''),
+          escapeCsv(typeLabel),
+          escapeCsv(catName),
+          formatMoney(item.salePrice || 0),
+          escapeCsv(item.stock ?? 0),
+          escapeCsv(item.minStock ?? 0),
+          escapeCsv(item.description || ''),
+          escapeCsv(item.brand || ''),
+          escapeCsv(statusLabel),
+          escapeCsv(catalogLabel),
         ];
       }
     });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `produtos_catalogo_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
-  static exportCustomersToCSV(customers: Customer[]): void {
-    const headers = ['ID', 'Nome / Razão Social', 'Tipo', 'CPF / CNPJ', 'Telefone / WhatsApp', 'E-mail', 'Endereço', 'Cidade', 'Estado', 'CEP', 'Data Cadastro'];
+  static exportCustomersToCSV(customers: Customer[]): boolean {
+    if (!customers || customers.length === 0) return false;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const headers = [
+      'Nome / Razão Social',
+      'Tipo (PF / PJ)',
+      'CPF / CNPJ',
+      'Telefone / WhatsApp',
+      'E-mail',
+      'Endereço',
+      'Cidade',
+      'Estado / UF',
+      'CEP',
+      'Observações',
+      'Promotor / Indicador',
+      'Data Cadastro',
+    ];
 
     const rows = customers.map((c) => [
-      c.id,
-      `"${c.name.replace(/"/g, '""')}"`,
-      `"${c.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}"`,
-      `"${(c.document || '').replace(/"/g, '""')}"`,
-      `"${(c.phone || '').replace(/"/g, '""')}"`,
-      `"${(c.email || '').replace(/"/g, '""')}"`,
-      `"${(c.address || '').replace(/"/g, '""')}"`,
-      `"${(c.city || '').replace(/"/g, '""')}"`,
-      `"${(c.state || '').replace(/"/g, '""')}"`,
-      `"${(c.zipCode || '').replace(/"/g, '""')}"`,
-      `"${c.createdAt.split('T')[0]}"`,
+      escapeCsv(c.name || ''),
+      escapeCsv(c.type === 'PJ' ? 'PJ' : 'PF'),
+      escapeCsv(c.document || ''),
+      escapeCsv(c.phone || ''),
+      escapeCsv(c.email || ''),
+      escapeCsv(c.address || ''),
+      escapeCsv(c.city || ''),
+      escapeCsv(c.state || ''),
+      escapeCsv(c.zipCode || ''),
+      escapeCsv(c.notes || ''),
+      escapeCsv(c.promoterName || ''),
+      escapeCsv(c.createdAt ? c.createdAt.split('T')[0] : ''),
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `clientes_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
-  static exportBudgetsToCSV(budgets: Budget[]): void {
-    const headers = ['Número Orçamento', 'Cliente', 'Telefone', 'Vendedor', 'Itens Qtd', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)', 'Validade', 'Status', 'Data Criação'];
+  static exportBudgetsToCSV(budgets: Budget[]): boolean {
+    if (!budgets || budgets.length === 0) return false;
 
-    const rows = budgets.map((b) => [
-      b.budgetNumber,
-      `"${b.customerName.replace(/"/g, '""')}"`,
-      `"${(b.customerPhone || '').replace(/"/g, '""')}"`,
-      `"${b.sellerName.replace(/"/g, '""')}"`,
-      b.items.reduce((acc, it) => acc + it.quantity, 0),
-      b.subtotal.toFixed(2).replace('.', ','),
-      b.discount.toFixed(2).replace('.', ','),
-      b.total.toFixed(2).replace('.', ','),
-      b.validUntil,
-      `"${b.status}"`,
-      `"${b.createdAt.split('T')[0]}"`,
-    ]);
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const headers = [
+      'Número Orçamento',
+      'Data Criação',
+      'Cliente',
+      'Telefone',
+      'E-mail',
+      'Vendedor',
+      'Itens Qtd',
+      'Itens Descrição',
+      'Subtotal (R$)',
+      'Desconto (R$)',
+      'Acréscimo / Frete (R$)',
+      'Total (R$)',
+      'Validade',
+      'Status',
+      'Observações',
+    ];
+
+    const rows = budgets.map((b) => {
+      const itemsCount = Array.isArray(b.items) ? b.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0;
+      const itemsSummary = Array.isArray(b.items)
+        ? b.items.map((it) => `${it.quantity}x ${it.item?.name || (it as any).itemName || (it as any).name || 'Item'}`).join(' | ')
+        : '';
+
+      return [
+        escapeCsv(b.budgetNumber || b.id || ''),
+        escapeCsv(b.createdAt ? b.createdAt.replace('T', ' ').substring(0, 19) : ''),
+        escapeCsv(b.customerName || 'Cliente'),
+        escapeCsv(b.customerPhone || ''),
+        escapeCsv(b.customerEmail || ''),
+        escapeCsv(b.sellerName || 'Vendedor'),
+        escapeCsv(itemsCount),
+        escapeCsv(itemsSummary),
+        formatMoney(b.subtotal),
+        formatMoney(b.discount),
+        formatMoney(b.freight || 0),
+        formatMoney(b.total),
+        escapeCsv(b.validUntil || ''),
+        escapeCsv(b.status || 'ABERTO'),
+        escapeCsv(b.notes || ''),
+      ];
+    });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `orcamentos_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
   }
 
-  static exportSalesToCSV(sales: Sale[]): void {
-    const headers = ['Número Venda', 'Data', 'Cliente', 'CPF/CNPJ', 'Vendedor', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)', 'Valor Pago (R$)', 'Saldo Aberto (R$)', 'Status Pagamento', 'Comissão Vendedor (R$)', 'Lucro Bruto (R$)'];
+  static exportSalesToCSV(sales: Sale[]): boolean {
+    if (!sales || sales.length === 0) {
+      return false;
+    }
 
-    const rows = sales.map((s) => [
-      s.saleNumber,
-      `"${s.createdAt.replace('T', ' ').substring(0, 19)}"`,
-      `"${s.customerName.replace(/"/g, '""')}"`,
-      `"${(s.customerDocument || '').replace(/"/g, '""')}"`,
-      `"${s.sellerName.replace(/"/g, '""')}"`,
-      s.subtotal.toFixed(2).replace('.', ','),
-      s.discount.toFixed(2).replace('.', ','),
-      s.total.toFixed(2).replace('.', ','),
-      s.paidAmount.toFixed(2).replace('.', ','),
-      s.remainingAmount.toFixed(2).replace('.', ','),
-      `"${s.paymentStatus}"`,
-      s.commissionAmount.toFixed(2).replace('.', ','),
-      s.grossProfit.toFixed(2).replace('.', ','),
-    ]);
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const headers = [
+      'Número Venda',
+      'Data / Hora',
+      'Cliente',
+      'CPF/CNPJ',
+      'Telefone',
+      'E-mail',
+      'Vendedor',
+      'Forma Pagamento',
+      'Itens Qtd',
+      'Itens Descrição',
+      'Subtotal (R$)',
+      'Desconto (R$)',
+      'Acréscimo (R$)',
+      'Total (R$)',
+      'Valor Pago (R$)',
+      'Saldo Aberto (R$)',
+      'Status Pagamento',
+      'Status Venda',
+      'Comissão Vendedor (R$)',
+      'Lucro Bruto (R$)',
+    ];
+
+    const rows = sales.map((s) => {
+      const saleNum = s.saleNumber || (s as any).sale_code || s.id || '';
+      const dateStr = s.createdAt ? s.createdAt.replace('T', ' ').substring(0, 19) : '';
+      const custName = s.customerName || (s as any).customer_name || 'Consumidor Final';
+      const custDoc = s.customerDocument || (s as any).customer_document || '';
+      const custPhone = s.customerPhone || (s as any).customer_phone || '';
+      const custEmail = (s as any).customerEmail || (s as any).customer_email || '';
+      const seller = s.sellerName || (s as any).seller_name || 'Vendedor';
+      const payMethod = s.paymentMethod || (s as any).payment_method || 'Não informado';
+      const payStatus = s.paymentStatus || (s as any).payment_status || 'PENDENTE';
+      const saleStatus = s.status || 'CONCLUIDA';
+      const itemsCount = Array.isArray(s.items) ? s.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0;
+      const itemsSummary = Array.isArray(s.items) ? s.items.map((it) => `${it.quantity}x ${it.itemName}`).join(' | ') : '';
+
+      // Commission calculation safely
+      let comm = Number(s.commissionAmount);
+      if (isNaN(comm) || s.commissionAmount === undefined) {
+        try {
+          comm = calculateSaleCommission(s).commissionAmount;
+        } catch {
+          comm = 0;
+        }
+      }
+
+      // Gross profit calculation safely
+      let profit = Number(s.grossProfit);
+      if (isNaN(profit) || s.grossProfit === undefined) {
+        const cost = Number(s.totalCost) || (Array.isArray(s.items) ? s.items.reduce((acc, it) => acc + (Number(it.totalCost ?? ((it.unitCost || 0) * (it.quantity || 1))) || 0), 0) : 0);
+        profit = (Number(s.total) || 0) - cost;
+      }
+
+      return [
+        escapeCsv(saleNum),
+        escapeCsv(dateStr),
+        escapeCsv(custName),
+        escapeCsv(custDoc),
+        escapeCsv(custPhone),
+        escapeCsv(custEmail),
+        escapeCsv(seller),
+        escapeCsv(payMethod),
+        escapeCsv(itemsCount),
+        escapeCsv(itemsSummary),
+        formatMoney(s.subtotal),
+        formatMoney(s.discount),
+        formatMoney(s.addition),
+        formatMoney(s.total),
+        formatMoney(s.paidAmount),
+        formatMoney(s.remainingAmount),
+        escapeCsv(payStatus),
+        escapeCsv(saleStatus),
+        formatMoney(comm),
+        formatMoney(profit),
+      ];
+    });
 
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     downloadBlobFile(csvContent, `vendas_faturamento_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
+  }
+
+  static exportFinancialTransactionsToCSV(transactions: any[], periodLabel: string = 'geral'): boolean {
+    if (!transactions || transactions.length === 0) return false;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const headers = [
+      'Data / Hora',
+      'Número Venda',
+      'Categoria',
+      'Produto(s)',
+      'Cliente',
+      'Vendedor',
+      'Forma de Pagamento',
+      'Conta de Recebimento',
+      'Valor Bruto (R$)',
+      'Taxa (%)',
+      'Custo da Loja (Taxa R$)',
+      'Valor Líquido (R$)',
+    ];
+
+    const rows = transactions.map((t) => [
+      escapeCsv(t.saleCreatedAt ? t.saleCreatedAt.replace('T', ' ').substring(0, 19) : ''),
+      escapeCsv(t.saleNumber || ''),
+      escapeCsv(t.categoryLabel || 'Sem Categoria'),
+      escapeCsv((t.items || []).map((i: any) => `${i.quantity}x ${i.itemName}`).join(' | ') || '—'),
+      escapeCsv(t.customerName || ''),
+      escapeCsv(t.sellerName || ''),
+      escapeCsv(t.method || ''),
+      escapeCsv(t.accountName || ''),
+      formatMoney(t.grossAmount),
+      formatMoney(t.feePercent),
+      formatMoney(t.feeAmount),
+      formatMoney(t.netAmount),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const cleanPeriod = periodLabel.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    downloadBlobFile(csvContent, `relatorio_financeiro_${cleanPeriod}_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
+  }
+
+  static exportDashboardMetricsToCSV(params: {
+    companyName: string;
+    periodLabel: string;
+    metrics: any;
+    paymentMethods: any[];
+    categories: any[];
+    topSelling: any[];
+    topCustomers: any[];
+  }): boolean {
+    const { companyName, periodLabel, metrics, paymentMethods, categories, topSelling, topCustomers } = params;
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""').replace(/[\r\n]+/g, ' ');
+      return `"${str}"`;
+    };
+
+    const formatMoney = (val: any): string => {
+      const num = Number(val);
+      return isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',');
+    };
+
+    const rows: string[][] = [
+      ['RELATÓRIO EXECUTIVO DE VENDAS - DASHBOARD GERENCIAL'],
+      ['Empresa', companyName || 'Digital Express'],
+      ['Período', periodLabel],
+      ['Data de Geração', new Date().toLocaleString('pt-BR')],
+      [],
+      ['INDICADORES PRINCIPAIS'],
+      ['Faturamento Total (R$)', formatMoney(metrics.totalRevenue)],
+      ['Quantidade de Vendas', String(metrics.salesCount || 0)],
+      ['Ticket Médio (R$)', formatMoney(metrics.averageTicket)],
+      ['Lucro Bruto Estimado (R$)', formatMoney(metrics.grossProfit)],
+      ['Margem de Lucro (%)', formatMoney(metrics.profitMargin) + '%'],
+      ['Descontos Concedidos (R$)', formatMoney(metrics.totalDiscounts)],
+      ['Saldo a Receber / Pendente (R$)', formatMoney(metrics.totalReceivable)],
+      ['Média Diária de Vendas (R$)', formatMoney(metrics.dailyAverage)],
+      ['Vendas Canceladas (Qtd)', String(metrics.canceledCount || 0)],
+      ['Vendas Canceladas (R$)', formatMoney(metrics.canceledValue)],
+      [],
+      ['FORMAS DE PAGAMENTO'],
+      ['Forma de Pagamento', 'Valor Total (R$)', 'Quantidade', 'Participação (%)'],
+      ...paymentMethods.map((p: any) => [
+        p.name || '',
+        formatMoney(p.amount),
+        String(p.count || 0),
+        formatMoney(p.percent) + '%',
+      ]),
+      [],
+      ['VENDAS POR CATEGORIA'],
+      ['Categoria', 'Faturamento (R$)', 'Qtd Itens', 'Participação (%)'],
+      ...categories.map((c: any) => [
+        c.name || '',
+        formatMoney(c.amount),
+        String(c.qty || 0),
+        formatMoney(c.percent) + '%',
+      ]),
+      [],
+      ['PRODUTOS MAIS VENDIDOS'],
+      ['Item / Produto', 'Tipo', 'Qtd Vendida', 'Faturamento (R$)'],
+      ...topSelling.map((it: any) => [
+        it.itemName || '',
+        it.itemType || '',
+        String(it.totalQty || 0),
+        formatMoney(it.totalRevenue),
+      ]),
+      [],
+      ['PRINCIPAIS CLIENTES'],
+      ['Cliente', 'Telefone', 'Total Gasto (R$)', 'Qtd Pedidos', 'Última Compra'],
+      ...topCustomers.map((c: any) => [
+        c.name || '',
+        c.phone || '',
+        formatMoney(c.totalSpent),
+        String(c.ordersCount || 0),
+        c.lastOrderDate ? new Date(c.lastOrderDate).toLocaleDateString('pt-BR') : '',
+      ]),
+    ];
+
+    const csvContent = '\uFEFF' + rows.map((r) => r.map(escapeCsv).join(';')).join('\r\n');
+    downloadBlobFile(csvContent, `dashboard_vendas_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    return true;
+  }
+
+  // --- BATCH IMPORT METHODS (CSV) ---
+  static importCustomersBatch(
+    newCustomers: Customer[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getCustomers();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const c of newCustomers) {
+      const cleanPhone = normalizePhone(c.phone);
+      const cleanDoc = c.document ? c.document.replace(/\D/g, '') : '';
+
+      const idx = updatedList.findIndex((item) => {
+        if (item.id === c.id) return true;
+        if (cleanDoc && item.document && item.document.replace(/\D/g, '') === cleanDoc) return true;
+        if (cleanPhone && normalizePhone(item.phone) === cleanPhone) return true;
+        return false;
+      });
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...c,
+            id: updatedList[idx].id,
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.push(c);
+        created++;
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.CUSTOMERS, updatedList);
+    api.saveCustomersBatch(updatedList).catch((e) => console.debug('Background batch customers sync notice:', e));
+    window.dispatchEvent(new CustomEvent('customers-updated'));
+    return { created, updated, skipped };
+  }
+
+  static importBudgetsBatch(
+    newBudgets: Budget[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getBudgets();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const b of newBudgets) {
+      const idx = updatedList.findIndex(
+        (item) => item.id === b.id || (item.budgetNumber && b.budgetNumber && item.budgetNumber.toLowerCase() === b.budgetNumber.toLowerCase())
+      );
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...b,
+            id: updatedList[idx].id,
+            updatedAt: new Date().toISOString(),
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.unshift(b);
+        created++;
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.BUDGETS, updatedList);
+    api.saveBudgetsBatch(updatedList).catch((e) => console.debug('Background batch budgets sync notice:', e));
+    window.dispatchEvent(new CustomEvent('budgets-updated'));
+    return { created, updated, skipped };
+  }
+
+  static importSalesBatch(
+    newSales: Sale[],
+    action: 'SKIP' | 'UPDATE' = 'SKIP'
+  ): { created: number; updated: number; skipped: number } {
+    const existing = this.getSales();
+    const receivables = this.getReceivables();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedList = [...existing];
+
+    for (const s of newSales) {
+      const idx = updatedList.findIndex(
+        (item) => item.id === s.id || (item.saleNumber && s.saleNumber && item.saleNumber.toLowerCase() === s.saleNumber.toLowerCase())
+      );
+
+      if (idx >= 0) {
+        if (action === 'UPDATE') {
+          updatedList[idx] = {
+            ...updatedList[idx],
+            ...s,
+            id: updatedList[idx].id,
+          };
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else {
+        updatedList.unshift(s);
+        created++;
+      }
+
+      // Sincroniza Contas a Receber caso haja saldo aberto ou status pendente
+      const finalSale = idx >= 0 && action === 'UPDATE' ? updatedList[idx] : s;
+      if (
+        finalSale.remainingAmount > 0 ||
+        finalSale.paymentStatus === 'PENDENTE' ||
+        finalSale.paymentStatus === 'PARCIALMENTE_PAGO' ||
+        finalSale.paymentStatus === 'A_PRAZO'
+      ) {
+        const recIndex = receivables.findIndex(
+          (r) => r.saleId === finalSale.id || (r.saleNumber && finalSale.saleNumber && r.saleNumber === finalSale.saleNumber)
+        );
+        const recStatus: ReceivableStatus =
+          finalSale.remainingAmount <= 0
+            ? 'PAGO'
+            : finalSale.paymentStatus === 'A_PRAZO'
+            ? 'A_PRAZO'
+            : finalSale.paidAmount > 0
+            ? 'PARCIALMENTE_PAGO'
+            : 'PENDENTE';
+
+        if (recIndex >= 0) {
+          receivables[recIndex] = {
+            ...receivables[recIndex],
+            customerName: finalSale.customerName,
+            customerPhone: finalSale.customerPhone,
+            totalAmount: finalSale.total,
+            paidAmount: finalSale.paidAmount,
+            remainingAmount: finalSale.remainingAmount,
+            status: recStatus,
+            dueDate: finalSale.dueDate || receivables[recIndex].dueDate,
+          };
+        } else {
+          receivables.unshift({
+            id: `rec-imp-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            saleId: finalSale.id,
+            saleNumber: finalSale.saleNumber,
+            customerId: finalSale.customerId,
+            customerName: finalSale.customerName,
+            customerPhone: finalSale.customerPhone,
+            totalAmount: finalSale.total,
+            paidAmount: finalSale.paidAmount,
+            remainingAmount: finalSale.remainingAmount,
+            dueDate: finalSale.dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+            status: recStatus,
+            payments: [...(finalSale.payments || [])],
+            createdAt: finalSale.createdAt,
+          });
+        }
+      }
+    }
+
+    setItemToStorage(STORAGE_KEYS.SALES, updatedList);
+    setItemToStorage(STORAGE_KEYS.RECEIVABLES, receivables);
+    api.saveSalesBatch(updatedList).catch((e) => console.debug('Background batch sales sync notice:', e));
+    window.dispatchEvent(new CustomEvent('sales-updated'));
+    window.dispatchEvent(new CustomEvent('receivables-updated'));
+    return { created, updated, skipped };
   }
 
   // --- ONLINE EXTERNAL SERVICES ("Serviços Online") ---
@@ -4880,7 +5596,23 @@ export class StorageService {
           'tmpl-requerimento-administrativo',
           'tmpl-carta-demissao',
         ]);
-        const cleaned = parsed.filter((t) => !FICTIONAL_TEMPLATE_IDS.has(t.id));
+        const cleaned = parsed
+          .filter((t) => !FICTIONAL_TEMPLATE_IDS.has(t.id))
+          .map((t) => {
+            const rawPrice = (t as any).defaultPrice !== undefined ? (t as any).defaultPrice : (t as any).default_price;
+            let numPrice = 0;
+            if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+              numPrice = rawPrice;
+            } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+              const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+              numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+            }
+            return {
+              ...t,
+              defaultPrice: numPrice,
+            };
+          });
+
         if (cleaned.length !== parsed.length) {
           this.saveDocumentTemplates(cleaned);
         }
@@ -4893,14 +5625,38 @@ export class StorageService {
   }
 
   static saveDocumentTemplates(templates: DocumentTemplate[]): void {
-    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(templates));
+    const normalized = (templates || []).map((t) => {
+      const rawPrice = (t as any).defaultPrice !== undefined ? (t as any).defaultPrice : (t as any).default_price;
+      let numPrice = 0;
+      if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+        numPrice = rawPrice;
+      } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+        numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+      }
+      return {
+        ...t,
+        defaultPrice: numPrice,
+      };
+    });
+    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(normalized));
   }
 
   static addDocumentTemplate(template: Omit<DocumentTemplate, 'id' | 'createdAt' | 'updatedAt'>): DocumentTemplate {
     const templates = this.getDocumentTemplates();
     const now = new Date().toISOString();
+    const rawPrice = (template as any).defaultPrice !== undefined ? (template as any).defaultPrice : (template as any).default_price;
+    let numPrice = 0;
+    if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+      numPrice = rawPrice;
+    } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+      const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+      numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+    }
+
     const newTemplate: DocumentTemplate = {
       ...template,
+      defaultPrice: numPrice,
       id: `tmpl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       createdAt: now,
       updatedAt: now,
@@ -4926,9 +5682,21 @@ export class StorageService {
     const index = templates.findIndex((t) => t.id === id);
     if (index === -1) return undefined;
 
+    let numPrice = templates[index].defaultPrice;
+    if (updates.defaultPrice !== undefined || (updates as any).default_price !== undefined) {
+      const rawPrice = updates.defaultPrice !== undefined ? updates.defaultPrice : (updates as any).default_price;
+      if (typeof rawPrice === 'number' && !isNaN(rawPrice)) {
+        numPrice = rawPrice;
+      } else if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const strVal = String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.');
+        numPrice = isNaN(parseFloat(strVal)) ? 0 : parseFloat(strVal);
+      }
+    }
+
     const updated: DocumentTemplate = {
       ...templates[index],
       ...updates,
+      defaultPrice: numPrice,
       updatedAt: new Date().toISOString(),
     };
     templates[index] = updated;
@@ -5656,23 +6424,13 @@ export class StorageService {
     companyName?: string,
     suggestedPackageName?: string
   ): string {
-    const seller = sellerName || this.getCurrentUser().name || 'Equipe Comercial';
-    const company = companyName || this.getCompanySettings().name || 'Nossa Gráfica';
-    const oppName = opportunity.contactName || opportunity.name || 'Amigo(a)';
-    const bizName = opportunity.name || 'seu negócio';
-    const need = opportunity.needs && opportunity.needs.length > 0 ? opportunity.needs[0] : 'divulgação e impressos';
-    const pkg = suggestedPackageName || 'Kit Promocional de Divulgação';
-
-    let text = templateText;
-    text = text.replace(/\[NOME\]/g, oppName);
-    text = text.replace(/\[VENDEDOR\]/g, seller);
-    text = text.replace(/\[EMPRESA\]/g, company);
-    text = text.replace(/\[NOME_DO_NEGOCIO\]/g, bizName);
-    text = text.replace(/\[NECESSIDADE\]/g, need);
-    text = text.replace(/\[PACOTE_SUGERIDO\]/g, pkg);
-    text = text.replace(/\[PRODUTO_SUGERIDO\]/g, pkg);
-
-    return text;
+    return buildApproachWhatsAppMessage(
+      templateText,
+      opportunity,
+      sellerName || this.getCurrentUser().name,
+      companyName || this.getCompanySettings().name,
+      suggestedPackageName
+    );
   }
 
   // --- REGRAS DE SUGESTÃO POR SEGMENTO ---
@@ -6049,7 +6807,16 @@ export class StorageService {
     if (!niches || !Array.isArray(niches) || niches.length === 0) {
       return INITIAL_CATALOG_NICHES;
     }
-    return [...niches].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+    // Garante que nichos oficiais (como 'p' - Personalizados e Presentes) não se percam caso o storage contenha cache legado
+    const existingIds = new Set(niches.map((n) => n.id));
+    const merged = [...niches];
+    for (const init of INITIAL_CATALOG_NICHES) {
+      if (!existingIds.has(init.id)) {
+        merged.push(init);
+        existingIds.add(init.id);
+      }
+    }
+    return merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
   }
 
   static getCatalogNicheById(id: string): ProductNicheCard | undefined {

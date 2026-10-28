@@ -15,6 +15,11 @@ import { CompanySettings, Item, ItemPackage, ItemPriceRule, VitrineCartItem } fr
 import { calculateAreaPricing, getTechnicalMinArea } from '../../utils/areaPricing';
 import { formatCurrency } from '../../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../../utils/productUtils';
+import {
+  buildCatalogItemInterestMessage,
+  buildCatalogItemQuoteMessage,
+  openWhatsApp,
+} from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { ProductImage } from '../common/ProductImage';
@@ -40,19 +45,19 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   const [quantity, setQuantity] = useState<number>(() => {
     if (isGraphicOrPersonalized && item.pricingModel === 'POR_UNIDADE') {
-      return item.priceRules?.[0]?.minQuantity || 100;
+      return (item.priceRules && Array.isArray(item.priceRules) ? item.priceRules[0]?.minQuantity : 1) || 1;
     }
     return 1;
   });
 
   const [selectedVariantId, setSelectedVariantId] = useState<string>(
-    item.variants?.[0]?.id || ''
+    (Array.isArray(item.variants) && item.variants[0]?.id) || ''
   );
 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    item.options?.forEach((opt) => {
-      if (opt.values.length > 0) {
+    (item.options ?? []).forEach((opt) => {
+      if (opt && Array.isArray(opt.values) && opt.values.length > 0) {
         initial[opt.name] = opt.values[0].label;
       }
     });
@@ -88,15 +93,15 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   // Package
   const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    item.packages?.[0]?.id || ''
+    (Array.isArray(item.packages) && item.packages[0]?.id) || ''
   );
 
   const selectedVariant = useMemo(() => {
-    return item.variants?.find((v) => v.id === selectedVariantId);
+    return Array.isArray(item.variants) ? item.variants.find((v) => v.id === selectedVariantId) : undefined;
   }, [item.variants, selectedVariantId]);
 
   const selectedPackage = useMemo(() => {
-    return item.packages?.find((p) => p.id === selectedPackageId);
+    return Array.isArray(item.packages) ? item.packages.find((p) => p.id === selectedPackageId) : undefined;
   }, [item.packages, selectedPackageId]);
 
   // Live Price Calculation for Customer
@@ -170,8 +175,8 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
       } else {
         // POR_UNIDADE
         let applicableTier: ItemPriceRule | undefined;
-        if (item.priceRules && item.priceRules.length > 0) {
-          const sortedRules = [...item.priceRules].sort((a, b) => b.minQuantity - a.minQuantity);
+        if (Array.isArray(item.priceRules) && item.priceRules.length > 0) {
+          const sortedRules = [...(item.priceRules ?? [])].sort((a, b) => b.minQuantity - a.minQuantity);
           applicableTier = sortedRules.find((r) => quantity >= r.minQuantity);
           if (!applicableTier) {
             applicableTier = sortedRules[sortedRules.length - 1];
@@ -214,8 +219,8 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
 
   const handleDirectInterestWhatsApp = () => {
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    const text = encodeURIComponent(`Olá! Tenho interesse no produto ${item.name}.`);
-    window.open(`https://wa.me/55${cleanPhone}?text=${text}`, '_blank');
+    const message = buildCatalogItemInterestMessage(item.name);
+    openWhatsApp(cleanPhone, message);
   };
 
   const handleWhatsAppQuote = () => {
@@ -228,28 +233,26 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
     }
 
     const cleanPhone = companySettings.phone.replace(/\D/g, '');
-    let details = `Olá! Tenho interesse no produto *${item.name}* (SKU: ${item.sku}).\n\n`;
-    details += `*Especificações Solicitadas:*\n`;
+    const details = buildCatalogItemQuoteMessage({
+      itemName: item.name,
+      sku: item.sku,
+      isGraphicOrPersonalized,
+      pricingModel: item.pricingModel,
+      width,
+      height,
+      widthUnit,
+      heightUnit,
+      widthInMeters,
+      heightInMeters,
+      areaM2,
+      selectedPackage,
+      selectedOptions,
+      selectedVariant,
+      quantity,
+      totalPrice,
+    });
 
-    if (isGraphicOrPersonalized) {
-      if (item.pricingModel === 'POR_M2') {
-        details += `📐 Medidas: ${width}${widthUnit} x ${height}${heightUnit} (${widthInMeters}m x ${heightInMeters}m = ${areaM2}m²)\n`;
-      } else if (item.pricingModel === 'POR_PACOTE' && selectedPackage) {
-        details += `📦 Pacote: ${selectedPackage.name} (${selectedPackage.quantity} un)\n`;
-      }
-      if (Object.keys(selectedOptions).length > 0) {
-        details += `✨ Acabamentos: ${Object.entries(selectedOptions)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ')}\n`;
-      }
-    } else if (!isGraphicOrPersonalized && selectedVariant) {
-      details += `🎨 Variante: ${selectedVariant.name}\n`;
-    }
-
-    details += `🔢 Quantidade: ${quantity}\n`;
-    details += `💰 Valor Estimado: ${formatCurrency(totalPrice)}\n\nPodem me orientar sobre o envio da arte e prazo de entrega?`;
-
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(details)}`, '_blank');
+    openWhatsApp(cleanPhone, details);
   };
 
   const handleAddToCart = () => {
@@ -477,13 +480,13 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 2. PACKAGES */}
-        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && item.packages && (
+        {isGraphicOrPersonalized && item.pricingModel === 'POR_PACOTE' && Array.isArray(item.packages) && item.packages.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione o Pacote de Quantidade:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {item.packages.map((pkg) => {
+              {(item.packages ?? []).map((pkg) => {
                 const isSelected = pkg.id === selectedPackageId;
                 return (
                   <div
@@ -508,13 +511,13 @@ export const CatalogItemModal: React.FC<CatalogItemModalProps> = ({
         )}
 
         {/* 3. PHYSICAL VARIANTS */}
-        {!isGraphicOrPersonalized && item.variants && item.variants.length > 0 && (
+        {!isGraphicOrPersonalized && Array.isArray(item.variants) && item.variants.length > 0 && (
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               Selecione a Opção / Modelo:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {item.variants.map((v) => {
+              {(item.variants ?? []).map((v) => {
                 const isSelected = v.id === selectedVariantId;
                 return (
                   <div

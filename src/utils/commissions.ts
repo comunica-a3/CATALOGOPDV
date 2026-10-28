@@ -315,12 +315,18 @@ export function aggregateCommissionsBySeller(
 
   // Agrega as vendas
   activeSales.forEach((sale) => {
-    const sId = sale.sellerId || 'sem-vendedor';
+    let matchedUser = users.find((u) => u.id === sale.sellerId);
+    if (!matchedUser && sale.sellerName) {
+      const sName = sale.sellerName.trim().toLowerCase();
+      matchedUser = users.find((u) => u.name.trim().toLowerCase() === sName);
+    }
+
+    const sId = matchedUser?.id || sale.sellerId || 'sem-vendedor';
     let current = sellerMap.get(sId);
     if (!current) {
       current = {
         sellerId: sId,
-        sellerName: sale.sellerName || 'Vendedor Não Identificado',
+        sellerName: matchedUser?.name || sale.sellerName || 'Vendedor Não Identificado',
         salesCount: 0,
         totalSold: 0,
         companyShare: 0,

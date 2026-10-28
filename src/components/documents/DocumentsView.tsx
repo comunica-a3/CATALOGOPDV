@@ -43,10 +43,12 @@ import {
   compileDocumentTemplate,
   downloadDocumentFile,
   formatDocumentToHtml,
+  normalizeTemplateFieldInstances,
 } from '../../utils/documentGenerator';
 import { downloadCustomDocumentPDF } from '../../utils/pdfReceipt';
 import { downloadDocumentAsPDF } from '../../utils/pdfDocumentExporter';
 import { downloadDocumentAsDocx } from '../../utils/docxExporter';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Modal } from '../common/Modal';
 import { DocumentTemplateModal } from './DocumentTemplateModal';
 import { DocumentVisualEditor } from './DocumentVisualEditor';
@@ -103,28 +105,67 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
 
+  // In-UI Confirmation Dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Reload helpers
   const reloadTemplates = async () => {
+    let list: DocumentTemplate[] = [];
     try {
       const remote = await api.getDocumentTemplates();
       if (Array.isArray(remote) && remote.length > 0) {
         StorageService.saveDocumentTemplates(remote);
         setTemplates(remote);
-        return;
+        list = remote;
       }
     } catch {}
-    setTemplates(StorageService.getDocumentTemplates());
+    if (list.length === 0) {
+      list = StorageService.getDocumentTemplates();
+      setTemplates(list);
+    }
+
+    // Keep selectedTemplate in sync if it was updated
+    setSelectedTemplate((current) => {
+      if (!current) return null;
+      const updated = list.find((t) => t.id === current.id);
+      if (!updated) return current;
+      const normalized = normalizeTemplateFieldInstances(updated.templateBody, updated.fields);
+      const rawPrice = (updated as any).defaultPrice !== undefined ? (updated as any).defaultPrice : (updated as any).default_price;
+      const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+      return {
+        ...updated,
+        defaultPrice: numPrice,
+        templateBody: normalized.templateBody,
+        fields: normalized.fields,
+      };
+    });
   };
 
   useEffect(() => {
     reloadTemplates();
 
     const handleTemplatesUpdated = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setTemplates(e.detail);
-      } else {
-        setTemplates(StorageService.getDocumentTemplates());
-      }
+      const updatedTemplates = e?.detail && Array.isArray(e.detail) ? e.detail : StorageService.getDocumentTemplates();
+      setTemplates(updatedTemplates);
+      setSelectedTemplate((current) => {
+        if (!current) return null;
+        const matching = updatedTemplates.find((t: DocumentTemplate) => t.id === current.id);
+        if (!matching) return current;
+        const normalized = normalizeTemplateFieldInstances(matching.templateBody, matching.fields);
+        const rawPrice = (matching as any).defaultPrice !== undefined ? (matching as any).defaultPrice : (matching as any).default_price;
+        const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+        return {
+          ...matching,
+          defaultPrice: numPrice,
+          templateBody: normalized.templateBody,
+          fields: normalized.fields,
+        };
+      });
     };
 
     window.addEventListener('document-templates-updated', handleTemplatesUpdated);
@@ -155,7 +196,17 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   // Select Template Handler
   const handleSelectTemplate = (tmpl: DocumentTemplate) => {
-    setSelectedTemplate(tmpl);
+    const normalized = normalizeTemplateFieldInstances(tmpl.templateBody, tmpl.fields);
+    const rawPrice = (tmpl as any).defaultPrice !== undefined ? (tmpl as any).defaultPrice : (tmpl as any).default_price;
+    const numPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) ? rawPrice : (parseFloat(String(rawPrice || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+
+    const effectiveTemplate: DocumentTemplate = {
+      ...tmpl,
+      defaultPrice: numPrice,
+      templateBody: normalized.templateBody,
+      fields: normalized.fields,
+    };
+    setSelectedTemplate(effectiveTemplate);
     setIsGenerated(false);
     setIsEditingContent(false);
     setSavedSuccessMsg('');
@@ -163,7 +214,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
     // Initial form state with default values or customer values
     const initialValues: Record<string, string> = {};
-    tmpl.fields.forEach((f) => {
+    effectiveTemplate.fields.forEach((f) => {
       if (selectedCustomer && f.customerFieldMapping) {
         if (f.customerFieldMapping === 'name') initialValues[f.id] = selectedCustomer.name || '';
         if (f.customerFieldMapping === 'document') initialValues[f.id] = selectedCustomer.document || '';
@@ -260,6 +311,10 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleSaveToHistory = () => {
     if (!selectedTemplate || !generatedContent) return;
 
+    const templatePrice = typeof selectedTemplate.defaultPrice === 'number' && !isNaN(selectedTemplate.defaultPrice)
+      ? selectedTemplate.defaultPrice
+      : 0;
+
     const newDoc = StorageService.addGeneratedDocument({
       templateId: selectedTemplate.id,
       templateTitle: selectedTemplate.title,
@@ -272,7 +327,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       customerPhone: selectedCustomer?.phone || formData['contato_telefone'],
       sellerId: currentUser.id,
       sellerName: currentUser.name,
-      priceCharged: selectedTemplate.defaultPrice,
+      priceCharged: templatePrice,
     });
 
     reloadGeneratedDocs();
@@ -283,10 +338,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleAddToCart = () => {
     if (!selectedTemplate || !onAddToCart) return;
 
+    const templatePrice = typeof selectedTemplate.defaultPrice === 'number' && !isNaN(selectedTemplate.defaultPrice)
+      ? selectedTemplate.defaultPrice
+      : 0;
+
     onAddToCart({
       id: selectedTemplate.id,
       name: `Doc: ${selectedTemplate.title}`,
-      price: selectedTemplate.defaultPrice || 30.0,
+      price: templatePrice,
       category: selectedTemplate.category,
       documentContent: generatedContent,
     });
@@ -528,11 +587,15 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                         </p>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-xs text-slate-500 block">Preço Sugerido</span>
-                        <strong className="text-sm font-bold text-emerald-700">
-                          R$ {selectedTemplate.defaultPrice.toFixed(2).replace('.', ',')}
-                        </strong>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <label className="text-[11px] font-medium text-slate-500 block">Preço de Serviço</label>
+                          <div className="inline-flex items-center mt-0.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <span className="text-xs font-bold">
+                              R$ {(selectedTemplate.defaultPrice || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -553,7 +616,18 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                     {/* Dynamic Fields Form */}
                     <form onSubmit={handleGenerate} className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {selectedTemplate.fields.map((field) => {
+                        {selectedTemplate.fields.map((field, idx) => {
+                          const sameLabelCount = selectedTemplate.fields.filter(
+                            (f) => f.label.toLowerCase() === field.label.toLowerCase()
+                          ).length;
+                          let instanceLabel = field.label;
+                          if (sameLabelCount > 1) {
+                            const occIndex = selectedTemplate.fields
+                              .slice(0, idx + 1)
+                              .filter((f) => f.label.toLowerCase() === field.label.toLowerCase()).length;
+                            instanceLabel = `${field.label} (${occIndex}ª ocorrência)`;
+                          }
+
                           const isFullWidth =
                             field.type === 'textarea' ||
                             field.id.includes('endereco') ||
@@ -566,7 +640,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                               className={isFullWidth ? 'sm:col-span-2 space-y-1' : 'space-y-1'}
                             >
                               <label className="block text-xs font-semibold text-slate-700">
-                                {field.label} {field.required && <span className="text-red-500">*</span>}
+                                {instanceLabel} {field.required && <span className="text-red-500">*</span>}
                               </label>
 
                               {field.type === 'textarea' ? (
@@ -669,7 +743,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                   <div>
                     <h3 className="font-bold text-sm text-slate-900">{documentTitle}</h3>
                     <span className="text-[11px] text-slate-500">
-                      {selectedTemplate?.title} • Taxa: R$ {selectedTemplate?.defaultPrice.toFixed(2).replace('.', ',')}
+                      {selectedTemplate?.title} • Taxa: R$ {(selectedTemplate?.defaultPrice || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 </div>
@@ -730,7 +804,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       ) : (
                         <>
                           <ShoppingCart className="w-3.5 h-3.5" />
-                          <span>Adicionar ao PDV (R$ {selectedTemplate?.defaultPrice.toFixed(2).replace('.', ',')})</span>
+                          <span>Adicionar ao PDV (R$ {(selectedTemplate?.defaultPrice || 0).toFixed(2).replace('.', ',')})</span>
                         </>
                       )}
                     </button>
@@ -863,10 +937,16 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`Excluir o documento "${doc.title}" do histórico?`)) {
-                              StorageService.deleteGeneratedDocument(doc.id);
-                              reloadGeneratedDocs();
-                            }
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: 'Excluir do Histórico',
+                              message: `Tem certeza que deseja excluir o documento "${doc.title}" do histórico? Esta ação não pode ser desfeita.`,
+                              onConfirm: () => {
+                                StorageService.deleteGeneratedDocument(doc.id);
+                                reloadGeneratedDocs();
+                                setConfirmDialog(null);
+                              },
+                            });
                           }}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                           title="Excluir"
@@ -1020,9 +1100,14 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const dup = StorageService.duplicateDocumentTemplate(tmpl.id);
                           if (dup) {
+                            try {
+                              await api.saveDocumentTemplate(dup);
+                            } catch (e) {
+                              console.error('Erro ao salvar cópia no servidor:', e);
+                            }
                             reloadTemplates();
                             setSavedSuccessMsg(`Modelo "${tmpl.title}" duplicado com sucesso!`);
                             setTimeout(() => setSavedSuccessMsg(''), 3000);
@@ -1049,10 +1134,21 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`Excluir permanentemente o modelo "${tmpl.title}"?`)) {
-                            StorageService.deleteDocumentTemplate(tmpl.id);
-                            reloadTemplates();
-                          }
+                          setConfirmDialog({
+                            isOpen: true,
+                            title: 'Excluir Modelo de Documento',
+                            message: `Deseja realmente excluir permanentemente o modelo "${tmpl.title}"? Esta ação removerá o modelo do catálogo.`,
+                            onConfirm: async () => {
+                              StorageService.deleteDocumentTemplate(tmpl.id);
+                              try {
+                                await api.deleteDocumentTemplate(tmpl.id);
+                              } catch (e) {
+                                console.error('Erro ao excluir modelo no servidor:', e);
+                              }
+                              reloadTemplates();
+                              setConfirmDialog(null);
+                            },
+                          });
                         }}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                         title="Excluir Modelo"
@@ -1143,6 +1239,20 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           onClose={() => setIsTemplateModalOpen(false)}
           template={editingTemplate}
           onSave={reloadTemplates}
+        />
+      )}
+
+      {/* Confirmation Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText="Confirmar Exclusão"
+          cancelText="Cancelar"
+          type="danger"
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
         />
       )}
     </div>

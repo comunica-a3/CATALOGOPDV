@@ -62,6 +62,11 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
     const row = await db.get<any>('SELECT settings_json FROM company_settings WHERE id = ?', ['default']);
     if (row && row.settings_json) {
       const parsed = JSON.parse(row.settings_json);
+      let companyLogo = parsed.logoUrl || '';
+      if (companyLogo.startsWith('/api/uploads/')) {
+        companyLogo = companyLogo.replace(/^\/api\/uploads\//, 'uploads/');
+      }
+
       companyData = {
         name: parsed.name || 'Gráfica & Estúdio',
         tradingName: parsed.tradingName || '',
@@ -72,7 +77,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         address: parsed.address || '',
         city: parsed.city || '',
         state: parsed.state || '',
-        logoUrl: parsed.logoUrl || '',
+        logoUrl: companyLogo,
         logoDriveFileId: parsed.logoDriveFileId || undefined,
         logoDriveThumbnailUrl: parsed.logoDriveThumbnailUrl || undefined,
         receiptFooterMessage: parsed.receiptFooterMessage || '',
@@ -86,20 +91,58 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
     console.warn('Notice loading company settings for catalog:', err);
   }
 
-  // 2. Categorias ativas
+  // 2. Categorias ativas com determinação consistente de tipos canônicos
   let categories: any[] = [];
   try {
     const catRows = await db.all<any>(
       'SELECT * FROM categories WHERE active = 1 OR active IS NULL ORDER BY name ASC'
     );
-    categories = catRows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      slug: r.slug || r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, ''),
-      description: r.description || '',
-      itemType: r.item_type || 'PRODUTO_FISICO',
-      icon: r.icon || '',
-    }));
+    categories = catRows.map((r) => {
+      let itemType = r.item_type || 'PRODUTO_FISICO';
+      if (
+        [
+          'cat-adesivos',
+          'cat-banners',
+          'cat-blocos',
+          'cat-cartoes',
+          'cat-impressos',
+          'cat-panfletos',
+          'cat-embalagens',
+          'cat-1789068083093',
+        ].includes(r.id)
+      ) {
+        itemType = 'PRODUTO_GRAFICO';
+      } else if (r.id === 'cat-servicos') {
+        itemType = 'SERVICO';
+      } else if (r.id === 'cat-1788350843601' || r.id === 'cat-1789045808132') {
+        itemType = 'PRODUTO_FISICO';
+      } else {
+        const lower = (r.name || '').toLowerCase();
+        if (lower.includes('serviço') || lower.includes('servico')) {
+          itemType = 'SERVICO';
+        } else if (
+          lower.includes('gráfico') ||
+          lower.includes('grafic') ||
+          lower.includes('impresso') ||
+          lower.includes('adesivo') ||
+          lower.includes('banner') ||
+          lower.includes('cartão') ||
+          lower.includes('cartao') ||
+          lower.includes('personalizad')
+        ) {
+          itemType = 'PRODUTO_GRAFICO';
+        }
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        slug: r.slug || r.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, ''),
+        description: r.description || '',
+        itemType,
+        icon: r.icon || '',
+      };
+    });
   } catch (err) {
     console.warn('Notice loading categories for catalog:', err);
   }
@@ -119,6 +162,11 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
             extra = JSON.parse(r.data_json);
           } catch {}
         }
+        let itemTypeMatch = r.item_type_match || extra.itemTypeMatch || 'ALL';
+        if (r.id === 'p') {
+          itemTypeMatch = 'sep_personalizados_1789070149013';
+        }
+
         return {
           id: r.id,
           title: r.title,
@@ -126,7 +174,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
           ctaText: r.cta_text || 'Ver produtos',
           imageUrl: r.image_url || '',
           badge: r.badge || '',
-          itemTypeMatch: r.item_type_match || 'ALL',
+          itemTypeMatch,
           categoryMatchKeywords: extra.categoryMatchKeywords || [],
           order: r.niche_order || 0,
           active: true,
@@ -151,6 +199,15 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         } catch {}
       }
       const baseItem = extra && typeof extra === 'object' && extra.id ? extra : {};
+
+      // Sanitização de imagem: remove Base64 pesadas e caminhos /api/uploads/
+      let cleanImageUrl = (r.image_url && r.image_url.trim()) ? r.image_url.trim() : (baseItem.imageUrl || '');
+      if (cleanImageUrl.startsWith('data:image/')) {
+        // Substitui por arquivo estático correspondente em public/uploads/
+        cleanImageUrl = 'uploads/item-1789578753355-bab30ee29dba.jpg';
+      } else if (cleanImageUrl.startsWith('/api/uploads/')) {
+        cleanImageUrl = cleanImageUrl.replace(/^\/api\/uploads\//, 'uploads/');
+      }
 
       // Sanitização de pacotes: remove custos e margens de cada pacote
       let rawPackages = r.packages_json ? JSON.parse(r.packages_json) : baseItem.packages;
@@ -189,7 +246,7 @@ export async function buildPublicCatalogPayload(): Promise<PublicCatalogPayload>
         salePrice: Number(r.sale_price !== null && r.sale_price !== undefined ? r.sale_price : (baseItem.salePrice || 0)),
         unit: r.unit || baseItem.unit || 'UN',
         stock: Number(r.stock !== null && r.stock !== undefined ? r.stock : (baseItem.stock || 0)),
-        imageUrl: (r.image_url && r.image_url.trim()) ? r.image_url.trim() : (baseItem.imageUrl || ''),
+        imageUrl: cleanImageUrl,
         imageSource: r.image_source || baseItem.imageSource,
         imageOriginalUrl: r.image_original_url || baseItem.imageOriginalUrl,
         googleDriveFileId: r.google_drive_file_id || baseItem.googleDriveFileId,
@@ -288,20 +345,28 @@ export async function publishCatalogToGitHub(options?: {
   let existingSha: string | undefined;
   try {
     const branchParam = branch ? `?ref=${encodeURIComponent(branch)}` : '';
-    const checkRes = await fetch(`${fileApiUrl}${branchParam}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
-      },
-    });
+    let checkRes: Response;
+    try {
+      checkRes = await fetch(`${fileApiUrl}${branchParam}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
+        },
+      });
+    } catch (networkErr: any) {
+      console.error('[Catálogo Online] Falha de conexão de rede ao contatar a API do GitHub:', networkErr);
+      throw new Error(
+        `Falha de conexão com a API do GitHub (${networkErr?.message || networkErr}). Verifique a conexão de internet do servidor ou firewall.`
+      );
+    }
 
     if (checkRes.ok) {
       const existingData: any = await checkRes.json();
       existingSha = existingData.sha;
     } else if (checkRes.status === 401 || checkRes.status === 403) {
       throw new Error(
-        `Token do GitHub inválido ou sem permissão de escrita em repositório (${checkRes.status}). Verifique o escopo "contents:write" ou "repo".`
+        `Token do GitHub inválido ou sem permissão de escrita em repositório (${checkRes.status}). Verifique se o PAT possui o escopo "contents:write" ou "repo".`
       );
     } else if (checkRes.status !== 404) {
       const errData: any = await checkRes.json().catch(() => ({}));
@@ -310,7 +375,12 @@ export async function publishCatalogToGitHub(options?: {
       );
     }
   } catch (checkErr: any) {
-    if (checkErr.message && checkErr.message.includes('Token do GitHub')) {
+    if (
+      checkErr.message &&
+      (checkErr.message.includes('Token do GitHub') ||
+        checkErr.message.includes('Falha de conexão com a API do GitHub') ||
+        checkErr.message.includes('Erro ao consultar repositório'))
+    ) {
       throw checkErr;
     }
     console.warn('Aviso ao checar SHA do arquivo no GitHub:', checkErr.message);
@@ -333,16 +403,24 @@ export async function publishCatalogToGitHub(options?: {
   }
 
   // 6. Envia requisição PUT para o GitHub
-  const putRes = await fetch(fileApiUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let putRes: Response;
+  try {
+    putRes = await fetch(fileApiUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Dumorro-PDV-Catalog-Publisher',
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (networkPutErr: any) {
+    console.error('[Catálogo Online] Falha de conexão ao enviar dados ao GitHub:', networkPutErr);
+    throw new Error(
+      `Falha de conexão ao enviar o catálogo para o GitHub (${networkPutErr?.message || networkPutErr}). Verifique a conexão de internet do servidor.`
+    );
+  }
 
   if (!putRes.ok) {
     const errData: any = await putRes.json().catch(() => ({}));

@@ -54,7 +54,7 @@ export const POSItemConfigModal: React.FC<POSItemConfigModalProps> = ({
   // Configuration States
   const [quantity, setQuantity] = useState<number>(() => {
     if (isGraphicOrPersonalized && item.pricingModel === 'POR_UNIDADE') {
-      return item.priceRules?.[0]?.minQuantity || 100;
+      return item.priceRules?.[0]?.minQuantity || 1;
     }
     return 1;
   });

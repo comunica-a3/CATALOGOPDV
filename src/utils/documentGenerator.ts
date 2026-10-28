@@ -27,9 +27,24 @@ export function compileDocumentTemplate(
   });
 
   // Process variable substitutions: {{key}}
+  const tagOccurrences: Record<string, number> = {};
   const varRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
   result = result.replace(varRegex, (match, key) => {
-    const val = formData[key];
+    tagOccurrences[key] = (tagOccurrences[key] || 0) + 1;
+    const occ = tagOccurrences[key];
+
+    // 1. Direct match: formData[key] (e.g. 'funcao_2' or 'funcao')
+    let val: string | undefined = formData[key];
+
+    // 2. If tag appears multiple times (e.g. {{funcao}} repeated) but formData has indexed keys:
+    if (val === undefined || val === null || val === '') {
+      if (occ > 1 && formData[`${key}_${occ}`] !== undefined) {
+        val = formData[`${key}_${occ}`];
+      }
+    } else if (occ > 1 && formData[`${key}_${occ}`] !== undefined) {
+      val = formData[`${key}_${occ}`];
+    }
+
     if (val !== undefined && val !== null && val.trim() !== '') {
       const trimmed = val.trim();
       if (isHtml && trimmed.includes('\n')) {
@@ -47,6 +62,92 @@ export function compileDocumentTemplate(
   }
 
   return result.trim();
+}
+
+/**
+ * Ensures each occurrence of a tag in a template body has its own independent
+ * field definition in the template fields list and a unique placeholder identity.
+ * 
+ * Example: If {{funcao}} is added 3 times:
+ * First occurrence: {{funcao}} with field id: 'funcao'
+ * Second occurrence: {{funcao_2}} with field id: 'funcao_2'
+ * Third occurrence: {{funcao_3}} with field id: 'funcao_3'
+ */
+export function normalizeTemplateFieldInstances(
+  templateBody: string,
+  fields: DocumentField[]
+): { templateBody: string; fields: DocumentField[] } {
+  if (!templateBody) {
+    return { templateBody: '', fields: [...(fields || [])] };
+  }
+
+  const currentFields: DocumentField[] = [...(fields || [])];
+
+  let updatedBody = templateBody;
+  const replacedCount: Record<string, number> = {};
+
+  // If any tag appears multiple times in templateBody (e.g. {{funcao}} repeated 3 times)
+  // and does NOT already have distinct tags (e.g. {{funcao_2}}), assign unique instance IDs
+  updatedBody = updatedBody.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (fullMatch, tag) => {
+    if (tag.startsWith('#') || tag.startsWith('/')) return fullMatch;
+    replacedCount[tag] = (replacedCount[tag] || 0) + 1;
+    const count = replacedCount[tag];
+
+    // If tag is already an indexed instance (e.g. 'funcao_2'), keep it
+    if (/_\d+$/.test(tag)) {
+      if (!currentFields.some((f) => f.id === tag)) {
+        const base = tag.replace(/_\d+$/, '');
+        const templateProto = currentFields.find((f) => f.id === base) || currentFields[0];
+        currentFields.push({
+          id: tag,
+          label: templateProto ? templateProto.label : tag.replace(/_/g, ' '),
+          type: templateProto ? templateProto.type : 'text',
+          required: templateProto ? templateProto.required : false,
+          placeholder: templateProto ? templateProto.placeholder : undefined,
+          defaultValue: templateProto ? templateProto.defaultValue : undefined,
+          options: templateProto ? templateProto.options : undefined,
+          helpText: templateProto ? templateProto.helpText : undefined,
+        });
+      }
+      return fullMatch;
+    }
+
+    // If this is occurrence > 1 of a non-indexed tag, convert to tag_N
+    if (count > 1) {
+      const instanceId = `${tag}_${count}`;
+      if (!currentFields.some((f) => f.id === instanceId)) {
+        const baseField = currentFields.find((f) => f.id === tag);
+        currentFields.push({
+          id: instanceId,
+          label: baseField ? baseField.label : tag.replace(/_/g, ' '),
+          type: baseField ? baseField.type : 'text',
+          required: baseField ? baseField.required : false,
+          placeholder: baseField ? baseField.placeholder : undefined,
+          defaultValue: baseField ? baseField.defaultValue : undefined,
+          options: baseField ? baseField.options : undefined,
+          helpText: baseField ? baseField.helpText : undefined,
+        });
+      }
+      return `{{${instanceId}}}`;
+    }
+
+    // Occurrence 1: ensure base field exists
+    if (!currentFields.some((f) => f.id === tag)) {
+      currentFields.push({
+        id: tag,
+        label: tag.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        type: 'text',
+        required: false,
+      });
+    }
+
+    return fullMatch;
+  });
+
+  return {
+    templateBody: updatedBody,
+    fields: currentFields,
+  };
 }
 
 /**

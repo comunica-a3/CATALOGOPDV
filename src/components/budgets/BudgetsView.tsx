@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   User,
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
@@ -19,10 +20,12 @@ import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Budget, CompanySettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { buildBudgetWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
 import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSBudgetModal } from '../pos/POSBudgetModal';
 import { BudgetDetailModal } from './BudgetDetailModal';
+import { CsvImportModal } from '../common/CsvImportModal';
 
 interface BudgetsViewProps {
   companySettings: CompanySettings;
@@ -44,6 +47,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [isNewBudgetModalOpen, setIsNewBudgetModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<Budget | null>(null);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -108,23 +112,16 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   };
 
   const handleSendWhatsApp = (b: Budget) => {
-    let phone = b.customerPhone || '';
-    if (!phone) {
-      phone = prompt('Informe o número de WhatsApp do cliente (com DDD):', '') || '';
-    }
+    const phone = b.customerPhone || '';
     const cleanPhone = phone.replace(/\D/g, '');
-    if (!cleanPhone) return;
+    if (!cleanPhone) {
+      setToastMessage('Este orçamento não possui telefone de cliente cadastrado para envio.');
+      setTimeout(() => setToastMessage(''), 3500);
+      return;
+    }
 
-    let msg = `Olá *${b.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${b.budgetNumber}* da *${companySettings.name || 'Nossa Empresa'}*:\n`;
-    msg += `📅 *Emitido:* ${new Date(b.createdAt).toLocaleDateString('pt-BR')}\n`;
-    msg += `⏳ *Validade:* ${new Date(b.validUntil).toLocaleDateString('pt-BR')}\n\n`;
-    (b.items || []).forEach((item, index) => {
-      const itemName = (item as any)?.itemName || item.item?.name || 'Item';
-      msg += `${index + 1}. ${itemName} (Qtd: ${item.quantity}) - ${formatCurrency(item.totalPrice)}\n`;
-    });
-    msg += `\n💰 *VALOR TOTAL: ${formatCurrency(b.total)}*\n\nPodemos confirmar o seu pedido?`;
-
-    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    const msg = buildBudgetWhatsAppMessage(b, companySettings.name || 'Nossa Empresa');
+    openWhatsApp(cleanPhone, msg);
   };
 
   const getStatusBadge = (status: Budget['status']) => {
@@ -176,6 +173,17 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="btn-import-budgets-csv"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+            title="Importar orçamentos a partir de arquivo CSV"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-500" />
+            <span>Importar CSV</span>
+          </button>
+
           <button
             type="button"
             id="btn-export-budgets-csv"
@@ -425,6 +433,18 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           companySettings={companySettings}
         />
       )}
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        entityType="BUDGETS"
+        onSuccess={() => {
+          handleRefresh();
+          setToastMessage('Importação de orçamentos processada com sucesso!');
+          setTimeout(() => setToastMessage(''), 4000);
+        }}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog
