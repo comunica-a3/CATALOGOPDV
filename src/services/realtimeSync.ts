@@ -131,16 +131,22 @@ class RealtimeSyncManager {
     this.isConnecting = false;
   }
 
+  private lastTriggerTime: number = 0;
+
   private handleSyncTrigger(event: string, data: any, fromNetwork: boolean) {
-    // Debounce triggers within 120ms
+    // Debounce triggers within 400ms and enforce a 800ms cooldown to prevent event storms
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
+
+    const now = Date.now();
+    const waitTime = Math.max(400, 800 - (now - this.lastTriggerTime));
 
     this.debounceTimer = setTimeout(async () => {
       this.debounceTimer = null;
       if (this.isSyncing) return;
       this.isSyncing = true;
+      this.lastTriggerTime = Date.now();
 
       try {
         await StorageService.syncWithServer();
@@ -188,7 +194,7 @@ class RealtimeSyncManager {
           console.error('Error in sync subscriber:', e);
         }
       }
-    }, 120);
+    }, waitTime);
 
     // Forward to other local tabs if received from network
     if (fromNetwork && this.broadcastChannel) {

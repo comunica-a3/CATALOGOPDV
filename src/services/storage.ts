@@ -356,7 +356,20 @@ export class StorageService {
     } catch {}
   }
 
+  private static isSyncingWithServer = false;
+  private static lastSyncTimestamp = 0;
+
   static async syncWithServer(): Promise<void> {
+    const nowTime = Date.now();
+    if (this.isSyncingWithServer) {
+      return;
+    }
+    if (nowTime - this.lastSyncTimestamp < 1500) {
+      return;
+    }
+    this.isSyncingWithServer = true;
+    this.lastSyncTimestamp = nowTime;
+
     try {
       const [
         settingsRes,
@@ -485,22 +498,6 @@ export class StorageService {
             window.dispatchEvent(new CustomEvent('catalog-updated'));
           }
         }
-
-        // Push pending local updates to server and store server-assigned URLs
-        if (itemsToPushToRemote.length > 0) {
-          api.saveItemsBatch(itemsToPushToRemote)
-            .then((res: any) => {
-              if (res && res.items && Array.isArray(res.items)) {
-                const currentItems = this.getItems();
-                const itemMap = new Map(currentItems.map((i) => [i.id, i]));
-                for (const updated of res.items) {
-                  itemMap.set(updated.id, updated);
-                }
-                setItemToStorage(STORAGE_KEYS.ITEMS, Array.from(itemMap.values()));
-              }
-            })
-            .catch((e) => console.debug('Sync push items batch notice:', e));
-        }
       }
 
       // Robust Categories Sync (Server Authority)
@@ -508,15 +505,6 @@ export class StorageService {
         const remoteCategories = categoriesRes.value;
         if (remoteCategories.length > 0) {
           setItemToStorage(STORAGE_KEYS.CATEGORIES, remoteCategories);
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('categories-updated'));
-            window.dispatchEvent(new CustomEvent('catalog-updated'));
-          }
-        } else {
-          const localCategories = this.getCategories();
-          if (localCategories.length > 0) {
-            api.saveCategoriesBatch(localCategories).catch(() => {});
-          }
         }
       }
 
@@ -613,19 +601,12 @@ export class StorageService {
           const localPaymentsCount = Array.isArray(localMatch.payments) ? localMatch.payments.length : 0;
           const remotePaymentsCount = Array.isArray(remoteSale.payments) ? remoteSale.payments.length : 0;
 
-          // Local has authoritative payment if:
-          // 1. Local is marked PAGO with 0 remaining, OR
-          // 2. Local has higher paidAmount or more payment records, OR
-          // 3. Local updatedAt is newer than remote
+          // Local has newer payment only if local actually has higher paid amount or more payments with newer timestamp
           const localHasNewerPayment =
-            (localMatch.paymentStatus === 'PAGO' && localMatch.remainingAmount <= 0) ||
-            localPaid > remotePaid ||
-            localPaymentsCount > remotePaymentsCount ||
-            localTime > remoteTime;
+            (localPaid > remotePaid && localTime > remoteTime) ||
+            (localPaymentsCount > remotePaymentsCount && localTime > remoteTime);
 
           if (localHasNewerPayment) {
-            // Local state has the latest payment/update. Proactively sync it to backend.
-            api.saveSale(localMatch).catch(() => {});
             return {
               ...remoteSale,
               ...localMatch,
@@ -674,15 +655,12 @@ export class StorageService {
           };
         });
 
-        // Preserve and sync any local sales not yet returned by the server
+        // Preserve and merge any local sales not yet returned by the server without re-posting
         const remoteIds = new Set(salesRes.value.map((rs: any) => rs.id));
         const remoteNumbers = new Set(salesRes.value.map((rs: any) => rs.saleNumber).filter(Boolean));
         const unsyncedLocal = localSales.filter(
           (ls) => !remoteIds.has(ls.id) && (!ls.saleNumber || !remoteNumbers.has(ls.saleNumber))
         );
-        for (const unsynced of unsyncedLocal) {
-          api.saveSale(unsynced).catch(() => {});
-        }
 
         const finalSales = [...mergedSales, ...unsyncedLocal];
         setItemToStorage(STORAGE_KEYS.SALES, finalSales);
@@ -696,9 +674,6 @@ export class StorageService {
         const localOpps = this.getOpportunities().filter((o) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'));
         const remoteIds = new Set(cleanRemote.map((o: any) => o.id));
         const unsyncedLocal = localOpps.filter((lo) => !remoteIds.has(lo.id));
-        for (const unsynced of unsyncedLocal) {
-          api.saveOpportunity(unsynced).catch(() => {});
-        }
         const finalOpps = [...cleanRemote, ...unsyncedLocal];
         setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, finalOpps);
       }
@@ -713,15 +688,8 @@ export class StorageService {
         if (remoteTemplates.length > 0) {
           const remoteIds = new Set(remoteTemplates.map((t: any) => t.id));
           const missingOnServer = localTemplates.filter((t) => !remoteIds.has(t.id));
-          for (const tpl of missingOnServer) {
-            api.saveApproachTemplate(tpl).catch(() => {});
-          }
           const merged = [...remoteTemplates, ...missingOnServer];
           setItemToStorage(STORAGE_KEYS.APPROACH_TEMPLATES, merged);
-        } else if (localTemplates.length > 0) {
-          for (const tpl of localTemplates) {
-            api.saveApproachTemplate(tpl).catch(() => {});
-          }
         }
       }
 
@@ -739,17 +707,11 @@ export class StorageService {
         if (cleanRemote.length > 0) {
           const remoteIds = new Set(cleanRemote.map((a: any) => a.id));
           const missingOnServer = cleanLocal.filter((a) => !remoteIds.has(a.id));
-          for (const act of missingOnServer) {
-            api.saveOpportunityActivity(act).catch(() => {});
-          }
           const merged = [...cleanRemote, ...missingOnServer].sort(
             (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
           );
           setItemToStorage(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, merged);
         } else if (cleanLocal.length > 0) {
-          for (const act of cleanLocal) {
-            api.saveOpportunityActivity(act).catch(() => {});
-          }
           setItemToStorage(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, cleanLocal);
         }
       }
@@ -759,22 +721,12 @@ export class StorageService {
         const remoteAccounts = accountsRes.value;
         const localAccounts = this.getReceivingAccounts();
         if (remoteAccounts.length > 0) {
-          // Servidor possui contas: é a fonte da verdade
-          // Se existirem contas criadas localmente que ainda não foram enviadas, enviamos ao servidor
           const remoteIds = new Set(remoteAccounts.map((a: any) => a.id));
           const missingOnServer = localAccounts.filter((a) => !remoteIds.has(a.id));
-          for (const acc of missingOnServer) {
-            api.saveReceivingAccount(acc).catch(() => {});
-          }
           setItemToStorage(STORAGE_KEYS.RECEIVING_ACCOUNTS, [...remoteAccounts, ...missingOnServer]);
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
             window.dispatchEvent(new CustomEvent('finance-updated'));
-          }
-        } else if (localAccounts.length > 0) {
-          // Se o servidor estiver vazio (primeira migração), envia as contas existentes ao servidor
-          for (const acc of localAccounts) {
-            api.saveReceivingAccount(acc).catch(() => {});
           }
         }
       }
@@ -786,9 +738,6 @@ export class StorageService {
         if (remoteExpenses.length > 0) {
           const remoteIds = new Set(remoteExpenses.map((e: any) => e.id));
           const missingOnServer = localExpenses.filter((e) => !remoteIds.has(e.id));
-          for (const exp of missingOnServer) {
-            api.saveExpense(exp).catch(() => {});
-          }
           const merged = [...remoteExpenses, ...missingOnServer].sort(
             (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
           );
@@ -797,8 +746,6 @@ export class StorageService {
             window.dispatchEvent(new CustomEvent('expenses-updated'));
             window.dispatchEvent(new CustomEvent('finance-updated'));
           }
-        } else if (localExpenses.length > 0) {
-          api.saveExpensesBatch(localExpenses).catch(() => {});
         }
       }
 
@@ -809,9 +756,6 @@ export class StorageService {
         if (remoteTransfers.length > 0) {
           const remoteIds = new Set(remoteTransfers.map((t: any) => t.id));
           const missingOnServer = localTransfers.filter((t) => !remoteIds.has(t.id));
-          for (const trf of missingOnServer) {
-            api.saveFinancialTransfer(trf).catch(() => {});
-          }
           const merged = [...remoteTransfers, ...missingOnServer].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
@@ -819,10 +763,6 @@ export class StorageService {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('finance-updated'));
             window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
-          }
-        } else if (localTransfers.length > 0) {
-          for (const trf of localTransfers) {
-            api.saveFinancialTransfer(trf).catch(() => {});
           }
         }
       }
@@ -834,9 +774,6 @@ export class StorageService {
         if (remoteSessions.length > 0) {
           const remoteIds = new Set(remoteSessions.map((s: any) => s.id));
           const missingOnServer = localSessions.filter((s) => !remoteIds.has(s.id));
-          for (const sess of missingOnServer) {
-            api.saveCashRegisterSession(sess).catch(() => {});
-          }
           const merged = [...remoteSessions, ...missingOnServer].sort(
             (a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
           );
@@ -844,10 +781,6 @@ export class StorageService {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('cash-sessions-updated'));
             window.dispatchEvent(new CustomEvent('finance-updated'));
-          }
-        } else if (localSessions.length > 0) {
-          for (const sess of localSessions) {
-            api.saveCashRegisterSession(sess).catch(() => {});
           }
         }
       }
@@ -859,9 +792,6 @@ export class StorageService {
         if (remoteAdjs.length > 0) {
           const remoteIds = new Set(remoteAdjs.map((a: any) => a.id));
           const missingOnServer = localAdjs.filter((a) => !remoteIds.has(a.id));
-          for (const adj of missingOnServer) {
-            api.saveAccountAdjustment(adj).catch(() => {});
-          }
           const merged = [...remoteAdjs, ...missingOnServer].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
@@ -869,10 +799,6 @@ export class StorageService {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('finance-updated'));
             window.dispatchEvent(new CustomEvent('receiving-accounts-updated'));
-          }
-        } else if (localAdjs.length > 0) {
-          for (const adj of localAdjs) {
-            api.saveAccountAdjustment(adj).catch(() => {});
           }
         }
       }
@@ -892,12 +818,6 @@ export class StorageService {
             window.dispatchEvent(new CustomEvent('catalog-niches-updated'));
             window.dispatchEvent(new CustomEvent('catalog-updated'));
           }
-        } else {
-          // If server database is completely empty, populate it with local niches
-          const localNiches = this.getCatalogNiches();
-          if (localNiches.length > 0) {
-            api.saveCatalogNichesBatch(localNiches).catch((e) => console.debug('Sync push niches batch notice:', e));
-          }
         }
       }
 
@@ -906,7 +826,6 @@ export class StorageService {
         const localOrders = this.getProductionOrders();
         const remoteOrders = productionRes.value as ProductionOrder[];
         const orderMap = new Map<string, ProductionOrder>();
-        const ordersToPush: ProductionOrder[] = [];
 
         // Inserir ordens locais no mapa
         for (const lo of localOrders) {
@@ -915,27 +834,7 @@ export class StorageService {
 
         // Mesclar ordens remotas do servidor
         for (const ro of remoteOrders) {
-          const lo = orderMap.get(ro.id);
-          if (lo) {
-            const lTime = new Date(lo.updatedAt || lo.createdAt || 0).getTime();
-            const rTime = new Date(ro.updatedAt || ro.createdAt || 0).getTime();
-            if (lTime > rTime) {
-              orderMap.set(lo.id, lo);
-              ordersToPush.push(lo);
-            } else {
-              orderMap.set(ro.id, ro);
-            }
-          } else {
-            orderMap.set(ro.id, ro);
-          }
-        }
-
-        // Identificar ordens criadas localmente offline que o servidor ainda não tem
-        for (const lo of localOrders) {
-          if (!remoteOrders.some((ro) => ro.id === lo.id)) {
-            ordersToPush.push(lo);
-            orderMap.set(lo.id, lo);
-          }
+          orderMap.set(ro.id, ro);
         }
 
         const finalOrders = Array.from(orderMap.values()).sort(
@@ -946,13 +845,11 @@ export class StorageService {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('production-updated'));
         }
-
-        if (ordersToPush.length > 0) {
-          api.saveProductionOrdersBatch(ordersToPush).catch((e) => console.debug('Sync push production orders notice:', e));
-        }
       }
     } catch (err) {
       console.warn('StorageService syncWithServer notice:', err);
+    } finally {
+      this.isSyncingWithServer = false;
     }
   }
 

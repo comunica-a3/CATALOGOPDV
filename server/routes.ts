@@ -116,24 +116,51 @@ function getLocalNetworkIps(): string[] {
 // -----------------------------------------------------------------------------
 
 const sseClients = new Set<Response>();
+const MAX_SSE_CLIENTS = 40;
 
 export function broadcastSync(event: string, data?: any) {
+  if (sseClients.size === 0) return;
+
   const payload = JSON.stringify({
     event,
     data: data || {},
     timestamp: new Date().toISOString(),
   });
   const message = `event: ${event}\ndata: ${payload}\n\n`;
+
   for (const client of Array.from(sseClients)) {
+    // 1. Remove destroyed or ended sockets
+    if (client.destroyed || client.writableEnded || (client as any).finished) {
+      sseClients.delete(client);
+      continue;
+    }
+
+    // 2. Backpressure guard: if socket buffer has queued > 256KB, terminate connection to prevent heap ballooning
+    if ((client as any).writableLength && (client as any).writableLength > 256 * 1024) {
+      try { client.end(); } catch {}
+      sseClients.delete(client);
+      continue;
+    }
+
     try {
       client.write(message);
     } catch {
+      try { client.end(); } catch {}
       sseClients.delete(client);
     }
   }
 }
 
 router.get('/sync/events', (req, res) => {
+  // Cap max active SSE connections to prevent zombie socket leaks
+  if (sseClients.size >= MAX_SSE_CLIENTS) {
+    const oldest = sseClients.values().next().value;
+    if (oldest) {
+      try { oldest.end(); } catch {}
+      sseClients.delete(oldest);
+    }
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -146,6 +173,11 @@ router.get('/sync/events', (req, res) => {
   sseClients.add(res);
 
   const heartbeat = setInterval(() => {
+    if (res.destroyed || res.writableEnded || (res as any).finished) {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+      return;
+    }
     try {
       res.write(': ping\n\n');
     } catch {
@@ -154,10 +186,15 @@ router.get('/sync/events', (req, res) => {
     }
   }, 15000);
 
-  req.on('close', () => {
+  const cleanup = () => {
     clearInterval(heartbeat);
     sseClients.delete(res);
-  });
+  };
+
+  req.on('close', cleanup);
+  req.on('error', cleanup);
+  res.on('finish', cleanup);
+  res.on('error', cleanup);
 });
 
 router.post('/sync/notify', (req, res) => {
