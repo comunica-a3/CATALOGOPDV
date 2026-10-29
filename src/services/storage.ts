@@ -2587,6 +2587,8 @@ export class StorageService {
       remainingAmount,
       dueDate,
       status: 'CONCLUIDA',
+      inventoryDeducted: true,
+      inventoryReverted: false,
       notes,
       createdAt: now,
       updatedAt: now,
@@ -2723,8 +2725,8 @@ export class StorageService {
       throw new Error('Esta venda já foi cancelada anteriormente.');
     }
 
-    // 1. Revert inventory
-    if (Array.isArray(sale.items)) {
+    // 1. Revert inventory (guarded against duplicate reversal)
+    if (!sale.inventoryReverted && Array.isArray(sale.items)) {
       sale.items.forEach((si) => {
         const itemObj = (si as any).item;
         if (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO') {
@@ -2737,6 +2739,7 @@ export class StorageService {
           });
         }
       });
+      sale.inventoryReverted = true;
     }
 
     // 2. Cancel associated production orders
@@ -2810,8 +2813,8 @@ export class StorageService {
     const userName = currentUser?.name || 'Administrador';
     const reason = params.reason.trim();
 
-    // 1. Reverter estoque dos produtos físicos com motivo auditável
-    if (Array.isArray(sale.items)) {
+    // 1. Reverter estoque dos produtos físicos com motivo auditável (garantido contra duplicidade)
+    if (!sale.inventoryReverted && Array.isArray(sale.items)) {
       sale.items.forEach((si) => {
         const itemObj = (si as any).item;
         if (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO') {
@@ -2825,6 +2828,7 @@ export class StorageService {
           });
         }
       });
+      sale.inventoryReverted = true;
     }
 
     // 2. Cancelar ordens de produção associadas
@@ -3288,7 +3292,14 @@ export class StorageService {
       });
     }
 
-    this.saveItem(item);
+    const localItems = this.getItems();
+    const localIdx = localItems.findIndex((i) => i.id === item.id);
+    if (localIdx >= 0) {
+      localItems[localIdx] = item;
+    } else {
+      localItems.unshift(item);
+    }
+    setItemToStorage(STORAGE_KEYS.ITEMS, localItems);
     setItemToStorage(STORAGE_KEYS.INVENTORY_MOVEMENTS, movements);
   }
 
@@ -3356,7 +3367,14 @@ export class StorageService {
       });
     }
 
-    this.saveItem(item);
+    const localItems = this.getItems();
+    const localIdx = localItems.findIndex((i) => i.id === item.id);
+    if (localIdx >= 0) {
+      localItems[localIdx] = item;
+    } else {
+      localItems.unshift(item);
+    }
+    setItemToStorage(STORAGE_KEYS.ITEMS, localItems);
     setItemToStorage(STORAGE_KEYS.INVENTORY_MOVEMENTS, movements);
   }
 

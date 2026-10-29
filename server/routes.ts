@@ -28,6 +28,7 @@ import {
 } from './backup';
 import { generateAIContent } from './ai';
 import { buildPublicCatalogPayload, publishCatalogToGitHub, saveCatalogLocally } from './catalogPublisher';
+import { deductStockForSale, restoreStockForSale } from './inventory';
 
 const router = express.Router();
 
@@ -1895,6 +1896,8 @@ router.get('/sales', async (req, res) => {
       commissionRate: r.commission_rate !== null && r.commission_rate !== undefined ? Number(r.commission_rate) : undefined,
       commissionAmount: r.commission_amount !== null && r.commission_amount !== undefined ? Number(r.commission_amount) : undefined,
       companyAmount: r.company_amount !== null && r.company_amount !== undefined ? Number(r.company_amount) : undefined,
+      inventoryDeducted: Number(r.inventory_deducted) === 1,
+      inventoryReverted: Number(r.inventory_reverted) === 1,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -1957,6 +1960,10 @@ router.post('/sales', async (req: AuthRequest, res) => {
     const isDeletedNum = s.isDeleted || s.status === 'EXCLUIDA' ? 1 : 0;
     const saleStatus = s.status || (isDeletedNum === 1 ? 'EXCLUIDA' : 'CONCLUIDA');
 
+    const existingSaleRec = await db.get<any>('SELECT inventory_deducted, inventory_reverted FROM sales WHERE id = ?', [id]);
+    const invDeductedVal = existingSaleRec?.inventory_deducted !== undefined ? Number(existingSaleRec.inventory_deducted) : 0;
+    const invRevertedVal = existingSaleRec?.inventory_reverted !== undefined ? Number(existingSaleRec.inventory_reverted) : 0;
+
     await db.run(
       `INSERT OR REPLACE INTO sales (
         id, sale_number, sale_code, customer_id, customer_name, customer_phone, customer_email,
@@ -1964,8 +1971,9 @@ router.post('/sales', async (req: AuthRequest, res) => {
         remaining_amount, status, is_deleted, deleted_at, deleted_by, deleted_by_name, deletion_reason, edit_history_json,
         payment_status, payment_method, payments_json, items_json,
         notes, invoice_status, created_at, updated_at,
-        promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount,
+        inventory_deducted, inventory_reverted
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         saleNumberNumeric,
@@ -2005,6 +2013,8 @@ router.post('/sales', async (req: AuthRequest, res) => {
         s.commissionRate !== undefined ? Number(s.commissionRate) : null,
         s.commissionAmount !== undefined ? Number(s.commissionAmount) : null,
         s.companyAmount !== undefined ? Number(s.companyAmount) : null,
+        invDeductedVal,
+        invRevertedVal,
       ]
     );
 
@@ -2050,6 +2060,27 @@ router.post('/sales', async (req: AuthRequest, res) => {
         WHERE sale_id = ?`,
         [total, paymentsJson, updatedAt, id]
       );
+    }
+
+    // Perform authoritative stock deduction for active physical items in sale
+    if (saleStatus !== 'CANCELADA' && saleStatus !== 'EXCLUIDA' && isDeletedNum === 0) {
+      try {
+        const invRes = await deductStockForSale(id, saleNumberStr, s.items || [], req.user);
+        if (invRes.success && invRes.deductedCount > 0) {
+          broadcastSync('items-updated', { reason: 'sale-stock-deducted', saleId: id });
+        }
+      } catch (invErr) {
+        console.error('Notice performing inventory deduction in POST /sales:', invErr);
+      }
+    } else if (invDeductedVal === 1 && invRevertedVal === 0) {
+      try {
+        const invRes = await restoreStockForSale(id, saleNumberStr, req.user, 'Venda registrada com status inativo');
+        if (invRes.success && invRes.restoredCount > 0) {
+          broadcastSync('items-updated', { reason: 'sale-stock-restored', saleId: id });
+        }
+      } catch (invErr) {
+        console.error('Notice performing inventory restoration in POST /sales:', invErr);
+      }
     }
 
     persistDatabase();
@@ -2246,6 +2277,17 @@ router.put('/sales/:id', async (req: AuthRequest, res) => {
       );
     }
 
+    if (body.status === 'CANCELADA' || body.status === 'EXCLUIDA' || body.isDeleted) {
+      try {
+        const invRes = await restoreStockForSale(targetId, existingSale?.sale_code || body.saleNumber || targetId, req.user, reason);
+        if (invRes.success && invRes.restoredCount > 0) {
+          broadcastSync('items-updated', { reason: 'sale-stock-restored', saleId: targetId });
+        }
+      } catch (e) {
+        console.error('Notice restoring inventory in PUT /sales:', e);
+      }
+    }
+
     persistDatabase();
 
     broadcastSync('sales-updated', { id: targetId, action: 'edit' });
@@ -2308,7 +2350,25 @@ router.post('/sales/:id/soft-delete', async (req: AuthRequest, res) => {
       [now, id]
     );
 
+    // Authoritative stock restoration
+    try {
+      const invRes = await restoreStockForSale(
+        id,
+        existingSale.sale_code || existingSale.sale_number || id,
+        req.user || { id: deleterId, name: deleterName },
+        deletionReason
+      );
+      if (invRes.success && invRes.restoredCount > 0) {
+        broadcastSync('items-updated', { reason: 'sale-stock-restored', saleId: id });
+      }
+    } catch (invErr) {
+      console.error('Notice performing inventory restoration in softDeleteSale:', invErr);
+    }
+
     persistDatabase();
+
+    broadcastSync('sales-updated', { id, action: 'delete' });
+    broadcastSync('finance-updated', { type: 'sale', id });
 
     await logAudit({
       userId: deleterId,
@@ -2387,6 +2447,10 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
       const isDeletedNum = s.isDeleted || s.status === 'EXCLUIDA' ? 1 : 0;
       const saleStatus = s.status || (isDeletedNum === 1 ? 'EXCLUIDA' : 'CONCLUIDA');
 
+      const existingSaleRec = await db.get<any>('SELECT inventory_deducted, inventory_reverted FROM sales WHERE id = ?', [id]);
+      const invDeductedVal = existingSaleRec?.inventory_deducted !== undefined ? Number(existingSaleRec.inventory_deducted) : 0;
+      const invRevertedVal = existingSaleRec?.inventory_reverted !== undefined ? Number(existingSaleRec.inventory_reverted) : 0;
+
       await db.run(
         `INSERT OR REPLACE INTO sales (
           id, sale_number, sale_code, customer_id, customer_name, customer_phone, customer_email,
@@ -2394,8 +2458,9 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
           remaining_amount, status, is_deleted, deleted_at, deleted_by, deleted_by_name, deletion_reason, edit_history_json,
           payment_status, payment_method, payments_json, items_json,
           notes, invoice_status, created_at, updated_at,
-          promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          promoter_id, promoter_name, promoter_commission_percent, promoter_commission_amount, seller_commission_amount, commission_rate, commission_amount, company_amount,
+          inventory_deducted, inventory_reverted
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           saleNumberNumeric,
@@ -2435,8 +2500,19 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
           s.commissionRate !== undefined ? Number(s.commissionRate) : null,
           s.commissionAmount !== undefined ? Number(s.commissionAmount) : null,
           s.companyAmount !== undefined ? Number(s.companyAmount) : null,
+          invDeductedVal,
+          invRevertedVal,
         ]
       );
+
+      // Deduct stock for new active physical sales
+      if (saleStatus !== 'CANCELADA' && saleStatus !== 'EXCLUIDA' && isDeletedNum === 0 && invDeductedVal === 0) {
+        try {
+          await deductStockForSale(id, saleNumberStr, s.items || [], req.user);
+        } catch (e) {
+          console.error('Notice deducting stock in batch:', e);
+        }
+      }
 
       // Sync receivables
       if (remainingAmount > 0 || paymentStatus === 'PENDENTE' || paymentStatus === 'PARCIALMENTE_PAGO' || paymentStatus === 'A_PRAZO') {
@@ -2487,6 +2563,7 @@ router.post('/sales/batch', async (req: AuthRequest, res) => {
     persistDatabase();
     broadcastSync('sales-updated', { count: savedCount });
     broadcastSync('finance-updated', { count: savedCount });
+    broadcastSync('items-updated', { reason: 'batch-sales' });
 
     res.json({ success: true, count: savedCount });
   } catch (err: any) {
@@ -2498,8 +2575,30 @@ router.post('/sales/:id/cancel', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const now = new Date().toISOString();
+    const existingSale = await db.get<any>('SELECT * FROM sales WHERE id = ?', [id]);
+    if (!existingSale) {
+      res.status(404).json({ error: 'Venda não encontrada.' });
+      return;
+    }
+
     await db.run("UPDATE sales SET status = 'CANCELADA', payment_status = 'CANCELADO', updated_at = ? WHERE id = ?", [now, id]);
     await db.run("UPDATE receivables SET status = 'CANCELADO', updated_at = ? WHERE id = ?", [now, id]);
+
+    // Authoritative stock restoration
+    try {
+      const invRes = await restoreStockForSale(
+        id,
+        existingSale.sale_code || existingSale.sale_number || id,
+        req.user,
+        'Cancelamento de venda'
+      );
+      if (invRes.success && invRes.restoredCount > 0) {
+        broadcastSync('items-updated', { reason: 'sale-stock-restored', saleId: id });
+      }
+    } catch (invErr) {
+      console.error('Notice performing inventory restoration in cancelSale:', invErr);
+    }
+
     persistDatabase();
 
     await logAudit({
@@ -2510,6 +2609,9 @@ router.post('/sales/:id/cancel', async (req: AuthRequest, res) => {
       entityId: id,
       ipAddress: req.ip,
     });
+
+    broadcastSync('sales-updated', { id, action: 'cancel' });
+    broadcastSync('finance-updated', { type: 'sale', id });
 
     res.json({ success: true });
   } catch (err: any) {

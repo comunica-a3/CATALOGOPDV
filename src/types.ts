@@ -509,6 +509,8 @@ export interface Sale {
   deletedByName?: string;
   deletionReason?: string;
   editHistory?: SaleEditHistoryEntry[];
+  inventoryDeducted?: boolean;
+  inventoryReverted?: boolean;
   notes?: string;
   annotations?: SaleAnnotation[];
   createdAt: string;

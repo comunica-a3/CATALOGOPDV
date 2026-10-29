@@ -1071,6 +1071,8 @@ export async function ensureAllTableColumns(): Promise<void> {
         { name: 'commission_rate', type: 'REAL' },
         { name: 'commission_amount', type: 'REAL' },
         { name: 'company_amount', type: 'REAL' },
+        { name: 'inventory_deducted', type: 'INTEGER DEFAULT 0' },
+        { name: 'inventory_reverted', type: 'INTEGER DEFAULT 0' },
       ],
     },
     {
@@ -1664,6 +1666,48 @@ export async function syncCatalogDataFromCatalogJson(): Promise<void> {
           cleanImg = cleanImg.replace(/^\/api\/uploads\//, 'uploads/');
         }
 
+        // Preserve real database values for existing items (stock, min_stock, prices, active status)
+        const existingItem = await db.get<any>(
+          'SELECT stock, min_stock, cost_price, supplier_cost, supplier_freight, sale_price, margin_reais, margin_percent, active, image_url, image_source FROM items WHERE id = ?',
+          [item.id]
+        );
+
+        const effectiveStock = existingItem && existingItem.stock !== null && existingItem.stock !== undefined
+          ? Number(existingItem.stock)
+          : Number(item.stock || 0);
+
+        const effectiveMinStock = existingItem && existingItem.min_stock !== null && existingItem.min_stock !== undefined
+          ? Number(existingItem.min_stock)
+          : Number(item.minStock || 0);
+
+        const effectiveCostPrice = existingItem && existingItem.cost_price !== null && existingItem.cost_price !== undefined
+          ? Number(existingItem.cost_price)
+          : Number(item.costPrice || 0);
+
+        const effectiveSupplierCost = existingItem && existingItem.supplier_cost !== null && existingItem.supplier_cost !== undefined
+          ? Number(existingItem.supplier_cost)
+          : Number(item.supplierCost || 0);
+
+        const effectiveSupplierFreight = existingItem && existingItem.supplier_freight !== null && existingItem.supplier_freight !== undefined
+          ? Number(existingItem.supplier_freight)
+          : Number(item.supplierFreight || 0);
+
+        const effectiveSalePrice = existingItem && existingItem.sale_price !== null && existingItem.sale_price !== undefined
+          ? Number(existingItem.sale_price)
+          : Number(item.salePrice || 0);
+
+        const effectiveMarginReais = existingItem && existingItem.margin_reais !== null && existingItem.margin_reais !== undefined
+          ? Number(existingItem.margin_reais)
+          : Number(item.marginReais || 0);
+
+        const effectiveMarginPercent = existingItem && existingItem.margin_percent !== null && existingItem.margin_percent !== undefined
+          ? Number(existingItem.margin_percent)
+          : Number(item.marginPercent || 0);
+
+        const effectiveActive = existingItem && existingItem.active !== null && existingItem.active !== undefined
+          ? Number(existingItem.active)
+          : (item.active !== false ? 1 : 0);
+
         await db.run(
           `INSERT OR REPLACE INTO items (
             id, name, sku, barcode, category_id, type, description, cost_price, supplier_cost, supplier_freight,
@@ -1679,14 +1723,14 @@ export async function syncCatalogDataFromCatalogJson(): Promise<void> {
             item.categoryId || '',
             item.type || 'PRODUTO_FISICO',
             item.description || '',
-            Number(item.costPrice || 0),
-            Number(item.supplierCost || 0),
-            Number(item.supplierFreight || 0),
-            Number(item.salePrice || 0),
-            Number(item.marginReais || 0),
-            Number(item.marginPercent || 0),
-            Number(item.stock || 0),
-            Number(item.minStock || 0),
+            effectiveCostPrice,
+            effectiveSupplierCost,
+            effectiveSupplierFreight,
+            effectiveSalePrice,
+            effectiveMarginReais,
+            effectiveMarginPercent,
+            effectiveStock,
+            effectiveMinStock,
             item.unit || 'UN',
             cleanImg,
             item.showInCatalog ? 1 : 0,
@@ -1705,7 +1749,7 @@ export async function syncCatalogDataFromCatalogJson(): Promise<void> {
             item.serviceFields ? JSON.stringify(item.serviceFields) : null,
             item.options ? JSON.stringify(item.options) : null,
             JSON.stringify(item),
-            item.active !== false ? 1 : 0,
+            effectiveActive,
             item.id,
             new Date().toISOString(),
             new Date().toISOString(),
