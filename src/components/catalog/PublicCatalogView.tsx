@@ -31,6 +31,7 @@ import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Category, CompanySettings, Item, ProductNicheCard, VitrineCartItem } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { isStaticCatalogOnlyHost } from '../../utils/env';
 import { getItemTypeLabel } from '../../utils/commissions';
 import {
   buildCatalogGeneralAttendanceMessage,
@@ -216,28 +217,35 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     StorageService.getCatalogNiches()
   );
 
+  // Adiciona estado indicando se o catalogo.json oficial publicado foi carregado com sucesso
+  const [hasLoadedStatic, setHasLoadedStatic] = useState(false);
+
   // Mantém os dados sincronizados quando as props da aplicação forem atualizadas
   useEffect(() => {
+    if (isStandalone && hasLoadedStatic) return;
     if (propItems && propItems.length > 0) {
       setLocalItems(propItems);
     }
-  }, [propItems]);
+  }, [propItems, isStandalone, hasLoadedStatic]);
 
   useEffect(() => {
+    if (isStandalone && hasLoadedStatic) return;
     if (propCategories && propCategories.length > 0) {
       setLocalCategories(propCategories);
     }
-  }, [propCategories]);
+  }, [propCategories, isStandalone, hasLoadedStatic]);
 
   useEffect(() => {
+    if (isStandalone && hasLoadedStatic) return;
     if (propCompanySettings?.name) {
       setLocalCompanySettings(propCompanySettings);
     }
-  }, [propCompanySettings]);
+  }, [propCompanySettings, isStandalone, hasLoadedStatic]);
 
   // Sincronização em tempo real quando o catálogo, itens, nichos ou configurações forem alterados no sistema
   useEffect(() => {
     const handleUpdate = () => {
+      if (isStandalone && hasLoadedStatic) return;
       if (!propItems || propItems.length === 0) {
         setLocalItems(StorageService.getItems());
       }
@@ -265,10 +273,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       window.removeEventListener('catalog-niches-updated', handleUpdate);
       window.removeEventListener('storage-sync-completed', handleUpdate);
     };
-  }, [propItems, propCategories, propCompanySettings]);
-
-  // Adiciona estado indicando se o catalogo.json oficial publicado foi carregado com sucesso
-  const [hasLoadedStatic, setHasLoadedStatic] = useState(false);
+  }, [propItems, propCategories, propCompanySettings, isStandalone, hasLoadedStatic]);
 
   // Suporte à visualização da vitrine (GitHub Pages, standalone ou sincronização pós-publicação):
   // Carrega o catalogo.json publicado com cache-busting (?v=timestamp) e no-cache
@@ -286,13 +291,28 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.items) && data.items.length > 0) {
-          setLocalItems(data.items);
+        if (data && typeof data === 'object') {
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            setLocalItems(data.items);
+          }
           if (data.categories && Array.isArray(data.categories)) {
             setLocalCategories(data.categories);
           }
           if (data.company && data.company.name) {
-            setLocalCompanySettings(data.company);
+            const normalizedCompany: CompanySettings = {
+              ...data.company,
+              catalogHeaderType:
+                data.company.catalogHeaderType ||
+                (data.company.logoUrl || data.company.logoDriveFileId || data.company.logoDataUrl
+                  ? 'LOGO'
+                  : 'NAME'),
+            };
+            setLocalCompanySettings(normalizedCompany);
+            if (isStandalone) {
+              try {
+                localStorage.setItem('pdv_company_settings', JSON.stringify(normalizedCompany));
+              } catch {}
+            }
           }
           if (data.niches && Array.isArray(data.niches)) {
             setNiches(data.niches);
@@ -303,7 +323,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
     } catch (err) {
       // Silencioso se não houver catalogo.json acessível
     }
-  }, []);
+  }, [isStandalone]);
 
   useEffect(() => {
     // Se for visualização standalone (visitante ou GitHub Pages) ou se não tiver itens locais, carrega o catalogo.json oficial
@@ -324,9 +344,11 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
   }, [loadStaticCatalog]);
 
   const companySettings: CompanySettings =
-    propCompanySettings?.name
+    isStandalone && hasLoadedStatic && localCompanySettings?.name
+      ? localCompanySettings
+      : propCompanySettings?.name
       ? propCompanySettings
-      : localCompanySettings.name
+      : localCompanySettings?.name
       ? localCompanySettings
       : {
           name: 'Gráfica & Estúdio',
@@ -758,20 +780,21 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
               type="button"
               onClick={handleGeneralWhatsApp}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+              title="Atendimento pelo WhatsApp"
             >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">WhatsApp</span>
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>WhatsApp</span>
             </button>
 
-            {onOpenManagement && (
+            {onOpenManagement && !isStaticCatalogOnlyHost() && (
               <button
                 type="button"
                 onClick={onOpenManagement}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
                 title="Acessar o painel administrativo restrito"
               >
-                <Lock className="w-3 h-3 text-amber-400" />
-                <span>Área Restrita</span>
+                <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="hidden sm:inline">Área Restrita</span>
               </button>
             )}
           </div>
@@ -783,11 +806,12 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({
         <div className="relative z-10 max-w-3xl w-full mx-auto space-y-4 flex flex-col items-center text-center">
 
           {companySettings?.catalogHeaderType === 'LOGO' ? (
-            companySettings?.logoUrl || companySettings?.logoDriveFileId ? (
+            companySettings?.logoUrl || companySettings?.logoDriveFileId || companySettings?.logoDataUrl ? (
               <div className="flex items-center justify-center py-2 w-full">
                 <BrandLogo
                   logoUrl={companySettings.logoUrl}
                   logoDriveFileId={companySettings.logoDriveFileId}
+                  logoDataUrl={companySettings.logoDataUrl}
                   alt={companySettings.name}
                   className="max-h-24 sm:max-h-32 w-auto max-w-[85%] object-contain drop-shadow-md mx-auto"
                   fallback={

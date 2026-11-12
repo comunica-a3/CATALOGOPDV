@@ -45,9 +45,9 @@ export const ApproachTemplateModal: React.FC<ApproachTemplateModalProps> = ({
       } else {
         setTitle('');
         setCategory('Primeiro Contato');
-        setTargetStage('A_CONTATAR');
+        setTargetStage('PARA_CONTATAR');
         setTemplateText(
-          'Olá, [NOME]! Tudo bem?\n\nMe chamo [VENDEDOR], da *[EMPRESA]*. Notei a presença do *[NOME_DO_NEGOCIO]* e gostaríamos de apresentar nossas condições especiais para [NECESSIDADE]...\n\nPodemos conversar?'
+          'Olá, tudo bem? Aqui é da Dumorro. Notei sua empresa aqui na região e gostaria de saber: posso te enviar o link do nosso catálogo rápido de materiais (banners, lonas, adesivos e placas) para você consultar quando precisar?'
         );
         setActive(true);
       }
@@ -142,10 +142,11 @@ export const ApproachTemplateModal: React.FC<ApproachTemplateModalProps> = ({
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
               <option value="ALL">Todas as Etapas</option>
-              <option value="A_CONTATAR">🟠 A Contatar</option>
-              <option value="CONTATADO">🟡 Contatado</option>
-              <option value="INTERESSADO">🔵 Interessado</option>
-              <option value="ORCAMENTO">🟣 Em Orçamento</option>
+              <option value="PARA_CONTATAR">🟠 Para Contatar</option>
+              <option value="CATALOGO_ENVIADO">🔵 Catálogo Enviado</option>
+              <option value="INTERESSADO_ORCAMENTO">🟣 Interessado / Em Orçamento</option>
+              <option value="FECHADO_SUCESSO">🟢 Bem Sucedido</option>
+              <option value="SEM_RETORNO_FECHADO">⚪ Sem Retorno / Recusado</option>
             </select>
           </div>
         </div>

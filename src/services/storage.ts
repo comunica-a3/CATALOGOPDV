@@ -12,10 +12,6 @@ import {
   INITIAL_USERS,
 } from '../data/initialData';
 import {
-  INITIAL_DOCUMENT_TEMPLATES,
-  INITIAL_ONLINE_SERVICES,
-} from '../data/initialServicesAndDocuments';
-import {
   INITIAL_APPROACH_TEMPLATES,
   INITIAL_CAPTURE_FORMS,
   INITIAL_COMPLEMENTARY_RULES,
@@ -25,10 +21,10 @@ import {
   INITIAL_SEGMENT_SUGGESTIONS,
 } from '../data/initialProspectingData';
 import { INITIAL_CATALOG_NICHES } from '../data/initialCatalogNiches';
+import { isStaticCatalogOnlyHost } from '../utils/env';
 import {
   AccountFinancialSummary,
   AccountType,
-  AdminAuthData,
   ApproachMessageTemplate,
   Budget,
   BudgetStatus,
@@ -48,13 +44,15 @@ import {
   Item,
   ItemType,
   MethodFinancialSummary,
-  OnlineService,
   Opportunity,
   OpportunityActivity,
   OpportunityActivityType,
   OpportunityNextAction,
   OpportunityOrigin,
   OpportunityStage,
+  normalizeOpportunityStage,
+  DEFAULT_PERMISSION_WHATSAPP_MESSAGE,
+  DEFAULT_CATALOG_WHATSAPP_MESSAGE,
   PaymentRecord,
   PaymentStatus,
   ProductPackage,
@@ -76,15 +74,9 @@ import {
   SaleStatus,
   SegmentSuggestionRule,
   User,
-  UserCredentials,
   UserRole,
 } from '../types';
 import { ExistingItemsAction, ValidatedImportItem } from '../utils/productImport';
-import {
-  generateSalt,
-  hashPassword,
-  verifyPassword,
-} from '../utils/security';
 import { api } from './api';
 import { formatPhone, normalizePhone } from '../utils/formatters';
 import { isGraphicOrPersonalizedItem } from '../utils/productUtils';
@@ -107,7 +99,6 @@ const STORAGE_KEYS = {
   ACCOUNT_BALANCE_ADJUSTMENTS: 'pdv_account_balance_adjustments',
   FINANCIAL_TRANSFERS: 'pdv_financial_transfers',
   CASH_REGISTER_SESSIONS: 'pdv_cash_register_sessions',
-  ONLINE_SERVICES: 'pdv_online_services',
   DOCUMENT_TEMPLATES: 'pdv_document_templates',
   GLOBAL_DOCUMENT_FIELDS: 'pdv_global_document_fields',
   GENERATED_DOCUMENTS: 'pdv_generated_documents',
@@ -120,9 +111,7 @@ const STORAGE_KEYS = {
   PUBLIC_SEGMENT_PAGES: 'pdv_public_segment_pages',
   CAPTURE_FORMS: 'pdv_capture_forms',
   CURRENT_USER_ID: 'pdv_current_user_id',
-  AUTH: 'pdv_admin_auth',
   SESSION: 'pdv_admin_session',
-  CREDENTIALS: 'pdv_user_credentials',
   EXPENSES: 'pdv_expenses',
   SALE_ANNOTATIONS: 'pdv_sale_annotations',
   DISMISSED_STOCK_WARNINGS: 'pdv_dismissed_stock_warnings',
@@ -358,8 +347,12 @@ export class StorageService {
 
   private static isSyncingWithServer = false;
   private static lastSyncTimestamp = 0;
+  private static lastSettingsSaveTimestamp = 0;
 
   static async syncWithServer(): Promise<void> {
+    if (isStaticCatalogOnlyHost() || !this.getSession().isAuthenticated) {
+      return;
+    }
     const nowTime = Date.now();
     if (this.isSyncingWithServer) {
       return;
@@ -415,7 +408,11 @@ export class StorageService {
         api.getExpenses(),
       ]);
 
-      if (settingsRes.status === 'fulfilled' && settingsRes.value) {
+      if (
+        settingsRes.status === 'fulfilled' &&
+        settingsRes.value &&
+        Date.now() - this.lastSettingsSaveTimestamp > 5000
+      ) {
         setItemToStorage(STORAGE_KEYS.SETTINGS, settingsRes.value);
       }
       if (usersRes.status === 'fulfilled' && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
@@ -666,16 +663,39 @@ export class StorageService {
         setItemToStorage(STORAGE_KEYS.SALES, finalSales);
       }
       if (budgetsRes.status === 'fulfilled' && Array.isArray(budgetsRes.value)) {
-        setItemToStorage(STORAGE_KEYS.BUDGETS, budgetsRes.value);
+        const localBudgets = getItemFromStorage<Budget[]>(STORAGE_KEYS.BUDGETS, []);
+        const { budgets: mergedBudgets, repaired } = this.normalizeAndRepairBudgets(
+          budgetsRes.value,
+          localBudgets
+        );
+        setItemToStorage(STORAGE_KEYS.BUDGETS, mergedBudgets);
+        if (repaired.length > 0) {
+          repaired.forEach((b) => {
+            api.saveBudget(b).catch((e) => console.debug('Background repair budget notice:', e));
+          });
+        }
       }
       if (oppsRes.status === 'fulfilled' && Array.isArray(oppsRes.value)) {
         const demoIds = ['opp-1', 'opp-2', 'opp-3', 'opp-4'];
-        const cleanRemote = oppsRes.value.filter((o: any) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'));
-        const localOpps = this.getOpportunities().filter((o) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'));
-        const remoteIds = new Set(cleanRemote.map((o: any) => o.id));
-        const unsyncedLocal = localOpps.filter((lo) => !remoteIds.has(lo.id));
-        const finalOpps = [...cleanRemote, ...unsyncedLocal];
-        setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, finalOpps);
+        const cleanRemote = oppsRes.value
+          .filter((o: any) => !demoIds.includes(o.id) && !o.id?.startsWith('opp-demo'))
+          .map((o: any) => {
+            const resolvedStage =
+              o.originDetails === 'FECHADO_SUCESSO' || o.stage === 'FECHADO_SUCESSO'
+                ? 'FECHADO_SUCESSO'
+                : normalizeOpportunityStage(o.stage);
+            return {
+              ...o,
+              stage: resolvedStage,
+              phone: o.phone || o.whatsapp || '',
+              whatsapp: o.whatsapp || o.phone || '',
+            };
+          });
+
+        setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, cleanRemote);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('opportunities-updated'));
+        }
       }
 
       // Sincronização e persistência de Modelos de Abordagem no Servidor (Compartilhado em rede)
@@ -854,10 +874,19 @@ export class StorageService {
   }
 
   static saveSettings(settings: CompanySettings): void {
+    this.lastSettingsSaveTimestamp = Date.now();
     setItemToStorage(STORAGE_KEYS.SETTINGS, settings);
-    notifyRealtime('catalog-updated', { type: 'settings' });
-    notifyRealtime('settings-updated', settings);
-    api.saveSettings(settings).catch((e) => console.debug('Background saveSettings sync notice:', e));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('settings-updated', { detail: settings }));
+      window.dispatchEvent(new CustomEvent('catalog-updated', { detail: { type: 'settings' } }));
+    }
+    api
+      .saveSettings(settings)
+      .then(() => {
+        notifyRealtime('settings-updated', settings);
+        notifyRealtime('catalog-updated', { type: 'settings' });
+      })
+      .catch((e) => console.debug('Background saveSettings sync notice:', e));
   }
 
   static saveCompanySettings(settings: CompanySettings): void {
@@ -931,169 +960,7 @@ export class StorageService {
     this.saveSettings(settings);
   }
 
-  // --- MULTI-USER AUTHENTICATION & SECURITY ---
-  static getAdminAuthData(): AdminAuthData {
-    const raw = localStorage.getItem(STORAGE_KEYS.AUTH);
-    if (!raw) {
-      const initialAuth: AdminAuthData = {
-        username: 'admin',
-        passwordHash: '',
-        salt: '',
-        isDefaultPassword: false,
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(initialAuth));
-      return initialAuth;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {
-        username: 'admin',
-        passwordHash: '',
-        salt: '',
-        isDefaultPassword: false,
-      };
-    }
-  }
-
-  static saveAdminAuthData(data: AdminAuthData): void {
-    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(data));
-  }
-
-  static getAllCredentials(): Record<string, UserCredentials> {
-    const raw = localStorage.getItem(STORAGE_KEYS.CREDENTIALS);
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-
-  static saveAllCredentials(creds: Record<string, UserCredentials>): void {
-    localStorage.setItem(STORAGE_KEYS.CREDENTIALS, JSON.stringify(creds));
-  }
-
-  static getUserCredentials(userId: string): UserCredentials | undefined {
-    const all = this.getAllCredentials();
-    return all[userId];
-  }
-
-  static async setUserPassword(userId: string, newPassword: string, isDefault = false): Promise<void> {
-    const trimmed = newPassword.trim();
-    if (trimmed.length < 4) {
-      throw new Error('A senha deve possuir no mínimo 4 caracteres.');
-    }
-
-    const users = this.getUsers();
-    const targetUser = users.find((u) => u.id === userId);
-    if (!targetUser) {
-      throw new Error('Usuário não encontrado.');
-    }
-
-    const salt = generateSalt(16);
-    const passwordHash = await hashPassword(trimmed, salt);
-
-    if (targetUser.role === 'ADMINISTRADOR') {
-      const authData = this.getAdminAuthData();
-      this.saveAdminAuthData({
-        ...authData,
-        passwordHash,
-        salt,
-        isDefaultPassword: isDefault,
-        updatedAt: new Date().toISOString(),
-      });
-    }
-
-    const all = this.getAllCredentials();
-    all[userId] = {
-      userId,
-      passwordHash,
-      salt,
-      isDefaultPassword: isDefault,
-      updatedAt: new Date().toISOString(),
-    };
-    this.saveAllCredentials(all);
-
-    // Also sync to backend API if available
-    try {
-      await api.changePassword({ newPassword: trimmed, targetUserId: userId });
-    } catch (e) {
-      console.warn('Backend password sync error (fallback active):', e);
-    }
-  }
-
-  static async validateUserPassword(
-    userId: string,
-    password: string
-  ): Promise<{ valid: boolean; mustChangePassword: boolean }> {
-    const trimmed = password.trim();
-    const users = this.getUsers();
-    const targetUser = users.find((u) => u.id === userId);
-
-    if (!targetUser) {
-      return { valid: false, mustChangePassword: false };
-    }
-
-    // Try backend API validation first for security and centralized authorization
-    try {
-      const response = await api.login({ userId: targetUser.id, password: trimmed });
-      if (response.success) {
-        return {
-          valid: true,
-          mustChangePassword: !!response.mustChangePassword,
-        };
-      }
-    } catch (apiErr: any) {
-      // If server unreachable or error, fallback to local hashed credentials
-      console.warn('Backend login fallback to local crypto:', apiErr?.message);
-    }
-
-    // Local crypto verification fallback
-    if (targetUser.role === 'ADMINISTRADOR') {
-      const authData = this.getAdminAuthData();
-      if (authData.passwordHash && authData.salt) {
-        const isCryptoValid = await verifyPassword(trimmed, authData.passwordHash, authData.salt);
-        return {
-          valid: isCryptoValid,
-          mustChangePassword: !!authData.isDefaultPassword,
-        };
-      }
-    }
-
-    const allCreds = this.getAllCredentials();
-    const cred = allCreds[userId];
-    if (cred && cred.passwordHash && cred.salt) {
-      const isCryptoValid = await verifyPassword(trimmed, cred.passwordHash, cred.salt);
-      return {
-        valid: isCryptoValid,
-        mustChangePassword: !!cred.isDefaultPassword,
-      };
-    }
-
-    return { valid: false, mustChangePassword: false };
-  }
-
-  static async validateAdminPassword(password: string): Promise<{ valid: boolean; mustChangePassword: boolean }> {
-    const admin = this.getAdmin();
-    return this.validateUserPassword(admin.id, password);
-  }
-
-  static async setAdminPassword(newPassword: string): Promise<void> {
-    const admin = this.getAdmin();
-    return this.setUserPassword(admin.id, newPassword, false);
-  }
-
-  static isDefaultPassword(): boolean {
-    const authData = this.getAdminAuthData();
-    return !!authData.isDefaultPassword;
-  }
-
-  static getAdminSession(): { isAuthenticated: boolean; user?: User; mustChangePassword: boolean } {
-    return this.getSession();
-  }
-
+  // --- MULTI-USER AUTHENTICATION & SESSION ---
   static getSession(): { isAuthenticated: boolean; user?: User; mustChangePassword: boolean } {
     try {
       const sessionRaw = sessionStorage.getItem(STORAGE_KEYS.SESSION) || localStorage.getItem(STORAGE_KEYS.SESSION);
@@ -1105,11 +972,10 @@ export class StorageService {
         const users = this.getUsers();
         const user = users.find((u) => u.id === session.userId);
         if (user) {
-          const isDefault = user.role === 'ADMINISTRADOR' ? this.isDefaultPassword() : false;
           return {
             isAuthenticated: true,
             user,
-            mustChangePassword: !!session.mustChangePassword || isDefault,
+            mustChangePassword: !!session.mustChangePassword,
           };
         }
       }
@@ -1117,10 +983,6 @@ export class StorageService {
       console.error('Error reading session', e);
     }
     return { isAuthenticated: false, mustChangePassword: false };
-  }
-
-  static setAdminSession(user: User, mustChangePassword: boolean): void {
-    this.setSession(user, mustChangePassword);
   }
 
   static setSession(user: User, mustChangePassword: boolean): void {
@@ -1135,16 +997,12 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(sessionObj));
   }
 
-  static clearAdminSession(): void {
-    this.clearSession();
-  }
-
   static clearSession(): void {
     sessionStorage.removeItem(STORAGE_KEYS.SESSION);
     localStorage.removeItem(STORAGE_KEYS.SESSION);
   }
 
-  // Users & Sellers
+  // Users
   static getUsers(): User[] {
     return getItemFromStorage(STORAGE_KEYS.USERS, INITIAL_USERS);
   }
@@ -1163,33 +1021,6 @@ export class StorageService {
     } catch {
       return false;
     }
-  }
-
-  static getSellers(): User[] {
-    return this.getUsers().filter((u) => u.role === 'VENDEDOR' || u.role === 'VENDEDOR_EXTERNO');
-  }
-
-  static getSalesOperators(): User[] {
-    return this.getUsers().filter(
-      (u) =>
-        u.active !== false &&
-        (u.role === 'ADMINISTRADOR' ||
-          u.role === 'COLABORADOR' ||
-          u.role === 'VENDEDOR' ||
-          u.role === 'VENDEDOR_EXTERNO')
-    );
-  }
-
-  static getCollaborators(): User[] {
-    return this.getUsers().filter((u) => u.role === 'COLABORADOR');
-  }
-
-  static getPromoters(): User[] {
-    return this.getUsers().filter((u) => u.role === 'PROMOTOR');
-  }
-
-  static getAdmins(): User[] {
-    return this.getUsers().filter((u) => u.role === 'ADMINISTRADOR');
   }
 
   static getAdmin(): User {
@@ -1272,15 +1103,10 @@ export class StorageService {
     };
     users.push(newUser);
     setItemToStorage(STORAGE_KEYS.USERS, users);
-
-    const initialPwd = params.initialPassword?.trim() || '1234';
-    this.setUserPassword(newUser.id, initialPwd, initialPwd === '1234').catch((e) =>
-      console.error('Error setting initial user password', e)
-    );
     return newUser;
   }
 
-  static updateUser(id: string, updates: Partial<User>, newPassword?: string): User | undefined {
+  static updateUser(id: string, updates: Partial<User>, _newPassword?: string): User | undefined {
     const users = this.getUsers();
     const index = users.findIndex((u) => u.id === id);
     if (index >= 0) {
@@ -1291,12 +1117,6 @@ export class StorageService {
         isTestUser: updates.isTestUser !== undefined ? Boolean(updates.isTestUser) : users[index].isTestUser,
       };
       setItemToStorage(STORAGE_KEYS.USERS, users);
-
-      if (newPassword && newPassword.trim().length >= 4) {
-        this.setUserPassword(id, newPassword.trim(), false).catch((e) =>
-          console.error('Error updating user password', e)
-        );
-      }
       return users[index];
     }
     return undefined;
@@ -1305,31 +1125,12 @@ export class StorageService {
   static deleteUser(id: string): void {
     const users = this.getUsers().filter((u) => u.id !== id);
     setItemToStorage(STORAGE_KEYS.USERS, users);
-    
-    // Clean credentials
-    const allCreds = this.getAllCredentials();
-    if (allCreds[id]) {
-      delete allCreds[id];
-      this.saveAllCredentials(allCreds);
-    }
 
     // Se o usuário atual excluído estiver ativo, troca para o primeiro restante
     const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
     if (currentId === id && users.length > 0) {
       this.setCurrentUser(users[0].id);
     }
-  }
-
-  static addSeller(name: string, initialPassword = '1234', email?: string, phone?: string): User {
-    return this.addUser({ name, role: 'VENDEDOR', initialPassword, email, phone });
-  }
-
-  static updateSeller(id: string, name: string, newPassword?: string): User | undefined {
-    return this.updateUser(id, { name }, newPassword);
-  }
-
-  static deleteSeller(id: string): void {
-    this.deleteUser(id);
   }
 
   // Categories
@@ -1501,9 +1302,6 @@ export class StorageService {
   // Items
   static getItems(): Item[] {
     const items = getItemFromStorage(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
-    const onlineServices = this.getOnlineServices();
-    const existingIds = new Set(items.map((i) => i.id));
-    const existingNames = new Set(items.map((i) => i.name.toLowerCase().trim()));
     let hasChanges = false;
 
     // Normalize any previous cat-servicos-digitais to cat-servicos
@@ -1514,22 +1312,6 @@ export class StorageService {
       }
       return it;
     });
-
-    // Ensure existing online services are enriched with their service URL (do not synthesize new items)
-    for (const svc of onlineServices) {
-      const itemId = `prod-srv-${svc.id.replace('srv-', '')}`;
-      const existingItem = updatedItems.find(
-        (it) => it.id === itemId || it.id === svc.id || it.name.toLowerCase().trim() === svc.name.toLowerCase().trim()
-      );
-
-      if (existingItem) {
-        if (!existingItem.serviceUrl && !existingItem.url && svc.url) {
-          existingItem.serviceUrl = svc.url;
-          existingItem.url = svc.url;
-          hasChanges = true;
-        }
-      }
-    }
 
     // Filter out any items in deletedIds or marked as 'apagar'
     const deletedIds = this.getDeletedItemIds();
@@ -1757,28 +1539,6 @@ export class StorageService {
       console.warn('Aviso ao sincronizar produto no backend (cache local mantido):', err?.message || err);
     }
 
-    // If saving a service that has a URL, keep corresponding online service synchronized
-    if (serverItem.type === 'SERVICO' && (serverItem.serviceUrl !== undefined || serverItem.url !== undefined)) {
-      try {
-        const newUrl = serverItem.serviceUrl || serverItem.url || '';
-        const onlineServices = this.getOnlineServices();
-        let svcChanged = false;
-        const updatedServices = onlineServices.map((s) => {
-          const srvId = `prod-srv-${s.id.replace('srv-', '')}`;
-          if (s.id === serverItem.id || srvId === serverItem.id || s.name.toLowerCase().trim() === serverItem.name.toLowerCase().trim()) {
-            svcChanged = true;
-            return { ...s, url: newUrl, updatedAt: new Date().toISOString() };
-          }
-          return s;
-        });
-        if (svcChanged) {
-          this.saveOnlineServices(updatedServices);
-        }
-      } catch (err) {
-        console.warn('Notice syncing online service from item:', err);
-      }
-    }
-
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('items-updated', { detail: serverItem }));
       window.dispatchEvent(new CustomEvent('catalog-updated', { detail: serverItem }));
@@ -1860,14 +1620,6 @@ export class StorageService {
     const items = this.getItems().filter((i) => i.id !== id);
     setItemToStorage(STORAGE_KEYS.ITEMS, items);
     this.markItemAsDeleted(id);
-
-    // Also remove from online services if applicable
-    const srvId = id.startsWith('prod-srv-') ? id.replace('prod-srv-', 'srv-') : id;
-    try {
-      api.deleteOnlineService(srvId).catch(() => {});
-      const services = this.getOnlineServices().filter((s) => s.id !== srvId && s.id !== id);
-      this.saveOnlineServices(services);
-    } catch {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('items-updated', { detail: { id, deleted: true } }));
@@ -2830,10 +2582,11 @@ export class StorageService {
     const previousItems = [...(sale.items || [])];
     const previousDataJson = JSON.stringify(sale);
 
-    // 1. Reverter estoque dos itens originais da venda
+    // 1. Reverter estoque dos itens originais da venda (ignorando itens personalizados/não cadastrados)
     previousItems.forEach((si) => {
       const itemObj = (si as any).item;
-      if (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO') {
+      const isCustom = Boolean(si.isCustom || itemObj?.isCustom || String(si.itemId || '').startsWith('custom-'));
+      if (!isCustom && (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO')) {
         this.restoreItemStock({
           itemId: si.itemId || itemObj?.id,
           variantId: si.configuration?.variantId,
@@ -2845,10 +2598,11 @@ export class StorageService {
       }
     });
 
-    // 2. Dar baixa no estoque com base nos novos itens da venda
+    // 2. Dar baixa no estoque com base nos novos itens da venda (ignorando itens personalizados/não cadastrados)
     params.items.forEach((si) => {
       const itemObj = (si as any).item;
-      if (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO') {
+      const isCustom = Boolean(si.isCustom || itemObj?.isCustom || String(si.itemId || '').startsWith('custom-'));
+      if (!isCustom && (si.itemType === 'PRODUTO_FISICO' || itemObj?.type === 'PRODUTO_FISICO')) {
         this.reduceItemStock({
           itemId: si.itemId || itemObj?.id,
           variantId: si.configuration?.variantId,
@@ -2860,7 +2614,7 @@ export class StorageService {
       }
     });
 
-    // 3. Recalcular valores financeiros
+    // 3. Recalcular valores financeiros e comissões
     const subtotal = params.items.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
     const discount = params.discount !== undefined ? Number(params.discount) : (Number(sale.discount) || 0);
     const addition = params.addition !== undefined ? Number(params.addition) : (Number(sale.addition || sale.freight) || 0);
@@ -2873,6 +2627,38 @@ export class StorageService {
     }, 0);
     const grossProfit = Math.max(0, total - totalCost);
     const grossMarginPercent = total > 0 ? (grossProfit / total) * 100 : 0;
+
+    // Recalcular comissões por item (cadastrados e personalizados)
+    const commissionRates = this.getCommissionRates();
+    const promoterRatePercent = Number(sale.promoterCommissionPercent ?? this.getPromoterCommissionPercent());
+    const subtotalSafe = Math.max(0.01, subtotal);
+    const discountRatio = total / subtotalSafe;
+    let totalCommission = 0;
+
+    const recalculatedItems: SaleItem[] = params.items.map((si) => {
+      const configuredRate = si.commissionRate !== undefined ? si.commissionRate : (commissionRates[si.itemType] ?? 0);
+      const rate = Math.max(0, Math.min(100, Number(configuredRate)));
+      const netItemTotal = Number(((Number(si.totalPrice) || 0) * discountRatio).toFixed(2));
+      const itemComm = Number(((netItemTotal * rate) / 100).toFixed(2));
+      totalCommission += itemComm;
+
+      return {
+        ...si,
+        commissionRate: rate,
+        commissionAmount: itemComm,
+      };
+    });
+
+    const finalCommissionPool = Number(totalCommission.toFixed(2));
+    const finalCompanyAmount = Number(Math.max(0, total - finalCommissionPool).toFixed(2));
+    const avgCommissionRate = total > 0 ? Number(((finalCommissionPool / total) * 100).toFixed(2)) : 0;
+    const isPromoterSale = Boolean(sale.isPromoterSale || sale.promoterId);
+    let promoterCommissionAmount = 0;
+    let sellerCommissionAmount = finalCommissionPool;
+    if (isPromoterSale && finalCommissionPool > 0) {
+      promoterCommissionAmount = Number(((finalCommissionPool * promoterRatePercent) / 100).toFixed(2));
+      sellerCommissionAmount = Number(Math.max(0, finalCommissionPool - promoterCommissionAmount).toFixed(2));
+    }
 
     // Gerenciar pagamentos
     const payments = params.payments || sale.payments || [];
@@ -3085,7 +2871,7 @@ export class StorageService {
     sale.customerDocument = params.customerDocument !== undefined ? params.customerDocument : sale.customerDocument;
     sale.sellerId = params.sellerId || sale.sellerId;
     sale.sellerName = params.sellerName || sale.sellerName;
-    sale.items = params.items;
+    sale.items = recalculatedItems;
     sale.subtotal = subtotal;
     sale.discount = discount;
     sale.addition = addition;
@@ -3094,6 +2880,13 @@ export class StorageService {
     sale.totalCost = totalCost;
     sale.grossProfit = grossProfit;
     sale.grossMarginPercent = grossMarginPercent;
+    sale.commissionRate = avgCommissionRate;
+    sale.commissionAmount = finalCommissionPool;
+    sale.companyAmount = finalCompanyAmount;
+    sale.sellerCommissionAmount = sellerCommissionAmount;
+    if (isPromoterSale) {
+      sale.promoterCommissionAmount = promoterCommissionAmount;
+    }
     sale.payments = enrichedPayments;
     sale.paidAmount = paidAmount;
     sale.remainingAmount = remainingAmount;
@@ -4578,8 +4371,130 @@ export class StorageService {
   }
 
   // --- BUDGETS / ORÇAMENTOS ---
+  private static isInvalidBudgetNumber(val: unknown): boolean {
+    if (val === undefined || val === null) return true;
+    const str = String(val).trim();
+    return !str || str === 'null' || str === 'undefined' || str === 'NaN' || str === '101' || str === '0';
+  }
+
+  private static normalizeBudgetValidUntil(validUntil?: string): string {
+    if (!validUntil) {
+      const d = new Date();
+      d.setDate(d.getDate() + 15);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}T12:00:00.000Z`;
+    }
+    const trimmed = String(validUntil).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return `${trimmed}T12:00:00.000Z`;
+    }
+    return trimmed;
+  }
+
+  static normalizeAndRepairBudgets(
+    rawBudgets: Budget[],
+    localReference?: Budget[]
+  ): { budgets: Budget[]; repaired: Budget[] } {
+    const localMap = new Map<string, Budget>();
+    if (Array.isArray(localReference)) {
+      for (const lb of localReference) {
+        if (lb?.id) localMap.set(lb.id, lb);
+      }
+    }
+
+    const merged: Budget[] = (rawBudgets || []).map((rb) => {
+      const localMatch = localMap.get(rb.id);
+      const validLocalNum =
+        localMatch && !this.isInvalidBudgetNumber(localMatch.budgetNumber)
+          ? String(localMatch.budgetNumber)
+          : undefined;
+      const validRemoteNum = !this.isInvalidBudgetNumber(rb.budgetNumber)
+        ? String(rb.budgetNumber)
+        : undefined;
+
+      const resolvedValidUntil = this.normalizeBudgetValidUntil(
+        rb.validUntil || localMatch?.validUntil
+      );
+
+      return {
+        ...(localMatch || {}),
+        ...rb,
+        budgetNumber: validRemoteNum || validLocalNum || '',
+        validUntil: resolvedValidUntil,
+        paymentConditions: rb.paymentConditions || localMatch?.paymentConditions,
+        productionLeadTime: rb.productionLeadTime || localMatch?.productionLeadTime,
+        customerDocument: rb.customerDocument || localMatch?.customerDocument,
+        customerAddress: rb.customerAddress || localMatch?.customerAddress,
+        convertedSaleId: rb.convertedSaleId || localMatch?.convertedSaleId,
+        convertedSaleNumber: rb.convertedSaleNumber || localMatch?.convertedSaleNumber,
+        opportunityId: rb.opportunityId || localMatch?.opportunityId,
+        promoterId: rb.promoterId || localMatch?.promoterId,
+        promoterName: rb.promoterName || localMatch?.promoterName,
+        freight: rb.freight ?? rb.addition ?? localMatch?.freight,
+        shippingCost: rb.shippingCost ?? rb.addition ?? localMatch?.shippingCost,
+      };
+    });
+
+    if (Array.isArray(localReference)) {
+      const remoteIds = new Set(merged.map((b) => b.id));
+      for (const lb of localReference) {
+        if (lb?.id && !remoteIds.has(lb.id)) {
+          merged.push({
+            ...lb,
+            validUntil: this.normalizeBudgetValidUntil(lb.validUntil),
+          });
+        }
+      }
+    }
+
+    // Sort chronologically ascending to assign deterministic ORC-YYYY-XXXX numbers
+    const chronological = [...merged].sort(
+      (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+
+    const usedNumbers = new Set<string>();
+    for (const b of chronological) {
+      if (!this.isInvalidBudgetNumber(b.budgetNumber)) {
+        usedNumbers.add(String(b.budgetNumber));
+      }
+    }
+
+    const repaired: Budget[] = [];
+    chronological.forEach((b, idx) => {
+      if (this.isInvalidBudgetNumber(b.budgetNumber)) {
+        const year = new Date(b.createdAt || Date.now()).getFullYear();
+        let seq = idx + 1;
+        let candidate = `ORC-${year}-${String(seq).padStart(4, '0')}`;
+        while (usedNumbers.has(candidate)) {
+          seq += 1;
+          candidate = `ORC-${year}-${String(seq).padStart(4, '0')}`;
+        }
+        b.budgetNumber = candidate;
+        usedNumbers.add(candidate);
+        repaired.push(b);
+      }
+    });
+
+    // Return sorted newest first
+    const finalSorted = [...chronological].sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    return { budgets: finalSorted, repaired };
+  }
+
   static getBudgets(): Budget[] {
-    return getItemFromStorage(STORAGE_KEYS.BUDGETS, []);
+    const raw = getItemFromStorage<Budget[]>(STORAGE_KEYS.BUDGETS, []);
+    const { budgets, repaired } = this.normalizeAndRepairBudgets(raw);
+    if (repaired.length > 0) {
+      setItemToStorage(STORAGE_KEYS.BUDGETS, budgets);
+      repaired.forEach((b) => {
+        api.saveBudget(b).catch((e) => console.debug('Background repair budget notice:', e));
+      });
+    }
+    return budgets;
   }
 
   static getBudgetById(id: string): Budget | undefined {
@@ -4589,14 +4504,32 @@ export class StorageService {
   static generateNextBudgetNumber(): string {
     const budgets = this.getBudgets();
     const year = new Date().getFullYear();
-    const count = budgets.length + 1;
-    return `ORC-${year}-${String(count).padStart(4, '0')}`;
+    let maxSeq = budgets.length;
+    for (const b of budgets) {
+      const match = String(b.budgetNumber || '').match(/^ORC-\d{4}-(\d+)$/i);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    return `ORC-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
   }
 
   static saveBudget(budget: Budget): Budget {
     const budgets = this.getBudgets();
     const index = budgets.findIndex((b) => b.id === budget.id);
-    const updated = { ...budget, updatedAt: new Date().toISOString() };
+    const resolvedNumber = !this.isInvalidBudgetNumber(budget.budgetNumber)
+      ? String(budget.budgetNumber)
+      : index >= 0 && !this.isInvalidBudgetNumber(budgets[index].budgetNumber)
+      ? String(budgets[index].budgetNumber)
+      : this.generateNextBudgetNumber();
+
+    const updated: Budget = {
+      ...budget,
+      budgetNumber: resolvedNumber,
+      validUntil: this.normalizeBudgetValidUntil(budget.validUntil),
+      updatedAt: new Date().toISOString(),
+    };
     if (index >= 0) {
       budgets[index] = updated;
     } else {
@@ -4624,13 +4557,29 @@ export class StorageService {
       subtotal = updates.items.reduce((acc, item) => acc + item.totalPrice, 0);
       totalCost = updates.items.reduce((acc, item) => acc + item.totalCost, 0);
     }
+    const freight =
+      updates.freight !== undefined
+        ? Number(updates.freight)
+        : updates.addition !== undefined
+        ? Number(updates.addition)
+        : Number(budget.freight ?? budget.addition ?? 0);
     const discount = updates.discount !== undefined ? updates.discount : budget.discount;
-    const total = Math.max(0, Number((subtotal - discount).toFixed(2)));
+    const total = Math.max(0, Number((subtotal + freight - discount).toFixed(2)));
 
     const updated: Budget = {
       ...budget,
       ...updates,
+      budgetNumber:
+        !this.isInvalidBudgetNumber(updates.budgetNumber)
+          ? String(updates.budgetNumber)
+          : budget.budgetNumber,
+      validUntil: updates.validUntil
+        ? this.normalizeBudgetValidUntil(updates.validUntil)
+        : budget.validUntil,
       subtotal: Number(subtotal.toFixed(2)),
+      freight,
+      shippingCost: freight,
+      addition: freight,
       totalCost: Number((totalCost || 0).toFixed(2)),
       total,
       updatedAt: new Date().toISOString(),
@@ -4652,6 +4601,7 @@ export class StorageService {
     freight?: number;
     discount: number;
     validUntilDays?: number;
+    validUntil?: string;
     notes?: string;
     paymentConditions?: string;
     productionLeadTime?: string;
@@ -4665,6 +4615,7 @@ export class StorageService {
       freight: paramFreight,
       discount,
       validUntilDays = 15,
+      validUntil: paramValidUntil,
       notes,
       paymentConditions,
       productionLeadTime,
@@ -4713,8 +4664,15 @@ export class StorageService {
     const total = Math.max(0, Number((subtotal + finalFreight - discount).toFixed(2)));
 
     const now = new Date();
-    const validUntilDate = new Date();
-    validUntilDate.setDate(now.getDate() + validUntilDays);
+    const daysToAdd = Number(validUntilDays) > 0 ? Number(validUntilDays) : 15;
+    const validUntilDate = new Date(now.getTime());
+    validUntilDate.setDate(validUntilDate.getDate() + daysToAdd);
+    const yyyy = validUntilDate.getFullYear();
+    const mm = String(validUntilDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(validUntilDate.getDate()).padStart(2, '0');
+    const computedValidUntil = paramValidUntil
+      ? this.normalizeBudgetValidUntil(paramValidUntil)
+      : `${yyyy}-${mm}-${dd}T12:00:00.000Z`;
 
     const budgetNumber = this.generateNextBudgetNumber();
 
@@ -4739,7 +4697,7 @@ export class StorageService {
       discount: Number(discount.toFixed(2)),
       total,
       totalCost: Number(totalCost.toFixed(2)),
-      validUntil: validUntilDate.toISOString().split('T')[0],
+      validUntil: computedValidUntil,
       status: 'ABERTO',
       notes: notes?.trim() || undefined,
       paymentConditions: paymentConditions?.trim() || 'À vista no PIX, Dinheiro ou Cartão',
@@ -5416,90 +5374,6 @@ export class StorageService {
     return { created, updated, skipped };
   }
 
-  // --- ONLINE EXTERNAL SERVICES ("Serviços Online") ---
-  static getOnlineServices(): OnlineService[] {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.ONLINE_SERVICES);
-      if (!stored) {
-        localStorage.setItem(STORAGE_KEYS.ONLINE_SERVICES, JSON.stringify(INITIAL_ONLINE_SERVICES));
-        return INITIAL_ONLINE_SERVICES;
-      }
-      return JSON.parse(stored);
-    } catch {
-      return INITIAL_ONLINE_SERVICES;
-    }
-  }
-
-  static saveOnlineServices(services: OnlineService[]): void {
-    localStorage.setItem(STORAGE_KEYS.ONLINE_SERVICES, JSON.stringify(services));
-  }
-
-  static addOnlineService(service: Omit<OnlineService, 'id' | 'createdAt' | 'updatedAt'>): OnlineService {
-    const services = this.getOnlineServices();
-    const now = new Date().toISOString();
-    const newService: OnlineService = {
-      ...service,
-      id: `srv-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      createdAt: now,
-      updatedAt: now,
-    };
-    if (this.isTestUserActive()) {
-      return newService;
-    }
-    services.push(newService);
-    this.saveOnlineServices(services);
-    return newService;
-  }
-
-  static updateOnlineService(id: string, updates: Partial<OnlineService>): OnlineService | undefined {
-    const services = this.getOnlineServices();
-    const index = services.findIndex((s) => s.id === id);
-    if (index === -1) return undefined;
-
-    const updated: OnlineService = {
-      ...services[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    if (this.isTestUserActive()) {
-      return updated;
-    }
-    services[index] = updated;
-    this.saveOnlineServices(services);
-
-    // Synchronize corresponding Item in items collection
-    if (updates.url !== undefined) {
-      try {
-        const items = this.getItems();
-        const itemId = `prod-srv-${id.replace('srv-', '')}`;
-        let itemChanged = false;
-        const newItems = items.map((it) => {
-          if (it.id === itemId || it.id === id || it.name.toLowerCase().trim() === updated.name.toLowerCase().trim()) {
-            itemChanged = true;
-            return { ...it, serviceUrl: updates.url, url: updates.url, updatedAt: new Date().toISOString() };
-          }
-          return it;
-        });
-        if (itemChanged) {
-          setItemToStorage(STORAGE_KEYS.ITEMS, newItems);
-        }
-      } catch (err) {
-        console.warn('Notice syncing item from online service:', err);
-      }
-    }
-
-    return updated;
-  }
-
-  static deleteOnlineService(id: string): void {
-    if (this.isTestUserActive()) {
-      return;
-    }
-    const services = this.getOnlineServices();
-    const filtered = services.filter((s) => s.id !== id);
-    this.saveOnlineServices(filtered);
-  }
-
   // --- DOCUMENT TEMPLATES ("Modelos de Documentos") ---
   static getDocumentTemplates(): DocumentTemplate[] {
     try {
@@ -5874,9 +5748,59 @@ export class StorageService {
   // --- MÓDULO DE CAPTAÇÃO E PROSPECÇÃO ATIVA ---
   // ==========================================
 
-  // --- OPORTUNIDADES ---
+  // --- MENSAGENS CONFIGURÁVEIS DE WHATSAPP DA CAPTAÇÃO ATIVA ---
+  static getProspectingMessages(): {
+    requestPermissionMessage: string;
+    sendCatalogMessage: string;
+  } {
+    const settings = this.getSettings();
+    return {
+      requestPermissionMessage:
+        settings.prospectingMessages?.requestPermissionMessage?.trim() || DEFAULT_PERMISSION_WHATSAPP_MESSAGE,
+      sendCatalogMessage:
+        settings.prospectingMessages?.sendCatalogMessage?.trim() || DEFAULT_CATALOG_WHATSAPP_MESSAGE,
+    };
+  }
+
+  static saveProspectingMessages(messages: {
+    requestPermissionMessage: string;
+    sendCatalogMessage: string;
+  }): void {
+    const settings = this.getSettings();
+    settings.prospectingMessages = {
+      requestPermissionMessage: messages.requestPermissionMessage?.trim() || DEFAULT_PERMISSION_WHATSAPP_MESSAGE,
+      sendCatalogMessage: messages.sendCatalogMessage?.trim() || DEFAULT_CATALOG_WHATSAPP_MESSAGE,
+    };
+    this.saveSettings(settings);
+  }
+
+  // --- OPORTUNIDADES (LEADS) ---
   static getOpportunities(): Opportunity[] {
-    return getItemFromStorage(STORAGE_KEYS.OPPORTUNITIES, INITIAL_OPPORTUNITIES);
+    const raw = getItemFromStorage<Opportunity[]>(STORAGE_KEYS.OPPORTUNITIES, INITIAL_OPPORTUNITIES);
+    if (!Array.isArray(raw)) return [];
+    let modified = false;
+    const normalized = raw.map((o) => {
+      const normStage: OpportunityStage =
+        o.originDetails === 'FECHADO_SUCESSO' || o.stage === 'FECHADO_SUCESSO'
+          ? 'FECHADO_SUCESSO'
+          : normalizeOpportunityStage(o.stage);
+      const normPhone = o.phone || o.whatsapp || '';
+      const normWhatsapp = o.whatsapp && o.whatsapp.length >= normPhone.length ? o.whatsapp : normPhone;
+      if (o.stage !== normStage || o.phone !== normPhone || o.whatsapp !== normWhatsapp) {
+        modified = true;
+        return {
+          ...o,
+          stage: normStage,
+          phone: normPhone,
+          whatsapp: normWhatsapp,
+        };
+      }
+      return o;
+    });
+    if (modified) {
+      setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, normalized);
+    }
+    return normalized;
   }
 
   static getOpportunityById(id: string): Opportunity | undefined {
@@ -5889,31 +5813,48 @@ export class StorageService {
     const currentUser = this.getCurrentUser();
 
     if (!opportunity.name || !opportunity.name.trim()) {
-      throw new Error('O Nome do cliente ou estabelecimento é obrigatório.');
+      throw new Error('O Nome do Contato / Empresa é obrigatório.');
     }
     if (!opportunity.phone || !opportunity.phone.trim()) {
-      throw new Error('O Telefone ou WhatsApp é obrigatório.');
+      throw new Error('O WhatsApp / Telefone é obrigatório.');
     }
+
+    const cleanPhone = opportunity.phone.trim();
+    const cleanWhatsapp = opportunity.whatsapp?.trim() || cleanPhone;
 
     if (opportunity.id) {
       const index = opps.findIndex((o) => o.id === opportunity.id);
       if (index >= 0) {
         const oldStage = opps[index].stage;
+        const normalizedStage = normalizeOpportunityStage(opportunity.stage || oldStage);
+        const updatedOriginDetails =
+          normalizedStage === 'FECHADO_SUCESSO'
+            ? 'FECHADO_SUCESSO'
+            : opps[index].originDetails === 'FECHADO_SUCESSO'
+            ? undefined
+            : opportunity.originDetails ?? opps[index].originDetails;
         const updated: Opportunity = {
           ...opps[index],
           ...opportunity,
+          name: opportunity.name.trim(),
+          phone: cleanPhone,
+          whatsapp: cleanWhatsapp,
+          neighborhood: opportunity.neighborhood?.trim() || undefined,
+          notes: opportunity.notes?.trim() || undefined,
+          stage: normalizedStage,
+          originDetails: updatedOriginDetails,
           updatedAt: now,
         };
         opps[index] = updated;
         setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, opps);
         api.saveOpportunity(updated).catch((e) => console.debug('Background saveOpportunity sync notice:', e));
+        notifyRealtime('opportunities-updated', { id: updated.id, stage: updated.stage });
 
-        // Se mudou de etapa, registra atividade
-        if (opportunity.stage && opportunity.stage !== oldStage) {
+        if (normalizedStage !== oldStage) {
           this.addOpportunityActivity({
             opportunityId: updated.id,
             type: 'MUDANCA_ETAPA',
-            description: `Etapa alterada de "${this.getStageLabel(oldStage)}" para "${this.getStageLabel(opportunity.stage)}"`,
+            description: `Status alterado de "${this.getStageLabel(oldStage)}" para "${this.getStageLabel(normalizedStage)}"`,
             userId: currentUser.id,
             userName: currentUser.name,
           });
@@ -5923,31 +5864,21 @@ export class StorageService {
       }
     }
 
-    // Criar nova oportunidade
-    const count = opps.length + 1;
-    const oppNumber = `OPP-${String(count).padStart(3, '0')}`;
+    // Criar novo lead (inicia sempre em PARA_CONTATAR por padrão)
+    const count = opps.length + 101;
+    const newStage = normalizeOpportunityStage(opportunity.stage || 'PARA_CONTATAR');
     const newOpp: Opportunity = {
       id: `opp-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      opportunityNumber: oppNumber,
+      opportunityNumber: count,
       name: opportunity.name.trim(),
-      contactName: opportunity.contactName?.trim() || undefined,
-      segment: opportunity.segment || 'Comércio & Serviços Gerais',
+      phone: cleanPhone,
+      whatsapp: cleanWhatsapp,
       neighborhood: opportunity.neighborhood?.trim() || undefined,
-      city: opportunity.city?.trim() || undefined,
-      phone: opportunity.phone.trim(),
-      whatsapp: opportunity.whatsapp?.trim() || opportunity.phone.trim(),
-      instagram: opportunity.instagram?.trim() || undefined,
-      needs: opportunity.needs || [],
-      needsDescription: opportunity.needsDescription?.trim() || undefined,
-      origin: opportunity.origin || 'PROSPECCAO_PRESENCIAL',
-      originDetails: opportunity.originDetails?.trim() || undefined,
-      stage: opportunity.stage || 'IDENTIFICADO',
+      notes: opportunity.notes?.trim() || undefined,
+      stage: newStage,
+      originDetails: newStage === 'FECHADO_SUCESSO' ? 'FECHADO_SUCESSO' : opportunity.originDetails,
       assignedUserId: opportunity.assignedUserId || currentUser.id,
       assignedUserName: opportunity.assignedUserName || currentUser.name,
-      notes: opportunity.notes?.trim() || undefined,
-      suggestedProductIds: opportunity.suggestedProductIds || [],
-      suggestedPackageIds: opportunity.suggestedPackageIds || [],
-      nextAction: opportunity.nextAction,
       createdAt: now,
       updatedAt: now,
     };
@@ -5955,52 +5886,106 @@ export class StorageService {
     opps.unshift(newOpp);
     setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, opps);
     api.saveOpportunity(newOpp).catch((e) => console.debug('Background saveOpportunity sync notice:', e));
-
-    // Registra atividade inicial
-    this.addOpportunityActivity({
-      opportunityId: newOpp.id,
-      type: 'OBSERVACAO',
-      description: `Oportunidade cadastrada na etapa "${this.getStageLabel(newOpp.stage)}" (Origem: ${this.getOriginLabel(newOpp.origin)})`,
-      userId: currentUser.id,
-      userName: currentUser.name,
-    });
+    notifyRealtime('opportunities-updated', { id: newOpp.id, stage: newOpp.stage });
 
     return newOpp;
   }
 
-  static updateOpportunityStage(id: string, stage: OpportunityStage, note?: string): Opportunity | undefined {
+  static saveOpportunitiesBatch(
+    items: Array<Partial<Opportunity> & { name: string; phone: string }>
+  ): Opportunity[] {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const opps = this.getOpportunities();
+    const now = new Date().toISOString();
+    const currentUser = this.getCurrentUser();
+    let nextNumber = opps.length + 101;
+
+    const createdList: Opportunity[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item || !item.name?.trim() || !item.phone?.trim()) continue;
+      const cleanPhone = item.phone.trim();
+      const cleanWhatsapp = item.whatsapp?.trim() || cleanPhone;
+      const newStage = normalizeOpportunityStage(item.stage || 'PARA_CONTATAR');
+
+      const newOpp: Opportunity = {
+        id: item.id || `opp-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+        opportunityNumber: nextNumber++,
+        name: item.name.trim(),
+        phone: cleanPhone,
+        whatsapp: cleanWhatsapp,
+        neighborhood: item.neighborhood?.trim() || undefined,
+        city: item.city?.trim() || undefined,
+        segment: item.segment?.trim() || undefined,
+        notes: item.notes?.trim() || undefined,
+        stage: newStage,
+        origin: item.origin || 'PESQUISA_PROPRIA',
+        originDetails: item.originDetails,
+        assignedUserId: item.assignedUserId || currentUser.id,
+        assignedUserName: item.assignedUserName || currentUser.name,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      createdList.push(newOpp);
+    }
+
+    if (createdList.length > 0) {
+      const updatedOpps = [...createdList, ...opps];
+      setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, updatedOpps);
+      api.saveOpportunitiesBatch(createdList).catch(() => {
+        createdList.forEach((opp) => {
+          api.saveOpportunity(opp).catch(() => {});
+        });
+      });
+      notifyRealtime('opportunities-updated', { count: createdList.length });
+    }
+
+    return createdList;
+  }
+
+  static updateOpportunityStage(id: string, stage: OpportunityStage | string, note?: string): Opportunity | undefined {
     const opps = this.getOpportunities();
     const index = opps.findIndex((o) => o.id === id);
     if (index === -1) return undefined;
 
     const oldStage = opps[index].stage;
+    const normalizedStage = normalizeOpportunityStage(stage);
     const now = new Date().toISOString();
     const currentUser = this.getCurrentUser();
 
+    const updatedOriginDetails =
+      normalizedStage === 'FECHADO_SUCESSO'
+        ? 'FECHADO_SUCESSO'
+        : opps[index].originDetails === 'FECHADO_SUCESSO'
+        ? undefined
+        : opps[index].originDetails;
+
     opps[index] = {
       ...opps[index],
-      stage,
+      stage: normalizedStage,
+      originDetails: updatedOriginDetails,
       updatedAt: now,
     };
 
-    if (stage === 'CONVERTIDO') {
-      opps[index].convertedAt = now;
-    }
-
     setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, opps);
     api.saveOpportunity(opps[index]).catch((e) => console.debug('Background updateOpportunityStage sync notice:', e));
+    notifyRealtime('opportunities-updated', { id, stage: normalizedStage });
 
-    const desc = note
-      ? `Etapa alterada para "${this.getStageLabel(stage)}". Nota: ${note}`
-      : `Etapa alterada de "${this.getStageLabel(oldStage)}" para "${this.getStageLabel(stage)}"`;
+    if (oldStage !== normalizedStage) {
+      const desc = note
+        ? `Status alterado para "${this.getStageLabel(normalizedStage)}". Nota: ${note}`
+        : `Status alterado de "${this.getStageLabel(oldStage)}" para "${this.getStageLabel(normalizedStage)}"`;
 
-    this.addOpportunityActivity({
-      opportunityId: id,
-      type: stage === 'CONVERTIDO' ? 'CONVERSAO' : 'MUDANCA_ETAPA',
-      description: desc,
-      userId: currentUser.id,
-      userName: currentUser.name,
-    });
+      this.addOpportunityActivity({
+        opportunityId: id,
+        type: 'MUDANCA_ETAPA',
+        description: desc,
+        userId: currentUser.id,
+        userName: currentUser.name,
+      });
+    }
 
     return opps[index];
   }
@@ -6009,6 +5994,7 @@ export class StorageService {
     const opps = this.getOpportunities().filter((o) => o.id !== id);
     setItemToStorage(STORAGE_KEYS.OPPORTUNITIES, opps);
     api.deleteOpportunity(id).catch((e) => console.debug('Background deleteOpportunity sync notice:', e));
+    notifyRealtime('opportunities-updated', { id, deleted: true });
 
     // Remove atividades associadas
     const activities = this.getOpportunityActivities().filter((a) => a.opportunityId !== id);
@@ -6026,43 +6012,31 @@ export class StorageService {
     const existingCustomers = this.getCustomers();
     let targetCustomer: Customer;
 
-    // Verifica se já existe cliente com este telefone
     const existing = existingCustomers.find((c) => normalizePhone(c.phone) === cleanPhone);
 
     if (existing) {
       targetCustomer = existing;
     } else {
-      // Cria novo cliente usando os dados da oportunidade sem retrabalho
       const newCust: Customer = {
         id: `cust-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
         name: opp.name,
         phone: opp.whatsapp || opp.phone,
         type: 'PJ',
-        address: opp.neighborhood ? `${opp.neighborhood}, ${opp.city || ''}` : undefined,
-        city: opp.city || undefined,
-        notes: `Contato: ${opp.contactName || 'Responsável'}. Cliente originado da Prospecção / Oportunidade #${opp.opportunityNumber || opp.id}. Segmento: ${opp.segment}.`,
+        address: opp.neighborhood || undefined,
+        notes: opp.notes || `Cliente originado da Captação Ativa.`,
         createdAt: new Date().toISOString(),
       };
       existingCustomers.push(newCust);
       setItemToStorage(STORAGE_KEYS.CUSTOMERS, existingCustomers);
+      api.saveCustomer(newCust).catch(() => {});
       targetCustomer = newCust;
     }
 
-    // Atualiza a oportunidade para CONVERTIDO
     const updatedOpp = this.saveOpportunity({
       ...opp,
-      stage: 'CONVERTIDO',
+      stage: 'FECHADO_SUCESSO',
       convertedCustomerId: targetCustomer.id,
       convertedAt: new Date().toISOString(),
-    });
-
-    const currentUser = this.getCurrentUser();
-    this.addOpportunityActivity({
-      opportunityId: opp.id,
-      type: 'CONVERSAO',
-      description: `Oportunidade convertida com sucesso no Cliente "${targetCustomer.name}"!`,
-      userId: currentUser.id,
-      userName: currentUser.name,
     });
 
     return { customer: targetCustomer, opportunity: updatedOpp };
@@ -6133,39 +6107,16 @@ export class StorageService {
   // --- ITENS QUE PRECISAM DE RETORNO OU AÇÕES DE HOJE ---
   static getTodayProspectingTasks(userId?: string): Opportunity[] {
     const opps = this.getOpportunities();
-    const todayStr = new Date().toISOString().split('T')[0];
-
     return opps.filter((o) => {
-      if (o.stage === 'CONVERTIDO' || o.stage === 'NAO_CONVERTEU') return false;
+      if (o.stage === 'SEM_RETORNO_FECHADO') return false;
       if (userId && o.assignedUserId && o.assignedUserId !== userId) return false;
-
-      // Tem próxima ação para hoje ou atrasada
-      if (o.nextAction && !o.nextAction.completed) {
-        if (o.nextAction.date <= todayStr) return true;
-      }
-      return false;
+      return o.stage === 'PARA_CONTATAR';
     });
   }
 
   static getOpportunitiesNeedingReturn(): Opportunity[] {
     const opps = this.getOpportunities();
-    const now = Date.now();
-    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-
-    return opps.filter((o) => {
-      // Não filtra os já finalizados
-      if (o.stage === 'CONVERTIDO' || o.stage === 'NAO_CONVERTEU') return false;
-
-      // Em orçamento ou interessado sem contato há mais de 3 dias
-      const lastUpdate = new Date(o.updatedAt).getTime();
-      const isStale = now - lastUpdate > threeDaysMs;
-
-      // Ou tem próxima ação atrasada
-      const todayStr = new Date().toISOString().split('T')[0];
-      const hasOverdueAction = o.nextAction && !o.nextAction.completed && o.nextAction.date < todayStr;
-
-      return (isStale && (o.stage === 'ORCAMENTO' || o.stage === 'INTERESSADO' || o.stage === 'CONTATADO')) || hasOverdueAction;
-    });
+    return opps.filter((o) => o.stage === 'CATALOGO_ENVIADO' || o.stage === 'INTERESSADO_ORCAMENTO');
   }
 
   // --- PACOTES E SOLUÇÕES ---
@@ -6617,7 +6568,7 @@ export class StorageService {
     formResponses?: Record<string, any>;
   }): Opportunity {
     const opp = this.saveOpportunity({
-      name: params.name,
+      name: params.contactName ? `${params.contactName} - ${params.name}` : params.name,
       contactName: params.contactName,
       phone: params.phone,
       whatsapp: params.phone,
@@ -6630,42 +6581,33 @@ export class StorageService {
         : params.packageId
         ? `Interesse no pacote ID: ${params.packageId}`
         : 'Formulário público de orçamento',
-      stage: 'IDENTIFICADO',
+      stage: 'PARA_CONTATAR',
       suggestedPackageIds: params.packageId ? [params.packageId] : [],
-      notes: `Lead gerado diretamente pelo formulário online público (${params.sourceFormTitle || 'Geral'}${params.sourcePageTitle ? ` - ${params.sourcePageTitle}` : ''}).`,
+      notes: `${params.need ? `${params.need}: ` : ''}${params.description || 'Lead gerado pelo formulário online.'}`,
       sourceFormId: params.sourceFormId,
       sourceFormTitle: params.sourceFormTitle,
       sourcePageId: params.sourcePageId,
       sourcePageTitle: params.sourcePageTitle,
       formResponses: params.formResponses,
-      nextAction: {
-        type: 'WHATSAPP',
-        date: new Date().toISOString().split('T')[0],
-        note: 'Fazer contato rápido com o cliente para enviar proposta',
-        completed: false,
-      },
     });
 
     return opp;
   }
 
   // --- AUXILIARES VISUAIS ---
-  static getStageLabel(stage: OpportunityStage): string {
-    switch (stage) {
-      case 'IDENTIFICADO':
-        return 'Identificado';
-      case 'A_CONTATAR':
-        return 'A Contatar';
-      case 'CONTATADO':
-        return 'Contatado';
-      case 'INTERESSADO':
-        return 'Interessado';
-      case 'ORCAMENTO':
-        return 'Em Orçamento';
-      case 'CONVERTIDO':
-        return 'Convertido em Cliente';
-      case 'NAO_CONVERTEU':
-        return 'Não Converteu';
+  static getStageLabel(stage: OpportunityStage | string): string {
+    const normalized = normalizeOpportunityStage(stage);
+    switch (normalized) {
+      case 'PARA_CONTATAR':
+        return 'Para Contatar';
+      case 'CATALOGO_ENVIADO':
+        return 'Catálogo Enviado';
+      case 'INTERESSADO_ORCAMENTO':
+        return 'Interessado / Em Orçamento';
+      case 'FECHADO_SUCESSO':
+        return 'Bem Sucedido';
+      case 'SEM_RETORNO_FECHADO':
+        return 'Sem Retorno / Recusado';
       default:
         return stage;
     }
@@ -6692,36 +6634,6 @@ export class StorageService {
       default:
         return 'Outro';
     }
-  }
-
-  // Reset demo data
-  static resetToDemoData(): void {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_COMPANY_SETTINGS));
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
-    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(INITIAL_CUSTOMERS));
-    localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(INITIAL_ITEMS));
-    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(INITIAL_SALES));
-    localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.PRODUCTION, JSON.stringify(INITIAL_PRODUCTION_ORDERS));
-    localStorage.setItem(STORAGE_KEYS.INVENTORY_MOVEMENTS, JSON.stringify(INITIAL_INVENTORY_MOVEMENTS));
-    localStorage.setItem(STORAGE_KEYS.RECEIVABLES, JSON.stringify(INITIAL_RECEIVABLES));
-    localStorage.setItem(STORAGE_KEYS.RECEIVING_ACCOUNTS, JSON.stringify(INITIAL_RECEIVING_ACCOUNTS));
-    localStorage.setItem(STORAGE_KEYS.ONLINE_SERVICES, JSON.stringify(INITIAL_ONLINE_SERVICES));
-    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify(INITIAL_DOCUMENT_TEMPLATES));
-    localStorage.removeItem(STORAGE_KEYS.GLOBAL_DOCUMENT_FIELDS);
-    localStorage.setItem(STORAGE_KEYS.GENERATED_DOCUMENTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.OPPORTUNITIES, JSON.stringify(INITIAL_OPPORTUNITIES));
-    localStorage.setItem(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(INITIAL_PACKAGES));
-    localStorage.setItem(STORAGE_KEYS.APPROACH_TEMPLATES, JSON.stringify(INITIAL_APPROACH_TEMPLATES));
-    localStorage.setItem(STORAGE_KEYS.SEGMENT_SUGGESTIONS, JSON.stringify(INITIAL_SEGMENT_SUGGESTIONS));
-    localStorage.setItem(STORAGE_KEYS.COMPLEMENTARY_RULES, JSON.stringify(INITIAL_COMPLEMENTARY_RULES));
-    localStorage.setItem(STORAGE_KEYS.PUBLIC_SEGMENT_PAGES, JSON.stringify(INITIAL_PUBLIC_SEGMENT_PAGES));
-    localStorage.setItem(STORAGE_KEYS.CASH_REGISTER_SESSIONS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_USERS[0].id);
-    localStorage.removeItem('deleted_items');
   }
 
   // --- NICHOS DA VITRINE PÚBLICA ---
@@ -6874,7 +6786,30 @@ export class StorageService {
   }
 
   static async resetToInitialData(): Promise<void> {
-    this.resetToDemoData();
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_COMPANY_SETTINGS));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
+    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(INITIAL_CUSTOMERS));
+    localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(INITIAL_ITEMS));
+    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(INITIAL_SALES));
+    localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.PRODUCTION, JSON.stringify(INITIAL_PRODUCTION_ORDERS));
+    localStorage.setItem(STORAGE_KEYS.INVENTORY_MOVEMENTS, JSON.stringify(INITIAL_INVENTORY_MOVEMENTS));
+    localStorage.setItem(STORAGE_KEYS.RECEIVABLES, JSON.stringify(INITIAL_RECEIVABLES));
+    localStorage.setItem(STORAGE_KEYS.RECEIVING_ACCOUNTS, JSON.stringify(INITIAL_RECEIVING_ACCOUNTS));
+    localStorage.setItem(STORAGE_KEYS.DOCUMENT_TEMPLATES, JSON.stringify([]));
+    localStorage.removeItem(STORAGE_KEYS.GLOBAL_DOCUMENT_FIELDS);
+    localStorage.setItem(STORAGE_KEYS.GENERATED_DOCUMENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OPPORTUNITIES, JSON.stringify(INITIAL_OPPORTUNITIES));
+    localStorage.setItem(STORAGE_KEYS.OPPORTUNITY_ACTIVITIES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(INITIAL_PACKAGES));
+    localStorage.setItem(STORAGE_KEYS.APPROACH_TEMPLATES, JSON.stringify(INITIAL_APPROACH_TEMPLATES));
+    localStorage.setItem(STORAGE_KEYS.SEGMENT_SUGGESTIONS, JSON.stringify(INITIAL_SEGMENT_SUGGESTIONS));
+    localStorage.setItem(STORAGE_KEYS.COMPLEMENTARY_RULES, JSON.stringify(INITIAL_COMPLEMENTARY_RULES));
+    localStorage.setItem(STORAGE_KEYS.PUBLIC_SEGMENT_PAGES, JSON.stringify(INITIAL_PUBLIC_SEGMENT_PAGES));
+    localStorage.setItem(STORAGE_KEYS.CASH_REGISTER_SESSIONS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_USERS[0].id);
     localStorage.removeItem('deleted_items');
     sessionStorage.clear();
 

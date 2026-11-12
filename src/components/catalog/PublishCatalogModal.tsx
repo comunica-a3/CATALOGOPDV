@@ -13,6 +13,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { StorageService } from '../../services/storage';
 import { Modal } from '../common/Modal';
 
 interface PublishCatalogModalProps {
@@ -104,6 +105,14 @@ export const PublishCatalogModal: React.FC<PublishCatalogModalProps> = ({
       if (effectiveOwner) localStorage.setItem('pdv_github_owner', effectiveOwner);
       if (effectiveRepo) localStorage.setItem('pdv_github_repo', effectiveRepo);
       if (effectiveBranch) localStorage.setItem('pdv_github_branch', effectiveBranch);
+
+      // Garante que as configurações atuais da empresa (incluindo logo e catalogHeaderType) estejam sincronizadas no SQLite antes de publicar
+      try {
+        const currentCompanySettings = StorageService.getCompanySettings();
+        if (currentCompanySettings?.name) {
+          await api.saveSettings(currentCompanySettings);
+        }
+      } catch {}
 
       const res = await api.publishCatalog({
         githubToken: effectiveToken || undefined,

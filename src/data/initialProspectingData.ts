@@ -227,86 +227,23 @@ export const INITIAL_PACKAGES: ProductPackage[] = [
 export const INITIAL_APPROACH_TEMPLATES: ApproachMessageTemplate[] = [
   {
     id: 'tpl-1',
-    title: '1ª Abordagem — Negócio Local / Novo Estabelecimento',
+    title: 'Pedir Permissão — Enviar Catálogo',
     category: 'Primeiro Contato',
-    targetStage: 'A_CONTATAR',
-    templateText: `Olá, [NOME]! Tudo bem?
-
-Me chamo [VENDEDOR], da *[EMPRESA]*. Notei a presença do *[NOME_DO_NEGOCIO]* aqui na nossa região e gostaria de parabenizá-los!
-
-Estamos com condições especiais em materiais gráficos e comunicação visual (como cartões de visita, banners, panfletos e adesivos) para ajudar a movimentar ainda mais as suas vendas.
-
-Vocês têm alguma demanda de impressão ou divulgação prevista para os próximos dias? Posso montar uma simulação sem compromisso!`,
+    targetStage: 'PARA_CONTATAR',
+    templateText: `Olá, tudo bem? Aqui é da Dumorro. Notei sua empresa aqui na região e gostaria de saber: posso te enviar o link do nosso catálogo rápido de materiais (banners, lonas, adesivos e placas) para você consultar quando precisar?`,
     isDefault: true,
     active: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'tpl-2',
-    title: 'Apresentação de Pacote — Kit Promocional',
-    category: 'Oferta de Pacote',
-    targetStage: 'INTERESSADO',
-    templateText: `Olá, [NOME]! Como você está?
+    title: 'Enviar Catálogo — Link Rápido',
+    category: 'Envio de Catálogo',
+    targetStage: 'CATALOGO_ENVIADO',
+    templateText: `Show, segue o link do nosso catálogo: https://dumorro.com
 
-Aqui é o [VENDEDOR] da *[EMPRESA]*.
-
-Pensando nas necessidades do seu segmento de *[NECESSIDADE]*, preparamos uma solução completa: o *[PACOTE_SUGERIDO]*. 
-
-Com ele, você garante todos os materiais essenciais com um desconto especial de lançamento e agilidade na entrega!
-
-Gostaria de dar uma olhada na composição e nos valores desse kit?`,
+Se tiver alguma medida específica ou precisar de um material personalizado que não encontrou ali, é só me mandar uma foto ou as dimensões que calculo o orçamento para você sem compromisso!`,
     isDefault: true,
-    active: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'tpl-3',
-    title: 'Follow-up / Retorno de Orçamento Enviado',
-    category: 'Pós-Orçamento',
-    targetStage: 'ORCAMENTO',
-    templateText: `Olá, [NOME]! Tudo bem?
-
-Aqui é o [VENDEDOR] da *[EMPRESA]*.
-
-Passando para saber se você conseguiu avaliar a proposta de orçamento que te enviei recentemente. 
-
-Ficou com alguma dúvida sobre os prazos de produção, acabamentos ou formas de pagamento facilitadas? 
-
-Estamos com a fila de produção aberta para essa semana e consigo priorizar o seu pedido se confirmarmos hoje!`,
-    isDefault: true,
-    active: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'tpl-4',
-    title: 'Retomada de Contato / Lead Antigo',
-    category: 'Retorno',
-    targetStage: 'CONTATADO',
-    templateText: `Oi, [NOME], tudo bem?
-
-É o [VENDEDOR] da *[EMPRESA]*.
-
-Estou revisando meus contatos e lembrei da nossa conversa sobre as demandas do *[NOME_DO_NEGOCIO]*. 
-
-Como estão os materiais de divulgação de vocês no momento? Precisando repor cartões, panfletos, adesivos ou faixas, temos condições especiais para clientes da nossa região!
-
-Se precisar de qualquer orçamento rápido, estou 100% à disposição!`,
-    isDefault: false,
-    active: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'tpl-5',
-    title: 'Abordagem Rápida — WhatsApp Direto',
-    category: 'Primeiro Contato',
-    targetStage: 'A_CONTATAR',
-    templateText: `Olá, [NOME]! Tudo bem?
-Aqui é o [VENDEDOR] da *[EMPRESA]*.
-
-Trabalhamos com produção rápida de cartões, panfletos, banners, comandas e comunicação visual para empresas e comércios da nossa cidade.
-
-Se precisar de orçamento rápido com preço direto de fábrica, é só me mandar o que você precisa que calculo na hora para você!`,
-    isDefault: false,
     active: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },

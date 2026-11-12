@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { StorageService } from '../services/storage';
 import { api } from '../services/api';
 import { User, UserRole } from '../types';
+import { isStaticCatalogOnlyHost } from '../utils/env';
 
 export function normalizeRole(role?: string): UserRole {
   if (role === 'ADMIN' || role === 'ADMINISTRADOR') {
@@ -100,28 +101,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (isStaticCatalogOnlyHost()) return false;
     const session = StorageService.getSession();
     return session.isAuthenticated;
   });
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(() => {
+    if (isStaticCatalogOnlyHost()) return false;
     const session = StorageService.getSession();
     return session.isAuthenticated && session.mustChangePassword;
   });
 
   const loadUsers = useCallback(async () => {
+    // Em hospedagem estática (GitHub Pages), não tentar consultar API administrativa
+    if (isStaticCatalogOnlyHost()) {
+      setIsAuthenticated(false);
+      setMustChangePassword(false);
+      return;
+    }
+
+    const session = StorageService.getSession();
+    setIsAuthenticated(session.isAuthenticated);
+    setMustChangePassword(session.isAuthenticated && session.mustChangePassword);
+
+    if (session.isAuthenticated && session.user) {
+      const normalizedSessionUser = { ...session.user, role: normalizeRole(session.user.role) };
+      setCurrentUserState(normalizedSessionUser);
+      StorageService.setCurrentUser(normalizedSessionUser.id);
+    } else {
+      const active = StorageService.getCurrentUser();
+      if (active) {
+        setCurrentUserState({ ...active, role: normalizeRole(active.role) });
+      }
+      // Visitantes não autenticados no catálogo não precisam consultar endpoints administrativos
+      return;
+    }
+
     // 1. Fetch live status from backend server
-    let serverHasAdmin: boolean | null = null;
     try {
       const statusRes = await api.getAuthStatus();
       if (statusRes && typeof statusRes.hasAdmin === 'boolean') {
-        serverHasAdmin = statusRes.hasAdmin;
         setHasAdmin(statusRes.hasAdmin);
       }
     } catch (e) {
       console.debug('API auth status check notice:', e);
     }
 
-    // 2. Sync from backend server
+    // 2. Sync from backend server (only when authenticated)
     try {
       const serverUsers = await api.getUsers();
       if (Array.isArray(serverUsers) && serverUsers.length > 0) {
@@ -138,21 +163,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const localUsers = StorageService.getUsers().map((u) => ({ ...u, role: normalizeRole(u.role) }));
       setUsers(localUsers);
     }
-
-    const session = StorageService.getSession();
-    setIsAuthenticated(session.isAuthenticated);
-    setMustChangePassword(session.isAuthenticated && session.mustChangePassword);
-
-    if (session.isAuthenticated && session.user) {
-      const normalizedSessionUser = { ...session.user, role: normalizeRole(session.user.role) };
-      setCurrentUserState(normalizedSessionUser);
-      StorageService.setCurrentUser(normalizedSessionUser.id);
-    } else {
-      const active = StorageService.getCurrentUser();
-      if (active) {
-        setCurrentUserState({ ...active, role: normalizeRole(active.role) });
-      }
-    }
   }, []);
 
   useEffect(() => {
@@ -160,6 +170,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [loadUsers]);
 
   const checkAuthStatus = async (): Promise<{ hasAdmin: boolean }> => {
+    if (isStaticCatalogOnlyHost()) {
+      return { hasAdmin: true };
+    }
     try {
       const statusRes = await api.getAuthStatus();
       const adminExists = !!statusRes?.hasAdmin;
@@ -230,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // Direct backend API authentication (Turso)
+      // Direct backend API authentication (SQLite)
       const apiRes = await api.login({ username: inputUser, password: inputPassword });
       if (apiRes.success && apiRes.user) {
         const authUser: User = {
@@ -293,7 +306,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       StorageService.setSession(updatedUser, false);
       setCurrentUserState(updatedUser);
       setMustChangePassword(false);
-      StorageService.setUserPassword(currentUser.id, trimmed, false).catch(() => {});
       return { success: true };
     } catch (err: any) {
       return {
@@ -325,7 +337,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('API password change notice:', apiErr);
       }
 
-      await StorageService.setUserPassword(uId, trimmedNew, false);
       if (uId === currentUser.id) {
         setMustChangePassword(false);
       }
@@ -352,7 +363,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (apiErr) {
         console.warn('API reset password notice:', apiErr);
       }
-      await StorageService.setUserPassword(userId, trimmed, false);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro ao redefinir senha do usuário.' };

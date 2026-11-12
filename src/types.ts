@@ -48,22 +48,6 @@ export interface User {
   isTestUser?: boolean;
 }
 
-export interface UserCredentials {
-  userId: string;
-  passwordHash: string;
-  salt: string;
-  isDefaultPassword?: boolean;
-  updatedAt?: string;
-}
-
-export interface AdminAuthData {
-  username: string;
-  passwordHash: string;
-  salt: string;
-  isDefaultPassword: boolean;
-  updatedAt?: string;
-}
-
 export interface Customer {
   id: string;
   name: string;
@@ -444,6 +428,7 @@ export interface SaleItem {
   commissionRate?: number; // e.g., 50 for 50%, 30 for 30%
   commissionAmount?: number;
   configuration: CartItemConfiguration;
+  isCustom?: boolean;
 }
 
 export interface SaleEditHistoryEntry {
@@ -613,6 +598,7 @@ export interface CompanySettings {
   city: string;
   state: string;
   logoUrl?: string;
+  logoDataUrl?: string; // Data URL embutida (Base64) da logo para funcionamento offline / GitHub Pages
   logoDriveFileId?: string; // ID do arquivo da logo no Google Drive (zero armazenamento local)
   logoDriveFileName?: string; // Nome original do arquivo da logo no Google Drive
   logoDriveThumbnailUrl?: string; // URL da miniatura no Google Drive
@@ -629,6 +615,10 @@ export interface CompanySettings {
     mainSubtitle?: string;
     funilTitle?: string;
     funilDesc?: string;
+  };
+  prospectingMessages?: {
+    requestPermissionMessage?: string;
+    sendCatalogMessage?: string;
   };
   pixQrCodeUrl?: string; // URL ou base64 do QR Code PIX cadastrado pelo Admin para exibição no POSFácil
 }
@@ -648,28 +638,6 @@ export interface ProductNicheCard {
   customKeywords?: string[]; // Termos de busca adicionais
   createdAt?: string;
   updatedAt?: string;
-}
-
-// --- ONLINE EXTERNAL SERVICES ("Serviços Online") ---
-export type OnlineServiceCategory =
-  | 'Governo'
-  | 'Documentos'
-  | 'Serviços Públicos'
-  | 'Consultas'
-  | 'Agendamentos'
-  | 'Outros';
-
-export interface OnlineService {
-  id: string;
-  name: string;
-  category: OnlineServiceCategory | string;
-  description?: string;
-  url: string;
-  price?: number; // Preço de venda opcional para cobrança no PDV/orçamento (R$)
-  cost?: number; // Custo opcional
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // --- DOCUMENT GENERATION ("Geração de Documentos") ---
@@ -791,13 +759,45 @@ export interface Budget {
 // ==========================================
 
 export type OpportunityStage =
-  | 'IDENTIFICADO'   // 🔴 Identificado (Possível cliente encontrado)
-  | 'A_CONTATAR'     // 🟠 A Contatar (Pronto para receber primeira abordagem)
-  | 'CONTATADO'      // 🟡 Contatado (Já recebeu abordagem)
-  | 'INTERESSADO'    // 🔵 Interessado (Demonstrou interesse)
-  | 'ORCAMENTO'      // 🟣 Orçamento (Solicitou ou recebeu proposta/orçamento)
-  | 'CONVERTIDO'     // 🟢 Convertido (Realizou primeira compra)
-  | 'NAO_CONVERTEU';  // ⚫ Não Converteu (Negociação encerrada sem venda)
+  | 'PARA_CONTATAR'          // Para Contatar: Lead cadastrado, aguardando primeira abordagem
+  | 'CATALOGO_ENVIADO'       // Catálogo Enviado: O estabelecimento autorizou o envio e recebeu o link do catálogo
+  | 'INTERESSADO_ORCAMENTO'  // Interessado / Em Orçamento: Demonstrou interesse e pode avançar para negociação e orçamento
+  | 'FECHADO_SUCESSO'        // Bem Sucedido: Contatação bem sucedida / negócio fechado
+  | 'SEM_RETORNO_FECHADO';   // Sem Retorno / Recusado: Não respondeu ou recusou o contato
+
+export function normalizeOpportunityStage(stage?: string | null): OpportunityStage {
+  switch (String(stage || '').toUpperCase()) {
+    case 'PARA_CONTATAR':
+    case 'IDENTIFICADO':
+    case 'A_CONTATAR':
+      return 'PARA_CONTATAR';
+    case 'CATALOGO_ENVIADO':
+    case 'CONTATADO':
+      return 'CATALOGO_ENVIADO';
+    case 'INTERESSADO_ORCAMENTO':
+    case 'INTERESSADO':
+    case 'ORCAMENTO':
+      return 'INTERESSADO_ORCAMENTO';
+    case 'FECHADO_SUCESSO':
+    case 'BEM_SUCEDIDO':
+    case 'CONVERTIDO':
+      return 'FECHADO_SUCESSO';
+    case 'SEM_RETORNO_FECHADO':
+    case 'SEM_RETORNO_RECUSADO':
+    case 'NAO_CONVERTEU':
+    case 'RECUSADO':
+      return 'SEM_RETORNO_FECHADO';
+    default:
+      return 'PARA_CONTATAR';
+  }
+}
+
+export const DEFAULT_PERMISSION_WHATSAPP_MESSAGE =
+  'Olá, tudo bem? Aqui é da Dumorro. Notei sua empresa aqui na região e gostaria de saber: posso te enviar o link do nosso catálogo rápido de materiais (banners, lonas, adesivos e placas) para você consultar quando precisar?';
+
+export const DEFAULT_CATALOG_WHATSAPP_MESSAGE = `Show, segue o link do nosso catálogo: https://dumorro.com
+
+Se tiver alguma medida específica ou precisar de um material personalizado que não encontrou ali, é só me mandar uma foto ou as dimensões que calculo o orçamento para você sem compromisso!`;
 
 export type OpportunityOrigin =
   | 'PESQUISA_PROPRIA'
@@ -855,43 +855,39 @@ export interface OpportunityNextAction {
 
 export interface Opportunity {
   id: string;
-  opportunityNumber?: string; // e.g. "OPP-001"
-  name: string; // Nome da pessoa ou negócio (ex: "Salão Bella Vista", "Padaria Central")
-  contactName?: string; // Nome do responsável/contato
-  segment: string; // Ex: "Salão de Beleza", "Restaurante", "Comércio", "Escola", "Evento", "Autônomo"
-  neighborhood?: string; // Bairro ou região
-  city?: string;
-  phone: string;
+  opportunityNumber?: string | number; // e.g. "OPP-001"
+  name: string; // Nome do Contato / Empresa (ex: "Padaria Central" ou "Marcos - Padaria Central")
+  phone: string; // WhatsApp / Telefone
   whatsapp?: string;
-  instagram?: string;
-  needs: string[]; // Lista de necessidades identificadas
-  needsDescription?: string; // Descrição livre da necessidade
-  origin: OpportunityOrigin;
-  originDetails?: string;
+  neighborhood?: string; // Bairro / Região
+  notes?: string; // Observação (texto livre e opcional)
   stage: OpportunityStage;
-  assignedUserId?: string; // Responsável comercial / Vendedor / Promotor
+
+  // Campos legados opcionais mantidos apenas para compatibilidade
+  contactName?: string;
+  segment?: string;
+  city?: string;
+  instagram?: string;
+  needs?: string[];
+  needsDescription?: string;
+  origin?: OpportunityOrigin;
+  originDetails?: string;
+  assignedUserId?: string;
   assignedUserName?: string;
-  notes?: string;
   suggestedProductIds?: string[];
   suggestedPackageIds?: string[];
   nextAction?: OpportunityNextAction;
-  
-  // Rastreabilidade de Captação Pública & Formulários
   sourceFormId?: string;
   sourceFormTitle?: string;
   sourcePageId?: string;
   sourcePageTitle?: string;
   formResponses?: Record<string, any>;
-
-  // Conversão
   convertedCustomerId?: string;
   convertedBudgetId?: string;
   convertedSaleId?: string;
   selectedTemplateId?: string;
   customApproachMessage?: string;
   convertedAt?: string;
-
-  // Encerramento
   lostReason?: string;
 
   createdAt: string;
@@ -901,9 +897,9 @@ export interface Opportunity {
 export interface ApproachMessageTemplate {
   id: string;
   title: string;
-  category?: string; // ex: "Primeiro Contato", "Retorno", "Oferta de Pacote", "Pós-Orçamento"
-  targetStage?: OpportunityStage | 'ALL';
-  templateText: string; // Variáveis: [NOME], [VENDEDOR], [NECESSIDADE], [NOME_DO_NEGOCIO], [PRODUTO_SUGERIDO], [PACOTE_SUGERIDO], [EMPRESA]
+  category?: string;
+  targetStage?: OpportunityStage | string;
+  templateText: string;
   isDefault?: boolean;
   active: boolean;
   createdAt: string;

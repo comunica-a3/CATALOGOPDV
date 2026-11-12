@@ -34,17 +34,72 @@ export function buildReceiptWhatsAppMessage(params: ReceiptWhatsAppParams): stri
 
 // --- 2. ORÇAMENTOS (Budgets) ---
 
+function formatBudgetItemSpecsForWhatsApp(item: any, index: number): string {
+  const itemName = item?.itemName || item?.item?.name || 'Item';
+  const qty = Number(item?.quantity) || 1;
+  const unitPrice = Number(item?.unitPrice ?? item?.item?.salePrice ?? 0);
+  const totalPrice = Number(item?.totalPrice ?? unitPrice * qty);
+  const config = item?.configuration || {};
+
+  let block = `${index + 1}. *${itemName}* (Qtd: ${qty})\n`;
+
+  if (config.packageName) {
+    block += `   • Pacote: ${config.packageName}\n`;
+  }
+
+  if (config.calculatedAreaM2) {
+    const wUnit = config.widthUnit || config.dimensionUnit || 'm';
+    const hUnit = config.heightUnit || config.dimensionUnit || 'm';
+    if (config.width && config.height) {
+      block += `   • Medida / M²: ${config.width}${wUnit} x ${config.height}${hUnit} (${config.calculatedAreaM2} m²)\n`;
+    } else {
+      block += `   • Área (M²): ${config.calculatedAreaM2} m²\n`;
+    }
+  } else if (config.width && config.height) {
+    const unit = config.dimensionUnit || 'm';
+    block += `   • Medida: ${config.width}${unit} x ${config.height}${unit}\n`;
+  }
+
+  if (config.variantName) {
+    block += `   • Variação: ${config.variantName}\n`;
+  }
+
+  if (config.selectedOptions && Object.keys(config.selectedOptions).length > 0) {
+    const opts = Object.entries(config.selectedOptions)
+      .filter(([, v]) => Boolean(v))
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+    if (opts) {
+      block += `   • Acabamentos: ${opts}\n`;
+    }
+  }
+
+  if (config.notes) {
+    block += `   • Detalhes: ${config.notes}\n`;
+  }
+
+  block += `   • Valor por unidade: ${formatCurrency(unitPrice)}\n`;
+  block += `   • Subtotal do item: *${formatCurrency(totalPrice)}*\n`;
+
+  return block;
+}
+
 export function buildBudgetWhatsAppMessage(budget: Budget, companyName: string): string {
   let msg = `Olá *${budget.customerName || 'Cliente'}*!\n\nSegue a proposta *Orçamento #${budget.budgetNumber}*:\n`;
   msg += `*Emitido:* ${new Date(budget.createdAt).toLocaleDateString('pt-BR')}\n`;
   msg += `*Validade:* ${new Date(budget.validUntil).toLocaleDateString('pt-BR')}\n\n`;
+  msg += `*ITENS DO ORÇAMENTO:*\n`;
 
   (budget.items || []).forEach((item, index) => {
-    const itemName = (item as any)?.itemName || item.item?.name || 'Item';
-    msg += `${index + 1}. ${itemName} (Qtd: ${item.quantity}) - ${formatCurrency(item.totalPrice)}\n`;
+    msg += `${formatBudgetItemSpecsForWhatsApp(item, index)}\n`;
   });
 
-  msg += `\n*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\nPodemos confirmar o seu pedido?`;
+  if (budget.discount && budget.discount > 0) {
+    msg += `Subtotal: ${formatCurrency(budget.subtotal)}\n`;
+    msg += `Desconto: -${formatCurrency(budget.discount)}\n`;
+  }
+
+  msg += `*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\nPodemos confirmar o seu pedido?`;
   return msg;
 }
 
@@ -56,29 +111,13 @@ export function buildDetailedBudgetWhatsAppMessage(budget: Budget, companyName: 
   msg += `*ITENS DO ORÇAMENTO:*\n`;
 
   (budget.items || []).forEach((item, index) => {
-    const itemName = (item as any)?.itemName || item.item?.name || 'Item';
-    msg += `${index + 1}. *${itemName}* (Qtd: ${item.quantity})\n`;
-    if (item.configuration?.notes) {
-      msg += `   • Detalhes: ${item.configuration.notes}\n`;
-    }
-    if (item.configuration?.variantName) {
-      msg += `   • Variação: ${item.configuration.variantName}\n`;
-    }
-    if (item.configuration?.calculatedAreaM2) {
-      msg += `   • Medida: ${item.configuration.width}x${item.configuration.height}${item.configuration.dimensionUnit || 'm'} (${item.configuration.calculatedAreaM2}m²)\n`;
-    }
-    if (item.configuration?.selectedOptions) {
-      msg += `   • Acabamentos: ${Object.entries(item.configuration.selectedOptions)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(', ')}\n`;
-    }
-    msg += `   • Valor: ${formatCurrency(item.totalPrice)}\n`;
+    msg += `${formatBudgetItemSpecsForWhatsApp(item, index)}\n`;
   });
 
   if (budget.discount && budget.discount > 0) {
-    msg += `\nSubtotal: ${formatCurrency(budget.subtotal)}\nDesconto: -${formatCurrency(budget.discount)}`;
+    msg += `Subtotal: ${formatCurrency(budget.subtotal)}\nDesconto: -${formatCurrency(budget.discount)}\n`;
   }
-  msg += `\n*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\n`;
+  msg += `*VALOR TOTAL: ${formatCurrency(budget.total)}*\n\n`;
   if (budget.paymentConditions) {
     msg += `*Condições:* ${budget.paymentConditions}\n`;
   }

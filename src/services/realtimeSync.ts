@@ -1,5 +1,6 @@
 import { StorageService } from './storage';
 import { api } from './api';
+import { isStaticCatalogOnlyHost } from '../utils/env';
 
 type SyncCallback = (event?: string, data?: any) => void;
 
@@ -45,6 +46,7 @@ class RealtimeSyncManager {
 
   public ensureConnection() {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    if (isStaticCatalogOnlyHost() || !StorageService.getSession().isAuthenticated) return;
     if (this.eventSource && this.eventSource.readyState !== EventSource.CLOSED) return;
     if (this.isConnecting) return;
 
@@ -86,6 +88,7 @@ class RealtimeSyncManager {
         'cash-sessions-updated',
         'sales-updated',
         'receivables-updated',
+        'opportunities-updated',
       ];
 
       for (const evtName of registeredEvents) {
@@ -104,6 +107,9 @@ class RealtimeSyncManager {
         if (this.eventSource) {
           this.eventSource.close();
           this.eventSource = null;
+        }
+        if (isStaticCatalogOnlyHost() || !StorageService.getSession().isAuthenticated) {
+          return;
         }
         // Retry connection with 3s backoff
         if (!this.reconnectTimer && this.callbacks.size > 0) {
@@ -134,6 +140,9 @@ class RealtimeSyncManager {
   private lastTriggerTime: number = 0;
 
   private handleSyncTrigger(event: string, data: any, fromNetwork: boolean) {
+    if (isStaticCatalogOnlyHost() || !StorageService.getSession().isAuthenticated) {
+      return;
+    }
     // Debounce triggers within 400ms and enforce a 800ms cooldown to prevent event storms
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -183,6 +192,9 @@ class RealtimeSyncManager {
         }
         if (event.includes('sale')) {
           window.dispatchEvent(new CustomEvent('sales-updated', { detail: { event, data } }));
+        }
+        if (event.includes('opportunit')) {
+          window.dispatchEvent(new CustomEvent('opportunities-updated', { detail: { event, data } }));
         }
       }
 

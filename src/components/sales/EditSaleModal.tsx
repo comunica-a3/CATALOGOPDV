@@ -3,11 +3,13 @@ import {
   AlertCircle,
   CheckCircle2,
   DollarSign,
+  Edit2,
   History,
   Info,
   Package,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   User as UserIcon,
   X,
@@ -15,6 +17,7 @@ import {
 } from 'lucide-react';
 import { StorageService } from '../../services/storage';
 import {
+  CartItem,
   CompanySettings,
   Customer,
   Item,
@@ -24,6 +27,7 @@ import {
   User,
 } from '../../types';
 import { formatCurrency, formatDateTime, maskPhone } from '../../utils/formatters';
+import { CustomItemModal } from '../budgets/CustomItemModal';
 import { Modal } from '../common/Modal';
 
 interface EditSaleModalProps {
@@ -99,9 +103,12 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Item Picker Modal State
+  // Item Picker & Custom Item Modal State
   const [showItemPicker, setShowItemPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+  const [editingCustomItemIndex, setEditingCustomItemIndex] = useState<number | null>(null);
+  const [customItemInitial, setCustomItemInitial] = useState<CartItem | null>(null);
 
   // Calculations
   const subtotal = useMemo(() => {
@@ -211,6 +218,120 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
 
     setItems((prev) => [...prev, newItem]);
     setShowItemPicker(false);
+  };
+
+  const handleOpenNewCustomItem = (prefillName?: string) => {
+    setEditingCustomItemIndex(null);
+    if (prefillName && prefillName.trim()) {
+      const cleanName = prefillName.trim();
+      setCustomItemInitial({
+        cartItemId: `custom-item-${Date.now()}`,
+        item: {
+          id: `custom-${Date.now()}`,
+          name: cleanName,
+          type: 'PRODUTO_GRAFICO',
+          categoryId: 'cat-grafica',
+          sku: 'PERS-GRAF',
+          description: '',
+          costPrice: 0,
+          salePrice: 0,
+          marginReais: 0,
+          marginPercent: 0,
+          active: true,
+          showInCatalog: false,
+          featuredInCatalog: false,
+          isCustom: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        quantity: 1,
+        unitPrice: 0,
+        unitCost: 0,
+        totalPrice: 0,
+        totalCost: 0,
+        configuration: {},
+        isCustom: true,
+      });
+    } else {
+      setCustomItemInitial(null);
+    }
+    setShowItemPicker(false);
+    setShowCustomItemModal(true);
+  };
+
+  const handleOpenEditCustomItem = (index: number) => {
+    const target = items[index];
+    if (!target) return;
+    setEditingCustomItemIndex(index);
+    setCustomItemInitial({
+      cartItemId: target.id,
+      item: {
+        id: target.itemId || `custom-${Date.now()}`,
+        name: target.itemName || (target as any).name || '',
+        type: target.itemType || 'PRODUTO_GRAFICO',
+        categoryId: 'cat-grafica',
+        sku: target.sku || 'PERS-GRAF',
+        description: target.configuration?.notes || '',
+        costPrice: Number(target.unitCost) || 0,
+        salePrice: Number(target.unitPrice) || 0,
+        marginReais: Number(((Number(target.unitPrice) || 0) - (Number(target.unitCost) || 0)).toFixed(2)),
+        marginPercent: 0,
+        active: true,
+        showInCatalog: false,
+        featuredInCatalog: false,
+        isCustom: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      quantity: Number(target.quantity) || 1,
+      unitPrice: Number(target.unitPrice) || 0,
+      unitCost: Number(target.unitCost) || 0,
+      totalPrice: Number(target.totalPrice) || 0,
+      totalCost: Number(target.totalCost) || 0,
+      configuration: { ...(target.configuration || {}) },
+      isCustom: true,
+    });
+    setShowCustomItemModal(true);
+  };
+
+  const handleSaveCustomItem = (customCartItem: CartItem) => {
+    const commissionRates = StorageService.getCommissionRates();
+    const rate = Math.max(0, Math.min(100, Number(commissionRates[customCartItem.item.type] ?? 0)));
+    const totalPrice = Number(customCartItem.totalPrice) || 0;
+
+    const saleItem: SaleItem = {
+      id:
+        customCartItem.cartItemId ||
+        `item-custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      itemId: customCartItem.item.id || `custom-${Date.now()}`,
+      itemName: customCartItem.item.name,
+      itemType: customCartItem.item.type,
+      sku: customCartItem.item.sku || 'PERS',
+      quantity: Number(customCartItem.quantity) || 1,
+      unitPrice: Number(customCartItem.unitPrice) || 0,
+      unitCost: Number(customCartItem.unitCost) || 0,
+      totalPrice,
+      totalCost: Number(customCartItem.totalCost) || 0,
+      commissionRate: rate,
+      commissionAmount: Number(((totalPrice * rate) / 100).toFixed(2)),
+      configuration: {
+        ...(customCartItem.configuration || {}),
+      },
+      isCustom: true,
+    };
+
+    if (editingCustomItemIndex !== null) {
+      setItems((prev) => {
+        const copy = [...prev];
+        copy[editingCustomItemIndex] = saleItem;
+        return copy;
+      });
+    } else {
+      setItems((prev) => [...prev, saleItem]);
+    }
+    setEditingCustomItemIndex(null);
+    setCustomItemInitial(null);
+    setShowCustomItemModal(false);
   };
 
   // Payment management
@@ -399,19 +520,30 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
 
           {/* Items Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
                 <Package className="w-3.5 h-3.5 text-blue-600" />
                 <span>Produtos e Itens ({items.length})</span>
               </h4>
-              <button
-                type="button"
-                onClick={() => setShowItemPicker(true)}
-                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Adicionar Item</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenNewCustomItem()}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Incluir um produto ou serviço personalizado (não cadastrado no catálogo)"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>+ Item Personalizado (Não Cadastrado)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowItemPicker(true)}
+                  className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Adicionar Item Cadastrado</span>
+                </button>
+              </div>
             </div>
 
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
@@ -431,13 +563,31 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
                     const isM2 =
                       item.configuration?.width !== undefined &&
                       item.configuration?.height !== undefined;
+                    const isCustomItem = Boolean(
+                      item.isCustom ||
+                        String(item.itemId || '').startsWith('custom-') ||
+                        String(item.sku || '').startsWith('PERS')
+                    );
                     return (
                       <tr key={idx} className="hover:bg-slate-50/80">
                         <td className="py-2.5 px-3">
-                          <p className="font-bold text-slate-900">{item.itemName || (item as any)?.name}</p>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-slate-900">{item.itemName || (item as any)?.name}</p>
+                            {isCustomItem && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold flex items-center gap-0.5">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Personalizado</span>
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono block">
                             {item.itemType} {item.sku ? `• ${item.sku}` : ''}
                           </span>
+                          {item.configuration?.notes && (
+                            <span className="text-[10px] text-slate-500 italic block mt-0.5">
+                              {item.configuration.notes}
+                            </span>
+                          )}
                         </td>
 
                         {/* Dimensions if m² */}
@@ -513,16 +663,28 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
                           {formatCurrency(item.totalPrice)}
                         </td>
 
-                        {/* Remove Action */}
+                        {/* Remove / Edit Action */}
                         <td className="py-2.5 px-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            title="Remover item"
-                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            {isCustomItem && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditCustomItem(idx)}
+                                title="Editar detalhes do item personalizado"
+                                className="p-1 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              title="Remover item"
+                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -769,15 +931,27 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-3 border-b border-slate-100">
+            <div className="p-3 border-b border-slate-100 space-y-2">
               <input
                 type="text"
                 value={pickerSearch}
                 onChange={(e) => setPickerSearch(e.target.value)}
-                placeholder="Buscar por nome, SKU ou categoria..."
+                placeholder="Buscar produto cadastrado por nome ou SKU..."
                 className="w-full text-xs p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 autoFocus
               />
+              <button
+                type="button"
+                onClick={() => handleOpenNewCustomItem(pickerSearch)}
+                className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>
+                  {pickerSearch.trim()
+                    ? `+ Incluir "${pickerSearch.trim()}" como Item Personalizado (Não Cadastrado)`
+                    : '+ Incluir Item Personalizado (Não Cadastrado)'}
+                </span>
+              </button>
             </div>
             <div className="p-3 overflow-y-auto space-y-1.5 flex-1 text-xs">
               {catalogItems
@@ -799,11 +973,11 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
                       <p className="font-bold text-slate-900">{ci.name}</p>
                       <span className="text-[10px] text-slate-400">
                         {ci.pricingModel === 'POR_M2' ? 'Cobrança por m²' : 'Unidade'} • Estoque:{' '}
-                        {ci.type === 'PRODUTO_FISICO' ? ci.stock : 'Serviço'}
+                        {ci.type === 'PRODUTO_FISICO' ? ci.stock : 'Sob demanda / Serviço'}
                       </span>
                     </div>
                     <span className="font-mono font-bold text-blue-700">
-                      {formatCurrency(ci.price)}
+                      {formatCurrency(ci.salePrice ?? (ci as any).price ?? 0)}
                     </span>
                   </div>
                 ))}
@@ -811,6 +985,18 @@ export const EditSaleModal: React.FC<EditSaleModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Custom (Unregistered) Item Modal */}
+      <CustomItemModal
+        isOpen={showCustomItemModal}
+        onClose={() => {
+          setShowCustomItemModal(false);
+          setEditingCustomItemIndex(null);
+          setCustomItemInitial(null);
+        }}
+        onSave={handleSaveCustomItem}
+        initialItem={customItemInitial}
+      />
     </Modal>
   );
 };

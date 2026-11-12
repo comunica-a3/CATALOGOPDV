@@ -1,6 +1,8 @@
 import {
   Calendar,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   CreditCard,
   Download,
@@ -14,14 +16,14 @@ import {
   Trash2,
   Upload,
   User,
+  XCircle,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import { Budget, CompanySettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { buildBudgetWhatsAppMessage, openWhatsApp } from '../../utils/whatsappMessages';
-import { Badge } from '../common/Badge';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { POSBudgetModal } from '../pos/POSBudgetModal';
 import { BudgetDetailModal } from './BudgetDetailModal';
@@ -33,6 +35,39 @@ interface BudgetsViewProps {
   onSaleCreated?: () => void;
 }
 
+const BUDGET_STATUS_OPTIONS: Array<{
+  value: Budget['status'];
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+  icon: React.FC<{ className?: string }>;
+}> = [
+  {
+    value: 'ABERTO',
+    label: 'Em aberto',
+    badgeClass:
+      'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80 hover:border-amber-300',
+    dotClass: 'text-amber-600',
+    icon: Clock,
+  },
+  {
+    value: 'CONVERTIDO_EM_VENDA',
+    label: 'Convertido',
+    badgeClass:
+      'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100/80 hover:border-blue-300',
+    dotClass: 'text-blue-600',
+    icon: CheckCircle2,
+  },
+  {
+    value: 'REJEITADO',
+    label: 'Rejeitado',
+    badgeClass:
+      'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100/80 hover:border-rose-300',
+    dotClass: 'text-rose-600',
+    icon: XCircle,
+  },
+];
+
 export const BudgetsView: React.FC<BudgetsViewProps> = ({
   companySettings,
   onNavigateToPDV,
@@ -43,6 +78,13 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
 
+  // Inline status dropdown state
+  const [statusMenu, setStatusMenu] = useState<{
+    budget: Budget;
+    top: number;
+    left: number;
+  } | null>(null);
+
   // Modals
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
@@ -50,6 +92,14 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<Budget | null>(null);
   const [toastMessage, setToastMessage] = useState('');
+
+  useEffect(() => {
+    const onSync = () => {
+      setBudgets(StorageService.getBudgets());
+    };
+    window.addEventListener('storage-sync-completed', onSync);
+    return () => window.removeEventListener('storage-sync-completed', onSync);
+  }, []);
 
   const filteredBudgets = useMemo(() => {
     return budgets.filter((b) => {
@@ -70,13 +120,23 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
     setBudgets(StorageService.getBudgets());
   };
 
+  const getStatusLabel = (status: Budget['status']): string => {
+    const found = BUDGET_STATUS_OPTIONS.find((o) => o.value === status);
+    if (found) return found.label;
+    if (status === 'APROVADO') return 'Aprovado';
+    if (status === 'EXPIRADO') return 'Expirado';
+    return status;
+  };
+
   const handleUpdateStatus = (budgetId: string, status: Budget['status']) => {
-    StorageService.updateBudgetStatus(budgetId, status);
+    const updated = StorageService.updateBudgetStatus(budgetId, status);
     handleRefresh();
     if (selectedBudget && selectedBudget.id === budgetId) {
       setSelectedBudget((prev) => (prev ? { ...prev, status } : null));
     }
-    setToastMessage(`Status do orçamento atualizado para "${status}".`);
+    setStatusMenu(null);
+    const numLabel = updated?.budgetNumber ? ` #${updated.budgetNumber}` : '';
+    setToastMessage(`Status do orçamento${numLabel} alterado para "${getStatusLabel(status)}".`);
     setTimeout(() => setToastMessage(''), 4000);
   };
 
@@ -124,21 +184,38 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
     openWhatsApp(cleanPhone, msg);
   };
 
-  const getStatusBadge = (status: Budget['status']) => {
-    switch (status) {
-      case 'ABERTO':
-        return <Badge variant="warning" size="sm">Em Aberto</Badge>;
-      case 'APROVADO':
-        return <Badge variant="success" size="sm">Aprovado</Badge>;
-      case 'CONVERTIDO_EM_VENDA':
-        return <Badge variant="primary" size="sm">Convertido</Badge>;
-      case 'REJEITADO':
-        return <Badge variant="danger" size="sm">Rejeitado</Badge>;
-      case 'EXPIRADO':
-        return <Badge variant="secondary" size="sm">Expirado</Badge>;
-      default:
-        return <Badge variant="gray" size="sm">{status}</Badge>;
-    }
+  const renderInteractiveStatus = (b: Budget) => {
+    const currentOpt =
+      BUDGET_STATUS_OPTIONS.find((o) => o.value === b.status) || BUDGET_STATUS_OPTIONS[0];
+    const StatusIcon = currentOpt.icon;
+    const isOpen = statusMenu?.budget.id === b.id;
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isOpen) {
+            setStatusMenu(null);
+            return;
+          }
+          const rect = e.currentTarget.getBoundingClientRect();
+          const menuHeight = 136;
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const top = spaceBelow < menuHeight ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4;
+          const left = Math.min(rect.left, window.innerWidth - 180);
+          setStatusMenu({ budget: b, top, left });
+        }}
+        title="Clique para alterar o status do orçamento"
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer select-none shadow-2xs ${currentOpt.badgeClass}`}
+      >
+        <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${currentOpt.dotClass}`} />
+        <span>{currentOpt.label}</span>
+        <ChevronDown
+          className={`w-3 h-3 opacity-70 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+    );
   };
 
   return (
@@ -224,10 +301,9 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto">
             {[
               { id: 'TODOS', label: 'Todos' },
-              { id: 'ABERTO', label: 'Em Aberto' },
-              { id: 'APROVADO', label: 'Aprovados' },
-              { id: 'CONVERTIDO_EM_VENDA', label: 'Convertidos em Venda' },
-              { id: 'REJEITADO', label: 'Rejeitados' },
+              { id: 'ABERTO', label: 'Em aberto' },
+              { id: 'CONVERTIDO_EM_VENDA', label: 'Convertido' },
+              { id: 'REJEITADO', label: 'Rejeitado' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -311,7 +387,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
 
                     {/* Status */}
                     <td className="py-3.5 px-3">
-                      {getStatusBadge(b.status)}
+                      {renderInteractiveStatus(b)}
                     </td>
 
                     {/* Actions */}
@@ -392,6 +468,46 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Floating Status Selection Menu */}
+      {statusMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setStatusMenu(null)}
+          />
+          <div
+            style={{ top: statusMenu.top, left: statusMenu.left }}
+            className="fixed z-50 w-44 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+              Alterar Status
+            </div>
+            {BUDGET_STATUS_OPTIONS.map((opt) => {
+              const OptIcon = opt.icon;
+              const isSelected = statusMenu.budget.status === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleUpdateStatus(statusMenu.budget.id, opt.value)}
+                  className={`w-full px-3 py-2 text-left text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <OptIcon className={`w-3.5 h-3.5 ${opt.dotClass}`} />
+                    <span>{opt.label}</span>
+                  </span>
+                  {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* View / Print Detail Modal */}
       {selectedBudget && (

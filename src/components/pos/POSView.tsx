@@ -45,7 +45,6 @@ import {
   Customer,
   DocumentTemplate,
   Item,
-  OnlineService,
   ProductionOrder,
   ProductSeparation,
   Sale,
@@ -113,8 +112,7 @@ export const POSView: React.FC<POSViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('TODOS');
 
-  // Services & Document Templates Data
-  const [onlineServices, setOnlineServices] = useState<OnlineService[]>(() => StorageService.getOnlineServices());
+  // Document Templates Data
   const [docTemplates, setDocTemplates] = useState<DocumentTemplate[]>(() => StorageService.getDocumentTemplates());
   const [selectedDocTemplate, setSelectedDocTemplate] = useState<DocumentTemplate | null>(null);
   const [docFormData, setDocFormData] = useState<Record<string, string>>({});
@@ -154,53 +152,10 @@ export const POSView: React.FC<POSViewProps> = ({
     return items.filter((i) => i.active !== false);
   }, [items]);
 
-  // Unified Service Items (combining catalog items of type SERVICO with any existing online services)
+  // Service Items (catalog items of type SERVICO)
   const allServiceItems = useMemo(() => {
-    const serviceItems = activeItems.filter((i) => i.type === 'SERVICO');
-    const existingNames = new Set(serviceItems.map((i) => i.name.toLowerCase().trim()));
-    const existingIds = new Set(serviceItems.map((i) => i.id));
-
-    const extraItems: Item[] = [];
-    for (const svc of onlineServices) {
-      const itemId = `prod-srv-${svc.id.replace('srv-', '')}`;
-      if (!existingIds.has(itemId) && !existingIds.has(svc.id) && !existingNames.has(svc.name.toLowerCase().trim())) {
-        extraItems.push({
-          id: itemId,
-          name: svc.name,
-          type: 'SERVICO',
-          categoryId: 'cat-servicos',
-          sku: `SRV-${svc.name.substring(0, 3).toUpperCase()}`,
-          description: svc.description || 'Serviço online prestado no balcão',
-          costPrice: svc.cost || 0,
-          salePrice: svc.price || 15.0,
-          marginReais: (svc.price || 15.0) - (svc.cost || 0),
-          marginPercent: 100,
-          active: svc.active !== false,
-          showInCatalog: true,
-          featuredInCatalog: false,
-          serviceUrl: svc.url,
-          url: svc.url,
-          createdAt: svc.createdAt,
-          updatedAt: svc.updatedAt,
-        });
-      }
-    }
-    return [...serviceItems, ...extraItems];
-  }, [activeItems, onlineServices]);
-
-  // Fast URL lookup map for services by id or name
-  const onlineServiceUrlMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of onlineServices) {
-      if (s.url) {
-        map.set(s.id, s.url);
-        map.set(`prod-${s.id}`, s.url);
-        map.set(`prod-srv-${s.id.replace('srv-', '')}`, s.url);
-        map.set(s.name.toLowerCase().trim(), s.url);
-      }
-    }
-    return map;
-  }, [onlineServices]);
+    return activeItems.filter((i) => i.type === 'SERVICO');
+  }, [activeItems]);
 
   const relevantCategories = useMemo(() => {
     if (posMode === 'DOCS') return [];
@@ -246,20 +201,6 @@ export const POSView: React.FC<POSViewProps> = ({
       return matchSearch && matchCategory;
     }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR') || a.id.localeCompare(b.id));
   }, [activeItems, allServiceItems, searchTerm, selectedCategoryTab, posMode]);
-
-  // Filtered Online Services
-  const filteredServices = useMemo(() => {
-    const q = (searchTerm || '').toLowerCase().trim();
-    return onlineServices.filter((s) => {
-      if (!s.active) return false;
-      return (
-        !q ||
-        (s.name || '').toLowerCase().includes(q) ||
-        (s.description ? s.description.toLowerCase().includes(q) : false) ||
-        (s.category ? s.category.toLowerCase().includes(q) : false)
-      );
-    });
-  }, [onlineServices, searchTerm]);
 
   // Filtered Document Templates
   const filteredDocTemplates = useMemo(() => {
@@ -323,46 +264,6 @@ export const POSView: React.FC<POSViewProps> = ({
 
   const handleAddToCart = (newItem: CartItem) => {
     setCart((prev) => [...prev, newItem]);
-  };
-
-  // Add External Online Service to Cart
-  const handleAddOnlineServiceToCart = (svc: OnlineService) => {
-    const price = svc.price || 15.0;
-    const cartItem: CartItem = {
-      cartItemId: `cart-srv-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      item: {
-        id: svc.id,
-        name: svc.name,
-        type: 'SERVICO',
-        categoryId: 'cat-servicos',
-        sku: `SRV-${svc.name.substring(0, 3).toUpperCase()}`,
-        description: svc.description || 'Serviço online prestado no balcão',
-        costPrice: 0,
-        salePrice: price,
-        marginReais: price,
-        marginPercent: 100,
-        active: true,
-        showInCatalog: false,
-        featuredInCatalog: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      quantity: 1,
-      unitPrice: price,
-      unitCost: 0,
-      totalPrice: price,
-      totalCost: 0,
-      configuration: {
-        serviceData: {
-          url: svc.url,
-          category: svc.category,
-        },
-      },
-    };
-
-    setCart((prev) => [...prev, cartItem]);
-    setToastMessage(`Serviço "${svc.name}" adicionado ao pedido!`);
-    setTimeout(() => setToastMessage(''), 3000);
   };
 
   // Open External Service in New Tab
@@ -878,12 +779,7 @@ export const POSView: React.FC<POSViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
               {filteredItems.length > 0 ? (
                 filteredItems.map((item) => {
-                  const targetUrl =
-                    item.serviceUrl ||
-                    item.url ||
-                    onlineServiceUrlMap.get(item.id) ||
-                    onlineServiceUrlMap.get(item.name.toLowerCase().trim()) ||
-                    '';
+                  const targetUrl = item.serviceUrl || item.url || '';
                   const catName = categories.find((c) => c.id === item.categoryId)?.name || 'Serviços';
 
                   return (

@@ -620,6 +620,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   });
 
   // --- COMPANY HANDLERS ---
+  useEffect(() => {
+    if (companySettings?.name) {
+      setName(companySettings.name);
+      setDocument(companySettings.document || '');
+      setPhone(companySettings.phone || '');
+      setEmail(companySettings.email || '');
+      setAddress(companySettings.address || '');
+      setCity(companySettings.city || '');
+      setState(companySettings.state || '');
+      setCatalogSubtitle(companySettings.catalogSubtitle || 'Sua rotina, mais simples.');
+      setLogoUrl(companySettings.logoUrl || '');
+      setLogoDriveFileId(companySettings.logoDriveFileId || '');
+      setLogoDriveFileName(companySettings.logoDriveFileName || '');
+      setCatalogHeaderType(
+        companySettings.catalogHeaderType ||
+          (companySettings.logoUrl || companySettings.logoDriveFileId ? 'LOGO' : 'NAME')
+      );
+      setReceiptFooter(companySettings.receiptFooterMessage || '');
+      setDefaultSupplierFreight(companySettings.defaultSupplierFreight ?? 20.0);
+      setPixQrCodeUrl(companySettings.pixQrCodeUrl || '');
+      setPaymentMethods(companySettings.paymentMethods || []);
+    }
+  }, [companySettings]);
+
+  const buildUpdatedCompanySettings = (overrides?: Partial<CompanySettings>): CompanySettings => ({
+    ...companySettings,
+    name: name.trim() || companySettings.name,
+    document: document.trim() || undefined,
+    phone: phone.trim(),
+    email: email.trim() || undefined,
+    address: address.trim(),
+    city: city.trim(),
+    state: state.trim(),
+    logoUrl: logoUrl.trim() || undefined,
+    logoDriveFileId: logoDriveFileId.trim() || undefined,
+    logoDriveFileName: logoDriveFileName.trim() || undefined,
+    catalogHeaderType,
+    catalogSubtitle: catalogSubtitle.trim() || 'Sua rotina, mais simples.',
+    receiptFooterMessage: receiptFooter.trim(),
+    paymentMethods,
+    defaultSupplierFreight: Number(defaultSupplierFreight) || 20.0,
+    pixQrCodeUrl: pixQrCodeUrl.trim() || undefined,
+    ...overrides,
+  });
+
+  const handleCatalogHeaderTypeChange = (nextType: 'NAME' | 'LOGO') => {
+    setCatalogHeaderType(nextType);
+    const updated = buildUpdatedCompanySettings({ catalogHeaderType: nextType });
+    StorageService.saveCompanySettings(updated);
+    onSettingsSaved();
+  };
+
   const handleSelectDriveLogo = (selected: {
     fileId: string;
     fileName: string;
@@ -636,6 +688,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setCatalogHeaderType('LOGO');
     setLogoError('');
     setIsDrivePickerOpen(false);
+    const updated = buildUpdatedCompanySettings({
+      logoUrl: selected.displayUrl,
+      logoDriveFileId: selected.fileId,
+      logoDriveFileName: selected.fileName,
+      catalogHeaderType: 'LOGO',
+    });
+    StorageService.saveCompanySettings(updated);
+    onSettingsSaved();
   };
 
   const handleResolveDriveLogoLink = async (e?: React.FormEvent) => {
@@ -674,6 +734,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setLogoDriveFileName('');
     setCatalogHeaderType('NAME');
     setLogoError('');
+    const updated = buildUpdatedCompanySettings({
+      logoUrl: undefined,
+      logoDriveFileId: undefined,
+      logoDriveFileName: undefined,
+      catalogHeaderType: 'NAME',
+    });
+    StorageService.saveCompanySettings(updated);
+    onSettingsSaved();
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -694,6 +762,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsUploadingLogo(true);
     try {
       const compressed = await compressImage(file, 800, 800, 0.9);
+      let finalLogoUrl = compressed;
       setLogoUrl(compressed);
       setLogoDriveFileId('');
       setLogoDriveFileName(file.name);
@@ -701,11 +770,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       try {
         const uploadRes = await api.uploadImage(compressed, 'logo');
         if (uploadRes && uploadRes.url) {
+          finalLogoUrl = uploadRes.url;
           setLogoUrl(uploadRes.url);
         }
       } catch (uploadErr) {
         console.warn('Upload remoto de logo não completou, mantendo dataUrl comprimido:', uploadErr);
       }
+      const updated = buildUpdatedCompanySettings({
+        logoUrl: finalLogoUrl,
+        logoDriveFileId: undefined,
+        logoDriveFileName: file.name,
+        catalogHeaderType: 'LOGO',
+      });
+      StorageService.saveCompanySettings(updated);
+      onSettingsSaved();
     } catch (err: any) {
       setLogoError(err.message || 'Falha ao processar a logo.');
     } finally {
@@ -1858,7 +1936,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setIsPublishCatalogModalOpen(true)}
+                    onClick={() => {
+                      const updated = buildUpdatedCompanySettings();
+                      StorageService.saveCompanySettings(updated);
+                      onSettingsSaved();
+                      setIsPublishCatalogModalOpen(true);
+                    }}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0"
                   >
                     <Globe className="w-4 h-4" />
@@ -1899,7 +1982,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         name="catalogHeaderType"
                         value="NAME"
                         checked={catalogHeaderType === 'NAME'}
-                        onChange={() => setCatalogHeaderType('NAME')}
+                        onChange={() => handleCatalogHeaderTypeChange('NAME')}
                         className="text-blue-600 focus:ring-blue-500"
                       />
                       <span>Nome da Marca ({name || 'Sem nome'})</span>
@@ -1911,7 +1994,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         name="catalogHeaderType"
                         value="LOGO"
                         checked={catalogHeaderType === 'LOGO'}
-                        onChange={() => setCatalogHeaderType('LOGO')}
+                        onChange={() => handleCatalogHeaderTypeChange('LOGO')}
                         className="text-blue-600 focus:ring-blue-500"
                       />
                       <span>Logo Personalizada</span>

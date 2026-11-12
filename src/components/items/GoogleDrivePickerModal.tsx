@@ -103,7 +103,7 @@ export const GoogleDrivePickerModal: React.FC<GoogleDrivePickerModalProps> = ({
         );
       } else if (code === 'auth/unauthorized-domain') {
         setAuthError(
-          'Domínio não autorizado no Firebase Authentication. Cole o link direto de compartilhamento da imagem abaixo para vincular sem restrições.'
+          'Domínio não autorizado no OAuth do Google. Cole o link direto de compartilhamento da imagem abaixo para vincular sem restrições.'
         );
       } else {
         setAuthError(

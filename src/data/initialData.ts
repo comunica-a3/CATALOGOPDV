@@ -79,7 +79,8 @@ export const INITIAL_COMPANY_SETTINGS: CompanySettings = {
   address: '',
   city: '',
   state: '',
-  logoUrl: 'https://drive.google.com/file/d/14NBeyoY4eSIHd1SBSUa09P154ZoWCsVv/view?usp=drive_link',
+  logoUrl: 'https://drive.google.com/thumbnail?id=13mzuknA7VbClvtdSJsrTQy-GIGUSFv9h&sz=w1200',
+  logoDriveFileId: '13mzuknA7VbClvtdSJsrTQy-GIGUSFv9h',
   receiptFooterMessage: 'Agradecemos a preferência!',
   paymentMethods: [
     'PIX',
@@ -94,6 +95,7 @@ export const INITIAL_COMPANY_SETTINGS: CompanySettings = {
   commissionRates: { ...DEFAULT_COMMISSION_RATES },
   promoterCommissionPercent: 20,
   catalogSubtitle: 'Sua rotina, mais simples.',
+  catalogHeaderType: 'LOGO',
 };
 
 export const INITIAL_PRODUCT_SEPARATIONS: ProductSeparation[] = [

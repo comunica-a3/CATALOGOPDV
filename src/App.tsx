@@ -24,6 +24,7 @@ import { SettingsTab, SettingsView } from './components/settings/SettingsView';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { StorageService } from './services/storage';
 import { initRealtimeSync } from './services/realtimeSync';
+import { isStaticCatalogOnlyHost } from './utils/env';
 import {
   Category,
   CompanySettings,
@@ -135,14 +136,19 @@ function MainApp() {
   useEffect(() => {
     loadAllData();
 
-    // Sincronização automática com o servidor central e conexão em tempo real (SSE) para todos os dispositivos
-    StorageService.syncWithServer().then(() => {
-      loadAllData();
-    }).catch((e) => console.debug('Notice syncing with server on mount:', e));
+    const shouldSyncAdminBackend = isAuthenticated && !isStaticCatalogOnlyHost();
+    let cleanupRealtime = () => {};
 
-    const cleanupRealtime = initRealtimeSync(() => {
-      loadAllData();
-    });
+    if (shouldSyncAdminBackend) {
+      // Sincronização automática com o servidor central e conexão em tempo real (SSE) apenas para sessões administrativas autenticadas
+      StorageService.syncWithServer().then(() => {
+        loadAllData();
+      }).catch((e) => console.debug('Notice syncing with server on mount:', e));
+
+      cleanupRealtime = initRealtimeSync(() => {
+        loadAllData();
+      });
+    }
 
     const handleDataEvent = () => {
       loadAllData();
@@ -158,16 +164,20 @@ function MainApp() {
     window.addEventListener('finance-updated', handleDataEvent);
     window.addEventListener('expenses-updated', handleDataEvent);
     window.addEventListener('receiving-accounts-updated', handleDataEvent);
+    window.addEventListener('opportunities-updated', handleDataEvent);
     window.addEventListener('storage-sync-completed', handleDataEvent);
 
-    // Keep data fresh when window gets focus
+    // Keep data fresh when window gets focus (only when authenticated on local backend)
     const handleFocus = () => {
+      if (!isAuthenticated || isStaticCatalogOnlyHost()) return;
       StorageService.syncWithServer().then(() => {
         loadAllData();
       }).catch((e) => console.debug('Notice syncing with server on focus:', e));
     };
 
-    window.addEventListener('focus', handleFocus);
+    if (shouldSyncAdminBackend) {
+      window.addEventListener('focus', handleFocus);
+    }
 
     return () => {
       cleanupRealtime();
@@ -181,10 +191,11 @@ function MainApp() {
       window.removeEventListener('finance-updated', handleDataEvent);
       window.removeEventListener('expenses-updated', handleDataEvent);
       window.removeEventListener('receiving-accounts-updated', handleDataEvent);
+      window.removeEventListener('opportunities-updated', handleDataEvent);
       window.removeEventListener('storage-sync-completed', handleDataEvent);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [loadAllData]);
+  }, [loadAllData, isAuthenticated]);
 
   // Read URL query params on mount
   useEffect(() => {
@@ -245,13 +256,9 @@ function MainApp() {
     (i) => i.type === 'PRODUTO_FISICO' && (i.stock || 0) <= (i.minStock || 5)
   ).length;
 
-  const prospectingActionCount = opportunities.filter((o) => {
-    if (o.stage === 'CONVERTIDO' || o.stage === 'NAO_CONVERTEU') return false;
-    const now = new Date();
-    const last = new Date(o.updatedAt);
-    const diffDays = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays >= 3 || (o.nextAction && !o.nextAction.completed);
-  }).length;
+  const prospectingActionCount = opportunities.filter(
+    (o) => o.stage === 'PARA_CONTATAR'
+  ).length;
 
   // --- PUBLIC PAGES (AVAILABLE TO EVERYONE) ---
   if (currentView === 'public_quote') {
@@ -276,7 +283,9 @@ function MainApp() {
 
   // --- UNHEALTHY / UNAUTHENTICATED FLOWS ---
   if (!isAuthenticated) {
-    if (currentView === 'login') {
+    const isStaticCatalogHost = isStaticCatalogOnlyHost();
+
+    if (currentView === 'login' && !isStaticCatalogHost) {
       return (
         <AdminLoginView
           companySettings={companySettings}
@@ -297,7 +306,7 @@ function MainApp() {
           items={items}
           categories={categories}
           companySettings={companySettings}
-          onOpenManagement={() => setCurrentView('login')}
+          onOpenManagement={isStaticCatalogHost ? undefined : () => setCurrentView('login')}
           isStandalone={true}
         />
       </div>

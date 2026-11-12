@@ -84,32 +84,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
-  // System & Health
-  async getHealth() {
-    return request<{ status: string; hasAdmin: boolean; uptimeSeconds: number }>('/health');
-  },
-
-  async getSystemStatus() {
-    return request<{
-      status: string;
-      serverPort: number;
-      localIps: string[];
-      hasAdmin: boolean;
-      tablesCount: Record<string, number>;
-      memoryUsageMb: number;
-    }>('/system/status');
-  },
-
-  async migrateFromClient(payload: any) {
-    return request<{ success: boolean; importedCounts: Record<string, number> }>(
-      '/system/migrate-from-client',
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }
-    );
-  },
-
   // Auth
   async getAuthStatus() {
     return request<{ hasAdmin: boolean; user: any; isAuthenticated: boolean }>('/auth/status');
@@ -335,6 +309,70 @@ export const api = {
     });
   },
 
+  async saveOpportunitiesBatch(opportunities: any[]) {
+    return request<{ success: boolean; count: number; opportunities: any[] }>('/prospecting/opportunities/batch', {
+      method: 'POST',
+      body: JSON.stringify({ opportunities }),
+    });
+  },
+
+  async getGoogleMapsConfig() {
+    return request<{
+      configured: boolean;
+      source: 'env' | 'settings' | 'none';
+      maskedKey?: string;
+      defaultCity?: string;
+    }>('/prospecting/google-maps/config');
+  },
+
+  async saveGoogleMapsConfig(apiKey: string) {
+    return request<{
+      success: boolean;
+      configured: boolean;
+      source: 'env' | 'settings' | 'none';
+      maskedKey?: string;
+    }>('/prospecting/google-maps/config', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
+  },
+
+  async searchGoogleMapsLeads(params: {
+    query: string;
+    neighborhood?: string;
+    city?: string;
+    pageToken?: string;
+    apiKey?: string;
+  }) {
+    return request<{
+      query: string;
+      places: Array<{
+        placeId: string;
+        name: string;
+        phone: string;
+        neighborhood: string;
+        city: string;
+        address: string;
+        category: string;
+        rating?: number;
+        userRatingCount?: number;
+        website?: string;
+        googleMapsUrl?: string;
+      }>;
+      nextPageToken?: string;
+    }>('/prospecting/google-maps/search', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async updateOpportunityStage(id: string, stage: string) {
+    return request<any>(`/prospecting/opportunities/${id}/stage`, {
+      method: 'PATCH',
+      body: JSON.stringify({ stage }),
+    });
+  },
+
   async deleteOpportunity(id: string) {
     return request<{ success: boolean }>(`/prospecting/opportunities/${id}`, { method: 'DELETE' });
   },
@@ -411,13 +449,6 @@ export const api = {
     });
   },
 
-  async saveExpensesBatch(expenses: any[]) {
-    return request<{ success: boolean; count: number }>('/finance/expenses/batch', {
-      method: 'POST',
-      body: JSON.stringify({ expenses }),
-    });
-  },
-
   async deleteExpense(id: string) {
     return request<{ success: boolean; id: string }>(`/finance/expenses/${id}`, { method: 'DELETE' });
   },
@@ -454,13 +485,6 @@ export const api = {
 
   async getAccountAdjustments() {
     return request<any[]>('/finance/adjustments');
-  },
-
-  async saveAccountAdjustment(adjustment: any) {
-    return request<any>('/finance/adjustments', {
-      method: 'POST',
-      body: JSON.stringify(adjustment),
-    });
   },
 
   // Sale Annotations (Metadata sem alterar venda original)
@@ -519,17 +543,7 @@ export const api = {
     });
   },
 
-  // Services & Documents
-  async getOnlineServices() {
-    return request<any[]>('/online-services');
-  },
-
-  async deleteOnlineService(id: string) {
-    return request<any>(`/online-services/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
+  // Documents
   async getDocumentTemplates() {
     return request<any[]>('/document-templates');
   },
@@ -613,16 +627,6 @@ export const api = {
     }
   },
 
-  // Audit Logs
-  async getAuditLogs(params: { limit?: number; offset?: number; entityType?: string; userId?: string } = {}) {
-    const query = new URLSearchParams();
-    if (params.limit) query.set('limit', String(params.limit));
-    if (params.offset) query.set('offset', String(params.offset));
-    if (params.entityType) query.set('entityType', params.entityType);
-    if (params.userId) query.set('userId', params.userId);
-    return request<{ logs: any[]; total: number }>(`/audit?${query.toString()}`);
-  },
-
   // Backup & Restore
   async exportBackup() {
     return request<any>('/backup/export');
@@ -700,14 +704,6 @@ export const api = {
     return request<{ success: boolean; message: string }>('/database/reset-seed', {
       method: 'POST',
       body: JSON.stringify({}),
-    });
-  },
-
-  // AI Content Generator
-  async generateAI(params: { type: string; prompt: string; context?: any }) {
-    return request<{ text: string; source: 'gemini' | 'fallback' }>('/ai/generate', {
-      method: 'POST',
-      body: JSON.stringify(params),
     });
   },
 

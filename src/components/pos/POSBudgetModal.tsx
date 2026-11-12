@@ -23,7 +23,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StorageService } from '../../services/storage';
 import {
@@ -118,59 +118,80 @@ export const POSBudgetModal: React.FC<POSBudgetModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize and load customers / catalog
-  useEffect(() => {
-    if (isOpen) {
-      const allCust = StorageService.getCustomers();
-      const allItems = StorageService.getItems();
-      const allCats = StorageService.getCategories();
-      setCustomersList(allCust);
-      setCatalogItems(allItems);
-      setCategories(allCats);
-      setErrorMessage('');
+  // Track initialization so parent re-renders or customer selection never reset validUntilDays
+  const initializedKeyRef = useRef<string | null>(null);
 
-      if (initialBudget) {
-        // Editing existing budget
-        setBudgetItems(initialBudget.items ? [...initialBudget.items] : []);
-        setSelectedCustomerId(initialBudget.customerId || '');
-        setCustomerName(initialBudget.customerName || '');
-        setCustomerPhone(initialBudget.customerPhone || '');
-        setCustomerDocument(initialBudget.customerDocument || '');
-        setDiscount(initialBudget.discount || 0);
-        setNotes(initialBudget.notes || '');
-        setPaymentConditions(
-          initialBudget.paymentConditions || '50% de entrada e 50% na retirada do material'
+  // Initialize and load customers / catalog only when modal opens or switches target budget
+  useEffect(() => {
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+
+    const currentKey = initialBudget ? `edit-${initialBudget.id}` : 'new';
+    if (initializedKeyRef.current === currentKey) {
+      return;
+    }
+    initializedKeyRef.current = currentKey;
+
+    const allCust = StorageService.getCustomers();
+    const allItems = StorageService.getItems();
+    const allCats = StorageService.getCategories();
+    setCustomersList(allCust);
+    setCatalogItems(allItems);
+    setCategories(allCats);
+    setErrorMessage('');
+
+    if (initialBudget) {
+      // Editing existing budget
+      setBudgetItems(initialBudget.items ? [...initialBudget.items] : []);
+      setSelectedCustomerId(initialBudget.customerId || '');
+      setCustomerName(initialBudget.customerName || '');
+      setCustomerPhone(initialBudget.customerPhone || '');
+      setCustomerDocument(initialBudget.customerDocument || '');
+      setDiscount(initialBudget.discount || 0);
+      setNotes(initialBudget.notes || '');
+      setPaymentConditions(
+        initialBudget.paymentConditions || '50% de entrada e 50% na retirada do material'
+      );
+      setProductionLeadTime(initialBudget.productionLeadTime || '2 a 3 dias úteis');
+      if (initialBudget.validUntil) {
+        const baseTime = initialBudget.createdAt
+          ? new Date(initialBudget.createdAt).getTime()
+          : Date.now();
+        const diffDays = Math.round(
+          (new Date(initialBudget.validUntil).getTime() - baseTime) / (1000 * 60 * 60 * 24)
         );
-        setProductionLeadTime(initialBudget.productionLeadTime || '2 a 3 dias úteis');
-        if (initialBudget.validUntil) {
-          const diffDays = Math.round(
-            (new Date(initialBudget.validUntil).getTime() - new Date().getTime()) /
-              (1000 * 60 * 60 * 24)
-          );
-          setValidUntilDays(Math.max(1, diffDays));
-          setCustomValidDate(initialBudget.validUntil.split('T')[0]);
-        }
+        const snapDays = [3, 7, 15, 30].reduce((prev, curr) =>
+          Math.abs(curr - diffDays) < Math.abs(prev - diffDays) ? curr : prev
+        );
+        setValidUntilDays(Math.abs(snapDays - diffDays) <= 1 ? snapDays : Math.max(1, diffDays));
+        setCustomValidDate('');
       } else {
-        // New budget - capture cart items and discounts passed from PDV
-        const sourceItems = initialItems || cartItems || [];
-        setBudgetItems(sourceItems.length > 0 ? sourceItems.map((i) => ({ ...i })) : []);
-        if (propCustomer) {
-          setSelectedCustomerId(propCustomer.id);
-          setCustomerName(propCustomer.name);
-          setCustomerPhone(propCustomer.phone || '');
-          setCustomerDocument(propCustomer.document || '');
-        } else {
-          setSelectedCustomerId('');
-          setCustomerName('');
-          setCustomerPhone('');
-          setCustomerDocument('');
-        }
-        setDiscount(initialDiscount || 0);
-        setNotes(initialNotes || '');
-        setPaymentConditions('50% de entrada e 50% na retirada do material');
-        setProductionLeadTime('2 a 3 dias úteis');
         setValidUntilDays(15);
+        setCustomValidDate('');
       }
+    } else {
+      // New budget - capture cart items and discounts passed from PDV
+      const sourceItems = initialItems || cartItems || [];
+      setBudgetItems(sourceItems.length > 0 ? sourceItems.map((i) => ({ ...i })) : []);
+      if (propCustomer) {
+        setSelectedCustomerId(propCustomer.id);
+        setCustomerName(propCustomer.name);
+        setCustomerPhone(propCustomer.phone || '');
+        setCustomerDocument(propCustomer.document || '');
+      } else {
+        setSelectedCustomerId('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setCustomerDocument('');
+      }
+      setDiscount(initialDiscount || 0);
+      setNotes(initialNotes || '');
+      setPaymentConditions('50% de entrada e 50% na retirada do material');
+      setProductionLeadTime('2 a 3 dias úteis');
+      setValidUntilDays(15);
+      setCustomValidDate('');
     }
   }, [isOpen, initialBudget, initialItems, cartItems, initialDiscount, initialNotes, propCustomer]);
 
@@ -365,6 +386,16 @@ export const POSBudgetModal: React.FC<POSBudgetModalProps> = ({
         };
       }
 
+      const baseDate = initialBudget?.createdAt ? new Date(initialBudget.createdAt) : new Date();
+      const targetValidDate = new Date(baseDate.getTime());
+      targetValidDate.setDate(targetValidDate.getDate() + (Number(validUntilDays) || 15));
+      const vYear = targetValidDate.getFullYear();
+      const vMonth = String(targetValidDate.getMonth() + 1).padStart(2, '0');
+      const vDay = String(targetValidDate.getDate()).padStart(2, '0');
+      const computedValidUntil = customValidDate
+        ? `${customValidDate}T12:00:00.000Z`
+        : `${vYear}-${vMonth}-${vDay}T12:00:00.000Z`;
+
       if (initialBudget) {
         // UPDATE existing budget
         const updated = StorageService.updateBudget(initialBudget.id, {
@@ -380,9 +411,7 @@ export const POSBudgetModal: React.FC<POSBudgetModalProps> = ({
           notes,
           paymentConditions,
           productionLeadTime,
-          validUntil: customValidDate
-            ? new Date(`${customValidDate}T23:59:59`).toISOString()
-            : new Date(Date.now() + validUntilDays * 24 * 60 * 60 * 1000).toISOString(),
+          validUntil: computedValidUntil,
         });
 
         if (updated && onBudgetUpdated) {
@@ -399,6 +428,7 @@ export const POSBudgetModal: React.FC<POSBudgetModalProps> = ({
           freight: freightAmount,
           discount,
           validUntilDays,
+          validUntil: computedValidUntil,
           notes,
           paymentConditions,
           productionLeadTime,
@@ -720,7 +750,16 @@ export const POSBudgetModal: React.FC<POSBudgetModalProps> = ({
 
             <div>
               <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Validade da Proposta:
+                Validade da Proposta ({validUntilDays} dias — até{' '}
+                {(() => {
+                  const base = initialBudget?.createdAt
+                    ? new Date(initialBudget.createdAt)
+                    : new Date();
+                  const d = new Date(base.getTime());
+                  d.setDate(d.getDate() + (Number(validUntilDays) || 15));
+                  return d.toLocaleDateString('pt-BR');
+                })()}
+                ):
               </label>
               <div className="flex items-center gap-2">
                 {[3, 7, 15, 30].map((days) => (

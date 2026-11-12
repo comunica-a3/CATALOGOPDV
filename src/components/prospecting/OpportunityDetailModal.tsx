@@ -53,13 +53,11 @@ interface OpportunityDetailModalProps {
 }
 
 const STAGES: { key: OpportunityStage; label: string; color: string; badgeVariant: 'warning' | 'primary' | 'success' | 'danger' | 'secondary' }[] = [
-  { key: 'IDENTIFICADO', label: 'Identificado', color: 'text-rose-600 border-rose-300 bg-rose-50', badgeVariant: 'danger' },
-  { key: 'A_CONTATAR', label: 'A Contatar', color: 'text-amber-600 border-amber-300 bg-amber-50', badgeVariant: 'warning' },
-  { key: 'CONTATADO', label: 'Contatado', color: 'text-yellow-600 border-yellow-300 bg-yellow-50', badgeVariant: 'warning' },
-  { key: 'INTERESSADO', label: 'Interessado', color: 'text-blue-600 border-blue-300 bg-blue-50', badgeVariant: 'primary' },
-  { key: 'ORCAMENTO', label: 'Em Orçamento', color: 'text-purple-600 border-purple-300 bg-purple-50', badgeVariant: 'secondary' },
-  { key: 'CONVERTIDO', label: 'Convertido em Cliente', color: 'text-emerald-600 border-emerald-300 bg-emerald-50', badgeVariant: 'success' },
-  { key: 'NAO_CONVERTEU', label: 'Não Converteu', color: 'text-slate-600 border-slate-300 bg-slate-50', badgeVariant: 'secondary' },
+  { key: 'PARA_CONTATAR', label: 'Para Contatar', color: 'text-amber-600 border-amber-300 bg-amber-50', badgeVariant: 'warning' },
+  { key: 'CATALOGO_ENVIADO', label: 'Catálogo Enviado', color: 'text-blue-600 border-blue-300 bg-blue-50', badgeVariant: 'primary' },
+  { key: 'INTERESSADO_ORCAMENTO', label: 'Interessado / Em Orçamento', color: 'text-purple-600 border-purple-300 bg-purple-50', badgeVariant: 'secondary' },
+  { key: 'FECHADO_SUCESSO', label: 'Bem Sucedido', color: 'text-emerald-600 border-emerald-300 bg-emerald-50', badgeVariant: 'success' },
+  { key: 'SEM_RETORNO_FECHADO', label: 'Sem Retorno / Recusado', color: 'text-slate-600 border-slate-300 bg-slate-50', badgeVariant: 'secondary' },
 ];
 
 export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
@@ -216,9 +214,9 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
       userName: currentUser.name,
     });
 
-    // Se estiver em 'A_CONTATAR', avança automaticamente para 'CONTATADO'
-    if (opportunity.stage === 'A_CONTATAR' || opportunity.stage === 'IDENTIFICADO') {
-      StorageService.updateOpportunityStage(opportunity.id, 'CONTATADO');
+    // Se estiver em 'PARA_CONTATAR', avança para 'CATALOGO_ENVIADO'
+    if (opportunity.stage === 'PARA_CONTATAR') {
+      StorageService.updateOpportunityStage(opportunity.id, 'CATALOGO_ENVIADO');
     }
 
     onRefresh();
@@ -305,7 +303,7 @@ export const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
               <span>Editar</span>
             </button>
 
-            {opportunity.stage !== 'CONVERTIDO' ? (
+            {!opportunity.convertedCustomerId ? (
               <button
                 type="button"
                 onClick={handleConvertToCustomer}

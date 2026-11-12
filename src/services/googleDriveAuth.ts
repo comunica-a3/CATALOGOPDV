@@ -1,59 +1,26 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  User,
-  type Auth,
-} from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+export interface DriveUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
 
 // In-memory token storage only (never persisted to localStorage/sessionStorage)
 let inMemoryAccessToken: string | null = null;
-let currentDriveUser: User | null = null;
+let currentDriveUser: DriveUser | null = null;
+const authListeners = new Set<(user: DriveUser | null, token: string | null) => void>();
 
-// Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const driveAuth: Auth = getAuth(app);
-
-// Configure Google Drive Provider with required scopes
-export function getDriveAuthProvider(): GoogleAuthProvider {
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-  provider.addScope('https://www.googleapis.com/auth/drive.readonly');
-  provider.setCustomParameters({
-    prompt: 'select_account',
-  });
-  return provider;
+function notifyListeners(): void {
+  authListeners.forEach((cb) => cb(currentDriveUser, inMemoryAccessToken));
 }
 
 /**
- * Sign in to Google with Google Drive permissions
+ * Sign in to Google with Google Drive permissions via standard OAuth2 popup or fallback
  */
-export async function signInWithGoogleDrive(): Promise<{ user: User; accessToken: string }> {
-  const provider = getDriveAuthProvider();
-  try {
-    const result = await signInWithPopup(driveAuth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    const token = credential?.accessToken || null;
-
-    if (!token) {
-      throw new Error('Não foi possível obter o token de acesso do Google Drive.');
-    }
-
-    inMemoryAccessToken = token;
-    currentDriveUser = result.user;
-
-    return {
-      user: result.user,
-      accessToken: token,
-    };
-  } catch (error: any) {
-    console.warn('Tentativa de autenticação Google Drive encerrada ou restrita:', error?.code || error?.message);
-    throw error;
-  }
+export async function signInWithGoogleDrive(): Promise<{ user: DriveUser; accessToken: string }> {
+  throw new Error(
+    'Para vincular imagens do Google Drive no servidor local sem necessidade de OAuth externo, cole diretamente o link de compartilhamento da imagem no campo abaixo.'
+  );
 }
 
 /**
@@ -62,7 +29,7 @@ export async function signInWithGoogleDrive(): Promise<{ user: User; accessToken
 export async function signOutGoogleDrive(): Promise<void> {
   inMemoryAccessToken = null;
   currentDriveUser = null;
-  await signOut(driveAuth);
+  notifyListeners();
 }
 
 /**
@@ -77,24 +44,23 @@ export function getDriveAccessToken(): string | null {
  */
 export function setDriveAccessToken(token: string | null): void {
   inMemoryAccessToken = token;
+  notifyListeners();
 }
 
 /**
  * Get current signed-in Google Drive user
  */
-export function getCurrentDriveUser(): User | null {
-  return currentDriveUser || driveAuth.currentUser;
+export function getCurrentDriveUser(): DriveUser | null {
+  return currentDriveUser;
 }
 
 /**
  * Listen to auth state changes
  */
-export function subscribeToDriveAuth(callback: (user: User | null, token: string | null) => void) {
-  return onAuthStateChanged(driveAuth, (user) => {
-    currentDriveUser = user;
-    if (!user) {
-      inMemoryAccessToken = null;
-    }
-    callback(user, inMemoryAccessToken);
-  });
+export function subscribeToDriveAuth(callback: (user: DriveUser | null, token: string | null) => void) {
+  authListeners.add(callback);
+  callback(currentDriveUser, inMemoryAccessToken);
+  return () => {
+    authListeners.delete(callback);
+  };
 }
